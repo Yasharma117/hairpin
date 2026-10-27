@@ -2,10 +2,11 @@
 // Hover or focus shows a person's tagline and quip; a click (or Enter) gives them the lift.
 import * as THREE from 'three';
 import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, makeTaxi, roster, pick, disposeScene } from '../shared/kit.js';
+import { Stage } from '../shared/kit.js';
 import { PALETTE, FIGURE, UTIL } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
-export const assets = ['jorabat-dark.jpg'];
+export const assets = ['jorabat-dark.jpg', 'depth.png'];
 
 const IW = 1774, IH = 887;   // jorabat-dark.jpg in px; the scene lives in these units
 // where things are in the painting, as fractions
@@ -45,8 +46,9 @@ export async function load(ctx) {
   ctx.bed({ engine: .5, crickets: 1 });   // the taxi idling by the stall
 
   /* ---------- the painting: jorabat-lit.jpg once it's painted; until then the dark one, lifted warm, stands in ---------- */
-  const [iDark, iLit] = await Promise.all([loadImg(at('jorabat-dark.jpg')), loadImg(at('jorabat-lit.jpg'))]);
-  if (!iDark) throw new Error('jorabat-dark.jpg did not load');
+  const [iDark, iLit, depthImg] = await Promise.all([loadImg(at('jorabat-dark.jpg')), loadImg(at('jorabat-lit.jpg')), loadImg(at('depth.png'))]);
+  if (!iDark || !depthImg) throw new Error('jorabat-dark.jpg did not load');
+  const stage = new Stage({ W: IW, H: IH, depth: depthImg, k: .3 });
   function warmLift(src) {   // ponytail: stand-in for the lit painting; drop jorabat-lit.jpg in this folder when it exists
     const a = mkCanvas(IW, IH), ax = a.getContext('2d'); ax.drawImage(src, 0, 0, IW, IH);
     const A = ax.getImageData(0, 0, IW, IH), d = A.data;
@@ -72,11 +74,9 @@ export async function load(ctx) {
     return cone * 1.4 + lamps * .9;
   }
   const scene = new THREE.Scene();
-  const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
-  camera.position.z = 500;
-  const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+  const camera = stage.cam;
+  const bg = stage.mesh(new THREE.ShaderMaterial({
     uniforms: U,
-    vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: CONE + /* glsl */`
       uniform sampler2D tLit, tDark, tStroke; uniform vec2 uImg, uHead, uDir, uLamp[2]; uniform float uMode;
       varying vec2 vPx;
@@ -89,14 +89,12 @@ export async function load(ctx) {
         gl_FragColor = vec4(mix(texture2D(tDark, uv).rgb, texture2D(tLit, uv).rgb * vec3(1.05, .97, .86), on), 1.);
       }`,
   }));
-  bg.position.set(IW / 2, -IH / 2, -400);
   scene.add(bg);
 
   /* ---------- the taxi, parked at the left of the shot, nose along the road ---------- */
   const taxi = makeTaxi(uMode);
   taxi.jeepMat.uniforms.uL.value = .35;
   scene.add(taxi.jeep);
-  taxi.jeep.scale.setScalar(58);
   taxi.jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .06));
 
   /* ---------- the team: their painted stand-up if it exists, else a silhouette doing what their spot is for ---------- */
@@ -160,17 +158,20 @@ export async function load(ctx) {
   });
 
   /* ---------- the layout: worked out from what's on screen, so nobody is ever clipped ---------- */
-  let viewW = IW, viewH = IH;
-  const toScreen = (x, y) => [(x - camera.left) / viewW * innerWidth, (y + camera.top) / viewH * innerHeight];
+  let viewW = IW, viewH = IH, viewL = 0, viewR = IW, taxiX = 0;
+  // a painting point (at depth d) to css px, through the camera as it is now: the buttons and the bubble follow the push-in
+  const _p = new THREE.Vector3();
+  const toScreen = (x, y, d = stage.depthAt(x, y)) => { stage.toWorld(x, y, d, _p).project(camera); return [(_p.x + 1) / 2 * innerWidth, (1 - _p.y) / 2 * innerHeight]; };
   function place(p, x, y, row) {
     const r = ROWS[row], h = PERSON_H * r.s;   // sitting and crouching are drawn lower in the same frame
     Object.assign(p, { px: x, py: y * IH, h, w: h * p.aspect, row, dim: r.dim });
-    p.m.position.set(x, -p.py, 10 + row); p.m.scale.set(p.w, p.h, 1); p.m.renderOrder = p.ro = 2 + row;
-    p.sh.position.set(x, -p.py, 5); p.sh.scale.set(p.w * .8, 10, 1); p.sh.renderOrder = 1;
+    p.d = stage.depthAt(x, p.py);   // the ground under their feet
+    stage.place(p.m, x, p.py, [p.w, p.h], p.d); p.m.renderOrder = p.ro = 2 + row;
+    stage.place(p.sh, x, p.py, [p.w * .8, 10], p.d); p.sh.renderOrder = 1;
     p.L = clamp(.12 + lightCPU(x, p.py - p.h * .5) * .85, .12, 1.2) * r.dim;
   }
   function layout() {
-    const margin = 26, L = camera.left + margin, R = camera.right - margin, inView = x => x * IW > L && x * IW < R;
+    const margin = 26 + viewW * .06, L = viewL + margin, R = viewR - margin, inView = x => x * IW > L && x * IW < R;   // room for the push-in
     const rest = [];
     people.forEach((p, i) => {
       const spot = p.pose === 'sit' ? STALL.bench[i] : p.pose === 'counter' ? STALL.counter[i - 2] : p.pose === 'lean' ? STALL.lamp : null;
@@ -188,8 +189,11 @@ export async function load(ctx) {
       const jitter = (Math.sin(k * 12.9) * .5) * span / Math.max(inRow, 1) * .35;   // loose groups, not a fence
       place(p, clamp(x + jitter, L, R), ROWS[rows[ri]].y + (p.pose === 'crouch' ? .012 : 0), rows[ri]);
     });
+    buttons();
+  }
+  function buttons() {   // the invisible buttons over each person, where the camera puts them now
     for (const p of people) {
-      const [x0s, y0s] = toScreen(p.px - p.w / 2, p.py - p.h), [x1s, y1s] = toScreen(p.px + p.w / 2, p.py);
+      const [x0s, y0s] = toScreen(p.px - p.w / 2, p.py - p.h, p.d), [x1s, y1s] = toScreen(p.px + p.w / 2, p.py, p.d);
       Object.assign(p.btn.style, { left: `${x0s}px`, top: `${y0s}px`, width: `${x1s - x0s}px`, height: `${y1s - y0s}px`, zIndex: 2 + p.row });
     }
   }
@@ -198,16 +202,16 @@ export async function load(ctx) {
     if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
     // wide: the whole roadside; narrow: the stall, the bench and the lamp post, and the team crowds in front
     const cx = clamp(aspect < 1 ? .2 * IW : .52 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
-    camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
-    camera.updateProjectionMatrix();
-    const tx = camera.left + 70;   // the taxi, nosed into the left of the shot
-    taxi.jeep.position.set(tx, -.775 * IH, 150);
-    U.uHead.value.set(tx + 100, .755 * IH);
+    viewL = cx - viewW / 2; viewR = cx + viewW / 2;
+    stage.view(cx, cy, viewH, aspect);
+    taxiX = viewL + 70 + viewW * .05;   // the taxi, nosed into the left of the shot (inside the push-in)
+    stage.place(taxi.jeep, taxiX, .775 * IH, 58, stage.depthAt(taxiX, .79 * IH));
+    U.uHead.value.set(taxiX + 100, .755 * IH);
     layout();
   }
 
   /* ---------- meeting them: hover or focus shows their bubble; a click gives them the lift ---------- */
-  let looking = null, chosen = null, leftAt = 0, t = 0;
+  let looking = null, chosen = null, leftAt = 0, t = 0, since = 0;
   const bubble = $('.bubble');
   function show(p) {
     looking = p;
@@ -215,7 +219,7 @@ export async function load(ctx) {
     if (!p) { bubble.hidden = true; return; }
     bubble.innerHTML = `<b>${p.tagline}</b><span>${p.quip}</span><i>${p.name.toUpperCase()}</i>`;
     bubble.hidden = false;
-    const [x, y] = toScreen(p.px, p.py - p.h - 14), half = Math.min(150, (innerWidth - 32) / 2), bx = clamp(x, 16 + half, innerWidth - 16 - half);
+    const [x, y] = toScreen(p.px, p.py - p.h - 14, p.d), half = Math.min(150, (innerWidth - 32) / 2), bx = clamp(x, 16 + half, innerWidth - 16 - half);
     Object.assign(bubble.style, { left: `${bx}px`, top: `${Math.max(y, bubble.offsetHeight + 8)}px` });
     bubble.style.setProperty('--tail', `${clamp(50 + (x - bx) / (half * 2) * 100, 12, 88)}%`);   // the tail still points at them when nudged on screen
   }
@@ -256,21 +260,25 @@ export async function load(ctx) {
         p.mat.uniforms.uL.value = p.L + p.hi * .25;
         p.mat.uniforms.uHi.value = p.hi;
         p.mat.uniforms.uGlow.value = .3 + .2 * Math.sin(now * 2.3 + p.px);
-        let x = p.px, op = 1, y = -p.py;
+        let x = p.px, op = 1, y = p.py;
         if (chosen) {
           if (chosen === p) {   // walks to the taxi, and is gone
             const k = clamp((now - leftAt - .8) / 2.4, 0, 1);
-            x = lerp(p.px, taxi.jeep.position.x + 40, k * k); op = 1 - sstep(.75, 1, k);
-            y += Math.abs(Math.sin(k * 18)) * 3 * (k > 0 ? 1 : 0);
+            x = lerp(p.px, taxiX + 40, k * k); op = 1 - sstep(.75, 1, k);
+            y -= Math.abs(Math.sin(k * 18)) * 3 * (k > 0 ? 1 : 0);
+            stage.place(p.m, x, y, [p.w, p.h], p.d); stage.place(p.sh, x, p.py, [p.w * .8, 10], p.d);
           } else op = .5;   // the others step back into the dark
         }
-        p.m.position.x = x; p.m.position.y = y; p.sh.position.x = x;
         p.mat.uniforms.uOp.value = lerp(p.mat.uniforms.uOp.value, op, damp(6, dt));
         p.sh.material.opacity = .45 * p.mat.uniforms.uOp.value;
       }
       if (chosen && now - leftAt > 1.4) bubble.hidden = true;
       if (chosen && now - leftAt > 3.6) { chosen = null; ctx.next(); }
       taxi.body.position.y = -taxi.PIVOT.y + Math.sin(now * 13) * .004;   // idling
+      // the camera: a slow push-in over the first eight seconds; the buttons and the bubble ride along with it
+      stage.target.dolly = .09 * sstep(0, 8, since += dt);
+      stage.update(dt, 4);
+      if (since < 9) { buttons(); if (looking && !chosen) show(looking); }
       ctx.ink.uniforms.uTime.value = now; ctx.ink.uniforms.uJeepScale.value = .6;
       ctx.ink.render(scene, camera, taxi.jeep);
     },
