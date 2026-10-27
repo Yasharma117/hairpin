@@ -2,6 +2,7 @@
 // the passenger signs off; a shooting star crosses (hold while it's up to bank the wish); the quote sets itself on torn paper.
 import * as THREE from 'three';
 import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, disposeScene } from '../shared/kit.js';
+import { SHILLONG_PLACEHOLDER, FIGURE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 export const assets = ['../08-edge-scene/sprites/truck-lit.png', '../08-edge-scene/sprites/truck-dark.png'];
@@ -17,17 +18,12 @@ const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 function placeholder() {
   const cl = canvasIW(), cd = canvasIW(), ctx = [cl.getContext('2d'), cd.getContext('2d')], r = rng(11);
   const both = f => ctx.forEach(f);
-  const P = {   // [lit swatches, dark swatches], matched index for index so the two stay pixel-aligned
-    sky: [['#1a2150', '#222a5c', '#151b44'], ['#121735', '#171d40', '#0f132c']],
-    hill: [['#2c3a52', '#34445e', '#263248'], ['#161d30', '#1b2338', '#121828']],
-    town: [['#5a5068', '#6a5d72', '#4a4258'], ['#1d1c2c', '#232234', '#181726']],
-    ground: [['#8a7a5a', '#9c8a66', '#776a4e'], ['#1f2230', '#262938', '#1a1c28']],
-  };
+  const P = SHILLONG_PLACEHOLDER;   // [lit swatches, dark swatches]
   const dab = (pal, x, y, w, h, a) => { const i = r() * pal[0].length | 0; both((c, k) => { c.fillStyle = pal[k][i]; c.beginPath(); c.ellipse(x, y, w, h, a, 0, Math.PI * 2); c.fill(); }); };
   const hy = HORIZON * IH, ry = RAIL * IH;
   both((c, k) => { c.fillStyle = P.sky[k][0]; c.fillRect(0, 0, IW, IH); });
   for (let i = 0; i < 1400; i++) dab(P.sky, r() * IW, r() * hy, 40 + r() * 90, 8 + r() * 16, (r() - .5) * .2);
-  for (let i = 0; i < 260; i++) { const x = r() * IW, y = r() * hy * .9, s = .6 + r() * 1.4; both(c => { c.fillStyle = '#e8e4d0'; c.fillRect(x, y, s, s); }); }
+  for (let i = 0; i < 260; i++) { const x = r() * IW, y = r() * hy * .9, s = .6 + r() * 1.4; both(c => { c.fillStyle = P.star; c.fillRect(x, y, s, s); }); }
   // far ridges, then the bowl of the town
   const ridge = (y0, amp, f, ph) => x => y0 + Math.sin(x * f + ph) * amp + Math.sin(x * f * 2.7 + ph * 3) * amp * .4;
   for (const [y0, pal] of [[hy, P.hill], [hy + 40, P.town]]) {
@@ -41,14 +37,14 @@ function placeholder() {
     const c0 = towns[r() * towns.length | 0], a = r() * 6.283, d = Math.sqrt(-2 * Math.log(r() + 1e-6)) * c0[2] * .4;   // clustered: neighbourhoods
     const x = i % 5 ? c0[0] + Math.cos(a) * d * 1.8 : r() * IW, y = i % 5 ? c0[1] + Math.sin(a) * d * .5 : hy + 50 + r() * (ry - hy - 60), s = 1 + r() * 2.2;
     if (y < hy + 40 || y > ry - 30) continue;
-    const col = ['#ffd27a', '#ffe9b0', '#ffb860', '#f4f1e6'][r() * 4 | 0];
+    const col = P.lights[r() * 4 | 0];
     both(c => { c.fillStyle = col; c.fillRect(x, y, s, s); });
   }
   // the viewpoint: a paved lip and a low railing, the drop to the town beyond it
   both((c, k) => { c.fillStyle = P.ground[k][2]; c.fillRect(0, ry, IW, IH - ry); });
   for (let i = 0; i < 2500; i++) dab(P.ground, r() * IW, ry + r() * (IH - ry), 12 + r() * 20, 3 + r() * 5, (r() - .5) * .3);
   both((c, k) => {
-    c.fillStyle = ['#c9c2ae', '#2b2e3c'][k]; c.fillRect(0, ry - 26, IW, 5); c.fillRect(0, ry - 8, IW, 4);
+    c.fillStyle = P.rail[k]; c.fillRect(0, ry - 26, IW, 5); c.fillRect(0, ry - 8, IW, 4);
     for (let x = 20; x < IW; x += 70) c.fillRect(x, ry - 30, 6, 30);
   });
   return [cl, cd];
@@ -57,12 +53,12 @@ export async function load(ctx) {
 const { input, layer } = ctx;
 layer.innerHTML = `<style>
 .quote { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 60px); transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
-.quote p { margin: 0; background: var(--paper); color: var(--ink); padding: 8px 16px 10px; box-shadow: 4px 4px 0 #000; font-size: clamp(15px, 2.2vw, 19px); font-weight: 600; line-height: 1.3; clip-path: polygon(0% 10%, 6% 0%, 18% 6%, 30% 1%, 44% 7%, 58% 0%, 72% 6%, 86% 1%, 100% 5%, 99% 50%, 100% 92%, 88% 100%, 74% 94%, 60% 100%, 46% 95%, 32% 100%, 18% 94%, 4% 100%, 1% 50%); opacity: 0; transition: opacity .5s, transform .5s; }
+.quote p { margin: 0; background: var(--paper); color: var(--ink); padding: 8px 16px 10px; box-shadow: 4px 4px 0 var(--black); font-size: clamp(15px, 2.2vw, 19px); font-weight: 600; line-height: 1.3; clip-path: polygon(0% 10%, 6% 0%, 18% 6%, 30% 1%, 44% 7%, 58% 0%, 72% 6%, 86% 1%, 100% 5%, 99% 50%, 100% 92%, 88% 100%, 74% 94%, 60% 100%, 46% 95%, 32% 100%, 18% 94%, 4% 100%, 1% 50%); opacity: 0; transition: opacity .5s, transform .5s; }
 .quote p.on { opacity: 1; }
 .quote p:nth-child(odd) { transform: rotate(-1.2deg); }
 .quote p:nth-child(even) { transform: rotate(.9deg); margin-left: 18px; }
 .quote .star { display: inline-block; margin-left: 8px; color: var(--red); }
-.wish { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: var(--mono); font-size: 13px; letter-spacing: .1em; color: var(--paper); opacity: 0; transition: opacity .6s; pointer-events: none; text-shadow: 0 1px 6px #000; }
+.wish { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: var(--mono); font-size: 13px; letter-spacing: .1em; color: var(--paper); opacity: 0; transition: opacity .6s; pointer-events: none; text-shadow: 0 1px 6px var(--black); }
 .wish.on { opacity: .9; }
 </style>
 <div class="tag">HAIRPIN · SHILLONG</div>
@@ -128,11 +124,11 @@ const back = (fill, extra) => cutout(200, 240, c => {
     c.beginPath(); c.moveTo(18 + dx, 240); c.bezierCurveTo(14 + dx, 150 + dy, 30 + dx, 108 + dy, 100 + dx, 104 + dy); c.bezierCurveTo(170 + dx, 108 + dy, 186 + dx, 150 + dy, 182 + dx, 240); c.fill();
     c.beginPath(); c.ellipse(100 + dx, 62 + dy, 30, 36, 0, 0, Math.PI * 2); c.fill(); if (extra) extra(c, dx, dy);
   };
-  c.fillStyle = '#7a6a58'; shape(3, -3);   // rim: the town's glow catching the shoulders
+  c.fillStyle = SHILLONG_PLACEHOLDER.rimTown; shape(3, -3);   // rim: the town's glow catching the shoulders
   c.fillStyle = fill; shape(0, 0);
 });
 const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
-[[back('#191427', (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), .55], [back('#0b0f1e'), .61]].forEach(([map, x]) => {
+[[back(FIGURE.backFill[0], (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), .55], [back(FIGURE.backFill[1]), .61]].forEach(([map, x]) => {
   const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
   const y = RAIL * IH + 30, h = 150;
   m.position.set(x * IW, -y, 250); m.scale.set(h * 200 / 240, h, 1); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);

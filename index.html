@@ -8,27 +8,27 @@
 <style>
 /* Layout: one page. A title card, then every scene swapped in place on one canvas, with a torn sheet between them.
    Shared overlay: scene tag top-left, the subtitle up top, one advance chip at the bottom. Single night world by design. */
-:root {
-  --night: #10142a; --paper: #efe6cf; --ink: #141826; --amber: #f6c744; --red: #c8402f; --muted: #aab0cc;
+:root {   /* colours come from shared/style.js (applyCSS); the page stays hidden until they're set */
   --body: "Archivo", system-ui, -apple-system, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
 }
+html:not(.styled) { visibility: hidden; }
 html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--paper); font-family: var(--body); }
 [hidden] { display: none !important; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 #layer { position: fixed; inset: 0; pointer-events: none; }
 #layer > * { pointer-events: auto; }
-.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
-.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: max-content; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); pointer-events: none; z-index: 10; }
+.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 var(--black); transform: rotate(-1.5deg); pointer-events: none; }
+.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: max-content; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 var(--black); clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); pointer-events: none; z-index: 10; }
 .sub.off { visibility: hidden; }   /* shown solid or not at all */
 .sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
 .sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
 .sub .line:empty { display: none; }
-.chip { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); z-index: 10; font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: var(--amber); border: 0; padding: 12px 16px; min-height: 44px; box-shadow: 3px 3px 0 #000; cursor: pointer; }
+.chip { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); z-index: 10; font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: var(--amber); border: 0; padding: 12px 16px; min-height: 44px; box-shadow: 3px 3px 0 var(--black); cursor: pointer; }
 .chip:focus-visible { outline: 2px solid var(--paper); outline-offset: 3px; }
-.cue { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-1deg); z-index: 10; background: var(--red); color: var(--paper); font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: .14em; padding: 8px 14px; box-shadow: 4px 4px 0 #000; pointer-events: none; }
-#fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 600 12px var(--mono); color: var(--amber); background: #000a; padding: 4px 6px; pointer-events: none; }
+.cue { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-1deg); z-index: 10; background: var(--red); color: var(--paper); font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: .14em; padding: 8px 14px; box-shadow: 4px 4px 0 var(--black); pointer-events: none; }
+#fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 600 12px var(--mono); color: var(--amber); background: var(--night); padding: 4px 6px; pointer-events: none; }
 /* the torn sheet between scenes */
 .tear { position: fixed; inset: -4% 0; z-index: 50; background: var(--paper); pointer-events: none; transform: translateY(0); transition: transform .75s cubic-bezier(.7, 0, .3, 1);
   clip-path: polygon(0% 3%, 5% 1%, 11% 3.5%, 18% .5%, 26% 3%, 33% 1%, 41% 4%, 49% .8%, 57% 3.2%, 64% 1%, 72% 3.8%, 80% .6%, 87% 3%, 94% 1.2%, 100% 3.4%, 100% 97%, 94% 99.2%, 87% 96.8%, 80% 99.4%, 72% 96.6%, 64% 99%, 57% 96.8%, 49% 99.2%, 41% 96%, 33% 99%, 26% 97%, 18% 99.5%, 11% 96.5%, 5% 99%, 0% 97%); }
@@ -40,14 +40,14 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 #card main { width: min(620px, 100%); display: flex; flex-direction: column; gap: 24px; }
 #card h1 { margin: 0; font-size: clamp(64px, 16vw, 128px); line-height: .85; font-weight: 900; font-variation-settings: 'wdth' 125; text-shadow: 6px 6px 0 var(--red); }
 #card p { margin: 0; font-size: 18px; line-height: 1.45; max-width: 52ch; }
-#play { align-self: flex-start; background: var(--amber); color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: 15px; letter-spacing: .06em; padding: 14px 20px; min-height: 48px; border: 0; box-shadow: 4px 4px 0 #000; cursor: pointer; }
+#play { align-self: flex-start; background: var(--amber); color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: 15px; letter-spacing: .06em; padding: 14px 20px; min-height: 48px; border: 0; box-shadow: 4px 4px 0 var(--black); cursor: pointer; }
 #play:focus-visible, #card a:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
 .keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; font-size: 15px; line-height: 1.4; }
 .keys dt { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; color: var(--amber); padding-top: 2px; }
 .keys dd { margin: 0; }
 #card ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-#card ol a { display: block; background: var(--paper); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 700; padding: 6px 10px 7px; box-shadow: 3px 3px 0 #000; }
-#card small { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+#card ol a { display: block; background: var(--paper); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 700; padding: 6px 10px 7px; box-shadow: 3px 3px 0 var(--black); }
+#card small { font-family: var(--mono); font-size: 11px; color: var(--mist); letter-spacing: .08em; }
 </style>
 
 <canvas id="c" aria-label="Hairpin: a night drive by taxi from Jorabat to Shillong"></canvas>
@@ -86,6 +86,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 <script type="module">
 import * as THREE from 'three';
 import { Ink, clamp, loadImg, who } from './shared/kit.js';
+import { applyCSS } from './shared/style.js';
+import { GRADES } from './shared/grade.js';
+applyCSS();
 THREE.ColorManagement.enabled = false;
 
 // the scenes, in story order; each folder has a scene.js
@@ -227,6 +230,7 @@ async function go(name) {
   if (current) { current.dispose?.(); scope.dispose(); }
   say(null); prompt(null);
   scope = makeCtx(name); sceneName = name;
+  ink.setGrade(GRADES[name]);   // every scene graded toward the edge painting
   try { current = await mod.load(scope); }
   catch (e) { console.error(e); current = null; }
   resize();

@@ -2,6 +2,7 @@
 // Hover or focus shows a person's tagline and quip; a click (or Enter) gives them the lift.
 import * as THREE from 'three';
 import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, makeTaxi, roster, pick, disposeScene } from '../shared/kit.js';
+import { PALETTE, FIGURE, UTIL } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 export const assets = ['jorabat-dark.jpg'];
@@ -18,11 +19,11 @@ export async function load(ctx) {
   const { renderer, layer, on, U: { uMode } } = ctx;
   layer.innerHTML = `
     <style>
-      .ask { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); background: var(--paper); color: var(--ink); padding: 10px 20px 12px; box-shadow: 5px 5px 0 #000; font-size: clamp(18px, 2.8vw, 26px); font-weight: 800; font-variation-settings: 'wdth' 110; pointer-events: none; white-space: nowrap; }
+      .ask { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); background: var(--paper); color: var(--ink); padding: 10px 20px 12px; box-shadow: 5px 5px 0 var(--black); font-size: clamp(18px, 2.8vw, 26px); font-weight: 800; font-variation-settings: 'wdth' 110; pointer-events: none; white-space: nowrap; }
       .ask small { display: block; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .1em; color: var(--red); margin-bottom: 2px; }
       .person { position: fixed; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 6px; }
       .person:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-      .bubble { position: fixed; z-index: 5; max-width: min(300px, calc(100vw - 32px)); background: var(--paper); color: var(--ink); padding: 10px 14px 12px; border: 2px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 #000; pointer-events: none; transform: translate(-50%, -100%); }
+      .bubble { position: fixed; z-index: 5; max-width: min(300px, calc(100vw - 32px)); background: var(--paper); color: var(--ink); padding: 10px 14px 12px; border: 2px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--black); pointer-events: none; transform: translate(-50%, -100%); }
       .bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -12px; width: 16px; height: 12px; background: var(--paper); border: 2px solid var(--ink); border-top: 0; border-left: 0; transform: translateX(-50%) skewX(-30deg); }
       .bubble b { display: block; font-size: 17px; font-weight: 800; line-height: 1.2; }
       .bubble span { display: block; margin-top: 4px; font-size: 14px; line-height: 1.35; }
@@ -30,7 +31,7 @@ export async function load(ctx) {
       .faces { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); display: none; gap: 10px; overflow-x: auto; padding: 8px 16px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
       .faces::-webkit-scrollbar { display: none; }
       @media (max-width: 700px), (max-aspect-ratio: 1/1) { .faces { display: flex; } }
-      .face { flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper) center / cover no-repeat; box-shadow: 3px 3px 0 #000; padding: 0; cursor: pointer; scroll-snap-align: center; }
+      .face { flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper) center / cover no-repeat; box-shadow: 3px 3px 0 var(--black); padding: 0; cursor: pointer; scroll-snap-align: center; }
       .face[aria-pressed="true"] { outline: 3px solid var(--amber); outline-offset: 3px; }
       .face:focus-visible { outline: 3px solid var(--paper); outline-offset: 3px; }
       .bubble i { display: block; margin-top: 6px; font-family: var(--mono); font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--red); }
@@ -100,27 +101,27 @@ export async function load(ctx) {
 
   /* ---------- the team: their painted stand-up if it exists, else a silhouette doing what their spot is for ---------- */
   const people = roster.people.filter(p => p.on);
-  const SHIRTS = ['#4b5d78', '#7a3b52', '#3f6b4a', '#8a5a3c', '#5a4a78', '#2f5d8a', '#7a6a3a', '#6b3a3a'];
+  const SHIRTS = FIGURE.shirts;
   // a face for the strip: from their painted stand-up if it exists, else the stand-in's head and shoulders
   function faceOf(p) {
     const c = mkCanvas(104, 104), x = c.getContext('2d'), i = people.indexOf(p);
-    x.fillStyle = '#efe6cf'; x.fillRect(0, 0, 104, 104);
+    x.fillStyle = PALETTE.paper; x.fillRect(0, 0, 104, 104);
     if (p.sprite) { const sw = p.sprite.width, sh = Math.min(p.sprite.height, sw); x.drawImage(p.sprite, 0, 0, sw, sh * .9, 0, 0, 104, 104 * .9); }
     else {
       x.fillStyle = SHIRTS[i % SHIRTS.length]; x.beginPath(); x.ellipse(52, 112, 40, 34, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#c99772'; x.beginPath(); x.arc(52, 52, 24, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#1c1714'; x.beginPath(); x.arc(54, 46, 25, Math.PI * .95, Math.PI * 2.1); x.fill();
+      x.fillStyle = FIGURE.skin; x.beginPath(); x.arc(52, 52, 24, 0, Math.PI * 2); x.fill();
+      x.fillStyle = FIGURE.hair; x.beginPath(); x.arc(54, 46, 25, Math.PI * .95, Math.PI * 2.1); x.fill();
     }
     return c.toDataURL();
   }
   function standIn(pose, i) {   // facing left; 140 x 300, feet on the bottom edge
-    const c = mkCanvas(140, 300), x = c.getContext('2d'), shirt = SHIRTS[i % SHIRTS.length], skin = '#c99772', hair = '#1c1714', legs = '#1c1a24';
+    const c = mkCanvas(140, 300), x = c.getContext('2d'), shirt = SHIRTS[i % SHIRTS.length], { skin, hair, legs } = FIGURE;
     const head = (hx, hy) => { x.fillStyle = skin; x.beginPath(); x.arc(hx, hy, 23, 0, Math.PI * 2); x.fill(); x.fillStyle = hair; x.beginPath(); x.arc(hx + 2, hy - 6, 24, Math.PI * .95, Math.PI * 2.1); x.fill(); };
     const arm = (ax, ay, a, len = 60) => { x.save(); x.translate(ax, ay); x.rotate(a); x.fillStyle = shirt; x.fillRect(-7, 0, 14, len); x.restore(); };
     if (pose === 'sit') {   // on the bench, a glass of chai in both hands
       x.fillStyle = legs; x.fillRect(40, 236, 56, 16); x.fillRect(40, 236, 16, 64);
       x.fillStyle = shirt; x.beginPath(); x.roundRect(58, 150, 52, 96, 16); x.fill(); head(84, 124);
-      arm(70, 170, .9, 46); x.fillStyle = '#e8d4a8'; x.fillRect(34, 196, 14, 18); x.fillStyle = '#b5692c'; x.fillRect(35, 199, 12, 8);
+      arm(70, 170, .9, 46); x.fillStyle = FIGURE.chai; x.fillRect(34, 196, 14, 18); x.fillStyle = FIGURE.tea; x.fillRect(35, 199, 12, 8);
     } else if (pose === 'crouch') {   // down at the kerb
       x.fillStyle = legs; x.fillRect(46, 250, 52, 22); x.fillRect(46, 262, 14, 38); x.fillRect(84, 262, 14, 38);
       x.fillStyle = shirt; x.beginPath(); x.roundRect(48, 178, 54, 84, 18); x.fill(); head(64, 160); arm(56, 196, .4, 52);
@@ -130,7 +131,7 @@ export async function load(ctx) {
       x.fillStyle = legs; x.fillRect(52, 190, 16, 110); x.fillRect(74, 190, 16, 110);
       x.fillStyle = shirt; x.beginPath(); x.roundRect(44, 92, 54, 104, 16); x.fill(); head(70, 62);
       if (pose === 'flag') arm(50, 104, -2.3);                                   // a hand half up, flagging the taxi
-      else if (pose === 'phone') { arm(52, 104, -2.7, 42); x.fillStyle = '#b8d8ff'; x.fillRect(36, 60, 12, 20); }   // on the phone, its screen glowing
+      else if (pose === 'phone') { arm(52, 104, -2.7, 42); x.fillStyle = FIGURE.phone; x.fillRect(36, 60, 12, 20); }   // on the phone, its screen glowing
       else if (pose === 'lean') arm(92, 100, 2.4, 58);                           // a hand up on the lamp post
       else if (pose === 'counter') arm(48, 110, -1.3, 54);                       // elbow on the stall counter
       else { arm(46, 104, .15); arm(94, 104, -.15); }
@@ -142,7 +143,7 @@ export async function load(ctx) {
   const POSES = ['sit', 'sit', 'counter', 'counter', 'counter', 'lean', 'crouch', 'phone'];
   const stands = await Promise.all(people.map(p => loadImg(at(`../people/${p.id}-stand.png`))));
   try { await document.fonts.load('600 15px "IBM Plex Mono"'); } catch (e) {}
-  const POOL = (() => { const c = mkCanvas(64, 16), x = c.getContext('2d'), g = x.createRadialGradient(32, 8, 0, 32, 8, 32); g.addColorStop(0, '#fff'); g.addColorStop(1, '#fff0'); x.setTransform(1, 0, 0, .25, 0, 6); x.fillStyle = g; x.fillRect(0, -24, 64, 64); return tex(c); })();
+  const POOL = (() => { const c = mkCanvas(64, 16), x = c.getContext('2d'), g = x.createRadialGradient(32, 8, 0, 32, 8, 32); g.addColorStop(0, UTIL.white); g.addColorStop(1, `${UTIL.white}00`); x.setTransform(1, 0, 0, .25, 0, 6); x.fillStyle = g; x.fillRect(0, -24, 64, 64); return tex(c); })();
   const pMat = map => new THREE.ShaderMaterial({
     uniforms: { map: { value: map }, uL: { value: .2 }, uHi: { value: 0 }, uOp: { value: 1 }, uGlow: { value: 0 } }, transparent: true, depthWrite: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
@@ -154,7 +155,7 @@ export async function load(ctx) {
     p.sprite = stands[i]; const src = p.sprite || standIn(p.pose, i);
     p.aspect = src.width / src.height;
     p.mat = pMat(tex(src)); p.m = new THREE.Mesh(footGeo, p.mat); p.m.frustumCulled = false; scene.add(p.m);
-    p.sh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: POOL, color: 0x05070d, transparent: true, opacity: .45, depthWrite: false })); scene.add(p.sh);
+    p.sh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: POOL, color: UTIL.shadow, transparent: true, opacity: .45, depthWrite: false })); scene.add(p.sh);
     p.hi = 0;
   });
 

@@ -1,5 +1,6 @@
 // Shared by every scene: small helpers, the stroke map, the taxi, its ink outline, and the passenger.
 import * as THREE from 'three';
+import { LIVERY, TAXI, UTIL } from './style.js';
 
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -25,9 +26,14 @@ float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 
 float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(h12(i), h12(i+vec2(1,0)), f.x), mix(h12(i+vec2(0,1)), h12(i+vec2(1,1)), f.x), f.y); }`;
 
 /* ---------- the taxi: a modified 80s hatchback, painted two-tone, inked ---------- */
-// Livery is a guess: black body, yellow roof.
-export const LIVERY = { body: '#1c1e23', roof: '#f2c230' };
+// Livery is a guess: black body, yellow roof. The colours live in style.js.
+export { LIVERY };
 // jeep -> hang (the seesaw pivot, just behind the front axle) -> body. Every mesh goes in parts and on layer 1 for the ink pass.
+export function colorize(g, hex, emit = 0) {
+  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), e = new Float32Array(n).fill(emit);
+  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
+}
 export function makeTaxi(uMode) {
   const jeepMat = new THREE.ShaderMaterial({
     uniforms: { uL: { value: .3 }, uMode },
@@ -53,11 +59,7 @@ export function makeTaxi(uMode) {
         gl_FragColor = vec4(col, 1.);
       }`,
   });
-  function colorize(g, hex, emit = 0) {
-    const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), e = new Float32Array(n).fill(emit);
-    for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
-    g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
-  }
+
   // jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
   const PIVOT = new THREE.Vector3(.55, .2, 0);
   const jeep = new THREE.Group(), hang = new THREE.Group(), body = new THREE.Group();
@@ -79,41 +81,41 @@ export function makeTaxi(uMode) {
   put(new THREE.BoxGeometry(1.66, .03, 1.1), LIVERY.roof, { x: -.49, y: 1.445 });
   // glass
   for (const sgn of [-1, 1]) {
-    put(extrude([[-1.38, .93], [-1.32, 1.3], [.37, 1.31], [.84, .93]], .01, .004), '#000000', { z: sgn * .64, emit: 2 });
+    put(extrude([[-1.38, .93], [-1.32, 1.3], [.37, 1.31], [.84, .93]], .01, .004), TAXI.glass, { z: sgn * .64, emit: 2 });
     put(new THREE.BoxGeometry(.07, .42, .025), LIVERY.body, { x: -.36, y: 1.12, z: sgn * .65 });
     put(new THREE.BoxGeometry(.06, .4, .025), LIVERY.body, { x: -1.0, y: 1.12, z: sgn * .65 });
   }
-  put(new THREE.BoxGeometry(.02, .6, 1.08), '#000000', { x: .73, y: 1.12, rz: .82, emit: 2 });
-  put(new THREE.BoxGeometry(.02, .41, 1.08), '#000000', { x: -1.53, y: 1.12, rz: -.22, emit: 2 });
+  put(new THREE.BoxGeometry(.02, .6, 1.08), TAXI.glass, { x: .73, y: 1.12, rz: .82, emit: 2 });
+  put(new THREE.BoxGeometry(.02, .41, 1.08), TAXI.glass, { x: -1.53, y: 1.12, rz: -.22, emit: 2 });
   // the sound system, visible through the hatch glass
   for (const zz of [-.3, .3]) {
-    put(new THREE.CylinderGeometry(.11, .11, .02, 18), '#2a2b30', { x: -1.56, y: 1.0, z: zz, rz: Math.PI / 2 });
-    put(new THREE.CylinderGeometry(.045, .045, .025, 12), '#6a6d75', { x: -1.565, y: 1.0, z: zz, rz: Math.PI / 2 });
+    put(new THREE.CylinderGeometry(.11, .11, .02, 18), TAXI.speaker, { x: -1.56, y: 1.0, z: zz, rz: Math.PI / 2 });
+    put(new THREE.CylinderGeometry(.045, .045, .025, 12), TAXI.speakerCone, { x: -1.565, y: 1.0, z: zz, rz: Math.PI / 2 });
   }
   // lamps, grille, bumpers, yellow commercial plates
   for (const sgn of [-1, 1]) {
-    put(new THREE.BoxGeometry(.03, .14, .3), '#fff6d6', { x: 1.69, y: .62, z: sgn * .46, emit: 1 });
-    put(new THREE.BoxGeometry(.03, .07, .1), '#ffb347', { x: 1.68, y: .49, z: sgn * .6 });
-    put(new THREE.BoxGeometry(.03, .26, .15), '#c8352a', { x: -1.69, y: .66, z: sgn * .58, emit: 1 });
+    put(new THREE.BoxGeometry(.03, .14, .3), TAXI.headlamp, { x: 1.69, y: .62, z: sgn * .46, emit: 1 });
+    put(new THREE.BoxGeometry(.03, .07, .1), TAXI.indicator, { x: 1.68, y: .49, z: sgn * .6 });
+    put(new THREE.BoxGeometry(.03, .26, .15), TAXI.taillamp, { x: -1.69, y: .66, z: sgn * .58, emit: 1 });
     put(new THREE.BoxGeometry(.06, .08, .13), LIVERY.body, { x: .86, y: .98, z: sgn * .76 });
-    put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: -.36, y: .6, z: sgn * .755 });
-    put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: .9, y: .6, z: sgn * .755 });
-    put(new THREE.BoxGeometry(.1, .025, .02), '#8b8f96', { x: -.46, y: .78, z: sgn * .76 });
+    put(new THREE.BoxGeometry(.014, .48, .014), TAXI.pillar, { x: -.36, y: .6, z: sgn * .755 });
+    put(new THREE.BoxGeometry(.014, .48, .014), TAXI.pillar, { x: .9, y: .6, z: sgn * .755 });
+    put(new THREE.BoxGeometry(.1, .025, .02), TAXI.handle, { x: -.46, y: .78, z: sgn * .76 });
   }
-  put(new THREE.BoxGeometry(.02, .08, .6), '#0d0e10', { x: 1.7, y: .6 });
-  put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: 1.69, y: .32 });
-  put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: -1.69, y: .32 });
-  put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: 1.76, y: .42 });
-  put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: -1.76, y: .5 });
-  put(new THREE.CylinderGeometry(.006, .006, .75, 4), '#111215', { x: .7, y: 1.25, z: .66, rz: .35 });
+  put(new THREE.BoxGeometry(.02, .08, .6), TAXI.grille, { x: 1.7, y: .6 });
+  put(new THREE.BoxGeometry(.12, .14, 1.46), TAXI.bumper, { x: 1.69, y: .32 });
+  put(new THREE.BoxGeometry(.12, .14, 1.46), TAXI.bumper, { x: -1.69, y: .32 });
+  put(new THREE.BoxGeometry(.02, .12, .42), TAXI.plate, { x: 1.76, y: .42 });
+  put(new THREE.BoxGeometry(.02, .12, .42), TAXI.plate, { x: -1.76, y: .5 });
+  put(new THREE.CylinderGeometry(.006, .006, .75, 4), TAXI.aerial, { x: .7, y: 1.25, z: .66, rz: .35 });
   // wider aftermarket tyres sticking out of the arches, dark alloys with a chrome lip
   for (const [x, sgn] of [[1.07, 1], [1.07, -1], [-1.07, 1], [-1.07, -1]]) {
-    put(new THREE.CylinderGeometry(.33, .33, .02, 20), '#0b0c0e', { x, y: .3, z: sgn * .752, rx: Math.PI / 2 });
-    put(new THREE.TorusGeometry(.34, .04, 6, 18, Math.PI), '#0d0e10', { x, y: .3, z: sgn * .76 });
-    put(new THREE.CylinderGeometry(.29, .29, .28, 20), '#121316', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-    put(new THREE.CylinderGeometry(.18, .18, .29, 16), '#4d5158', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-    put(new THREE.TorusGeometry(.18, .016, 6, 20), '#c9ccd1', { x, y: .29, z: sgn * .867 });
-    put(new THREE.CylinderGeometry(.05, .05, .3, 8), '#24262a', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+    put(new THREE.CylinderGeometry(.33, .33, .02, 20), TAXI.tyre, { x, y: .3, z: sgn * .752, rx: Math.PI / 2 });
+    put(new THREE.TorusGeometry(.34, .04, 6, 18, Math.PI), TAXI.grille, { x, y: .3, z: sgn * .76 });
+    put(new THREE.CylinderGeometry(.29, .29, .28, 20), TAXI.wheel, { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+    put(new THREE.CylinderGeometry(.18, .18, .29, 16), TAXI.alloy, { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+    put(new THREE.TorusGeometry(.18, .016, 6, 20), TAXI.alloyLip, { x, y: .29, z: sgn * .867 });
+    put(new THREE.CylinderGeometry(.05, .05, .3, 8), TAXI.hub, { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
   }
   for (const m of parts) m.layers.enable(1);
   return { jeep, hang, body, parts, put, jeepMat, PIVOT };
@@ -128,12 +130,13 @@ export class Ink {
     this.renderer = renderer;
     this.rtColor = new THREE.WebGLRenderTarget(1, 1, { samples: lowEnd ? 0 : 4 });   // phones: no MSAA, the ink hides the edges
     this.rtInfo = new THREE.WebGLRenderTarget(1, 1);
-    this.uniforms = { tColor: { value: this.rtColor.texture }, tInfo: { value: this.rtInfo.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uBoil: { value: 1 }, uJeepScale: { value: .7 }, uBox: { value: new THREE.Vector4(2, 2, -1, -1) } };
+    this.uniforms = { tColor: { value: this.rtColor.texture }, tInfo: { value: this.rtInfo.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uBoil: { value: 1 }, uJeepScale: { value: .7 }, uBox: { value: new THREE.Vector4(2, 2, -1, -1) },
+      uLift: { value: new THREE.Vector3(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Vector3(1, 1, 1) }, uSat: { value: 1 } };
     this.mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms, depthTest: false, depthWrite: false,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
       fragmentShader: NOISE + /* glsl */`
-        uniform sampler2D tColor, tInfo; uniform vec2 uRes; uniform float uTime, uBoil, uJeepScale; uniform vec4 uBox; varying vec2 vUv;
+        uniform sampler2D tColor, tInfo; uniform vec2 uRes; uniform float uTime, uBoil, uJeepScale, uSat; uniform vec4 uBox; uniform vec3 uLift, uGamma, uGain; varying vec2 vUv;
         float maskAt(vec2 uv){ return texture2D(tInfo, uv).a; }
         vec2 PX;
         const vec2 DIRS[8] = vec2[8](vec2(1, 0), vec2(.7071, .7071), vec2(0, 1), vec2(-.7071, .7071), vec2(-1, 0), vec2(-.7071, -.7071), vec2(0, -1), vec2(.7071, -.7071));
@@ -161,7 +164,13 @@ export class Ink {
             if (maskAt(vUv - sh) > .5) col = texture2D(tColor, vUv - sh).rgb;
             col = mix(col, vec3(.07, .075, .1), ink);
           }
-          col += (h12(gl_FragCoord.xy) - .5) * .03;
+          // the scene's grade (fitted to the edge painting: see STYLE.md and shared/grade.js)
+          col = uLift + (uGain - uLift) * pow(clamp(col, 0., 1.), uGamma);
+          col = mix(vec3(dot(col, vec3(.299, .587, .114))), col, uSat);
+          // the shared paper grain: a soft fibre at a fixed screen scale plus a fine tooth, the same strength everywhere
+          vec2 g = gl_FragCoord.xy / max(1., uRes.y / 900.);
+          float fibre = vn2(g * vec2(.09, .5)) * .6 + vn2(g * vec2(.5, .09)) * .4;
+          col *= 1. + (fibre - .5) * .05 + (h12(g) - .5) * .035;
           vec2 q = vUv - .5; col *= 1. - dot(q, q) * .4;
           gl_FragColor = vec4(col, 1.);
         }`,
@@ -169,9 +178,11 @@ export class Ink {
     this.post = new THREE.Scene(); this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.post.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat));
   }
+  // [lift r,g,b, gamma r,g,b, gain r,g,b, saturation], from shared/grade.js
+  setGrade(p = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]) { const u = this.uniforms; u.uLift.value.fromArray(p, 0); u.uGamma.value.fromArray(p, 3); u.uGain.value.fromArray(p, 6); u.uSat.value = p[9]; }
   resize(pw, ph) { this.rtColor.setSize(pw, ph); this.rtInfo.setSize(pw, ph); this.uniforms.uRes.value.set(pw, ph); }
   // taxi: the jeep group, or null when there's no taxi in the shot
-  render(scene, camera, taxi, clear = 0x10142a) {
+  render(scene, camera, taxi, clear = UTIL.clear) {
     const r = this.renderer, B = this.uniforms.uBox.value;
     B.set(2, 2, -1, -1);
     if (taxi && taxi.visible) {
@@ -187,7 +198,7 @@ export class Ink {
         B.set(x0 - m, y0 - m, x1 + m, y1 + m);
         // info pass: just the taxi (layer 1), normals in rgb, coverage in alpha
         scene.overrideMaterial = infoMat; camera.layers.set(1);
-        r.setRenderTarget(this.rtInfo); r.setClearColor(0x8080ff, 0); r.clear(); r.render(scene, camera);
+        r.setRenderTarget(this.rtInfo); r.setClearColor(UTIL.infoClear, 0); r.clear(); r.render(scene, camera);
         scene.overrideMaterial = null; camera.layers.set(0);
       }
     }

@@ -1,7 +1,8 @@
 // The climb: painted hills, the headlight reveal, wind in the grass, cows, a dog that chases, a walker, the woman with the basket.
 // Hold to drive faster; the horn makes them look up.
 import * as THREE from 'three';
-import { disposeScene } from '../shared/kit.js';
+import { disposeScene, makeTaxi, colorize } from '../shared/kit.js';
+import { CLIMB_STANDINS as C } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'];
@@ -212,105 +213,20 @@ const lampGroup = new THREE.Group(); scene.add(lampGroup);
 const flatMat = hex => new THREE.MeshBasicMaterial({ color: hex });
 for (const L of LAMPS) {
   const s = lerp(.35, 1, depthN(L.y)) * 1.15;
-  const pole = new THREE.Mesh(new THREE.BoxGeometry(5 * s, 150 * s, 2), flatMat('#141826'));
+  const pole = new THREE.Mesh(new THREE.BoxGeometry(5 * s, 150 * s, 2), flatMat(C.lampPole));
   pole.position.set(L.x + 40 * s, -(L.y - 75 * s - 12 * s), -200); lampGroup.add(pole);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(44 * s, 4 * s, 2), flatMat('#141826'));
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(44 * s, 4 * s, 2), flatMat(C.lampPole));
   arm.position.set(L.x + 20 * s, -(L.y - 150 * s - 12 * s), -200); lampGroup.add(arm);
-  const bulb = new THREE.Mesh(new THREE.BoxGeometry(14 * s, 8 * s, 2), flatMat('#ffe9a8'));
+  const bulb = new THREE.Mesh(new THREE.BoxGeometry(14 * s, 8 * s, 2), flatMat(C.bulb));
   bulb.position.set(L.x + 2 * s, -(L.y - 146 * s - 12 * s), -199); lampGroup.add(bulb);
   pole.userData.base = pole.position.clone(); arm.userData.base = arm.position.clone(); bulb.userData.base = bulb.position.clone();
   pole.userData.y = arm.userData.y = bulb.userData.y = L.y;
 }
 
-/* ---------- the taxi: a modified 80s hatchback, painted two-tone, inked ---------- */
-// Livery is a guess: black body, yellow roof. Swap these two if Shillong's run the other way.
-const LIVERY = { body: '#1c1e23', roof: '#f2c230' };
-const jeepMat = new THREE.ShaderMaterial({
-  uniforms: { uL: { value: 0 }, uMode: U.uMode },
-  vertexShader: /* glsl */`
-    attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
-    void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
-  fragmentShader: /* glsl */`
-    uniform float uL, uMode; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
-    void main(){
-      vec3 n = normalize(vN);
-      if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }
-      float k = dot(n, normalize(vec3(-.4, .7, .6)));
-      float lit = step(.15, k * (.45 + uL)) * clamp(uL, .25, 1.);
-      if (uMode > 1.5) lit = step(-.25, k);       // lit painting: the car in full daylight colour
-      else if (uMode > .5) lit = 0.;             // dark painting: the car fully in night tones
-      vec3 col = mix(vC * vec3(.30, .34, .52), vC * vec3(1.03, .96, .86), lit);
-      col += vec3(.05, .06, .1) * step(.72, n.y);
-      col += vec3(.035, .04, .06) + vec3(.09, .11, .18) * smoothstep(.45, .8, 1. - abs(n.z));
-      if (vE > 1.5) {
-        float streak = step(.8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2));
-        col = mix(vec3(.07, .09, .15), vec3(.36, .43, .56), streak * .55 + step(.55, n.y) * .18 + lit * .12);
-      }
-      gl_FragColor = vec4(col, 1.);
-    }`,
-});
-function colorize(g, hex, emit = 0) {
-  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), e = new Float32Array(n).fill(emit);
-  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
-  g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
-}
-const jeep = new THREE.Group(), body = new THREE.Group(); jeep.add(body);
-const parts = [];
-const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}) => {
-  geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
-  const m = new THREE.Mesh(colorize(geo, hex, emit), jeepMat); body.add(m); parts.push(m); return m;
-};
-const extrude = (pts, depth, bevel) => {
-  const sh = new THREE.Shape(); sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
-  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
-  g.translate(0, 0, -depth / 2); return g;
-};
-// lower body: short sloping bonnet, flat sides, near-vertical hatch
-put(extrude([[-1.62, .24], [-1.66, .52], [-1.62, .84], [.95, .88], [1.56, .74], [1.64, .66], [1.64, .3], [1.58, .24]], 1.36, .06), LIVERY.body);
-// cabin: tall glasshouse, slight tumblehome
-put(extrude([[-1.55, .84], [-1.46, 1.34], [-1.38, 1.39], [.4, 1.39], [.5, 1.33], [.96, .88]], 1.18, .045), LIVERY.body);
-put(new THREE.BoxGeometry(1.66, .03, 1.1), LIVERY.roof, { x: -.49, y: 1.445 });
-// glass
-for (const sgn of [-1, 1]) {
-  put(extrude([[-1.38, .93], [-1.32, 1.3], [.37, 1.31], [.84, .93]], .01, .004), '#000000', { z: sgn * .64, emit: 2 });
-  put(new THREE.BoxGeometry(.07, .42, .025), LIVERY.body, { x: -.36, y: 1.12, z: sgn * .65 });
-  put(new THREE.BoxGeometry(.06, .4, .025), LIVERY.body, { x: -1.0, y: 1.12, z: sgn * .65 });
-}
-put(new THREE.BoxGeometry(.02, .6, 1.08), '#000000', { x: .73, y: 1.12, rz: .82, emit: 2 });
-put(new THREE.BoxGeometry(.02, .41, 1.08), '#000000', { x: -1.53, y: 1.12, rz: -.22, emit: 2 });
-// the sound system, visible through the hatch glass
-for (const zz of [-.3, .3]) {
-  put(new THREE.CylinderGeometry(.11, .11, .02, 18), '#2a2b30', { x: -1.56, y: 1.0, z: zz, rz: Math.PI / 2 });
-  put(new THREE.CylinderGeometry(.045, .045, .025, 12), '#6a6d75', { x: -1.565, y: 1.0, z: zz, rz: Math.PI / 2 });
-}
-// lamps, grille, bumpers, yellow commercial plates
-for (const sgn of [-1, 1]) {
-  put(new THREE.BoxGeometry(.03, .14, .3), '#fff6d6', { x: 1.69, y: .62, z: sgn * .46, emit: 1 });
-  put(new THREE.BoxGeometry(.03, .07, .1), '#ffb347', { x: 1.68, y: .49, z: sgn * .6 });
-  put(new THREE.BoxGeometry(.03, .26, .15), '#c8352a', { x: -1.69, y: .66, z: sgn * .58, emit: 1 });
-  put(new THREE.BoxGeometry(.06, .08, .13), LIVERY.body, { x: .86, y: .98, z: sgn * .76 });
-  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: -.36, y: .6, z: sgn * .755 });
-  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: .9, y: .6, z: sgn * .755 });
-  put(new THREE.BoxGeometry(.1, .025, .02), '#8b8f96', { x: -.46, y: .78, z: sgn * .76 });
-}
-put(new THREE.BoxGeometry(.02, .08, .6), '#0d0e10', { x: 1.7, y: .6 });
-put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: 1.69, y: .32 });
-put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: -1.69, y: .32 });
-put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: 1.76, y: .42 });
-put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: -1.76, y: .5 });
-put(new THREE.CylinderGeometry(.006, .006, .75, 4), '#111215', { x: .7, y: 1.25, z: .66, rz: .35 });
-// wider aftermarket tyres sticking out of the arches, dark alloys with a chrome lip
-for (const [x, sgn] of [[1.07, 1], [1.07, -1], [-1.07, 1], [-1.07, -1]]) {
-  put(new THREE.CylinderGeometry(.33, .33, .02, 20), '#0b0c0e', { x, y: .3, z: sgn * .752, rx: Math.PI / 2 });
-  put(new THREE.TorusGeometry(.34, .04, 6, 18, Math.PI), '#0d0e10', { x, y: .3, z: sgn * .76 });
-  put(new THREE.CylinderGeometry(.29, .29, .28, 20), '#121316', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-  put(new THREE.CylinderGeometry(.18, .18, .29, 16), '#4d5158', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-  put(new THREE.TorusGeometry(.18, .016, 6, 20), '#c9ccd1', { x, y: .29, z: sgn * .867 });
-  put(new THREE.CylinderGeometry(.05, .05, .3, 8), '#24262a', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-}
+/* ---------- the taxi: the shared one ---------- */
+const { jeep, body, parts, jeepMat, PIVOT } = makeTaxi(U.uMode);
 scene.add(jeep);
 
-for (const m of parts) m.layers.enable(1);   // the taxi, for the page's ink pass
 
 /* ---------- framing: cover the screen, follow the jeep ---------- */
 let viewW = IW, viewH = IH, ZOOM = 1.5, baseW = IW, baseH = IH, zoomK = 1;
@@ -350,7 +266,7 @@ function creature() { const R = new THREE.Group(), B = new THREE.Group(); R.add(
 const Box = (a, b, c) => new THREE.BoxGeometry(a, b, c);
 function legs(c, hex, xs, zs, len, w, y0) {
   const out = [];
-  for (const x of xs) for (const z of zs) { const L = new THREE.Group(); L.position.set(x, y0, z); c.B.add(L); c.M(L, Box(w, len, w), hex, { y: -len / 2 }); c.M(L, Box(w * 1.1, .07, w * 1.1), '#2b2522', { y: -len + .03 }); out.push(L); }
+  for (const x of xs) for (const z of zs) { const L = new THREE.Group(); L.position.set(x, y0, z); c.B.add(L); c.M(L, Box(w, len, w), hex, { y: -len / 2 }); c.M(L, Box(w * 1.1, .07, w * 1.1), C.hoof, { y: -len + .03 }); out.push(L); }
   return out;
 }
 function makeCow(hex, patch) {
@@ -362,20 +278,20 @@ function makeCow(hex, patch) {
   c.legs = legs(c, hex, [-.55, .55], [-.2, .2], .7, .14, .7);
   c.H = new THREE.Group(); c.H.position.set(.72, 1.12, 0); c.B.add(c.H);
   c.M(c.H, Box(.42, .3, .28), hex, { x: .2, y: -.05 });
-  c.M(c.H, Box(.16, .2, .26), '#cdbda8', { x: .45, y: -.1 });
-  for (const z of [-.1, .1]) { c.M(c.H, new THREE.CylinderGeometry(.018, .03, .18, 5), '#e8e0cc', { x: .12, y: .15, z, rx: z * 5 }); c.M(c.H, Box(.06, .06, .16), hex, { x: .1, y: .04, z: z * 1.9 }); }
-  c.eyes = [-.12, .12].map(z => c.M(c.H, Box(.04, .05, .04), '#ffe9a0', { x: .33, y: 0, z, emit: 1 }));
+  c.M(c.H, Box(.16, .2, .26), C.cowMuzzle, { x: .45, y: -.1 });
+  for (const z of [-.1, .1]) { c.M(c.H, new THREE.CylinderGeometry(.018, .03, .18, 5), C.horn, { x: .12, y: .15, z, rx: z * 5 }); c.M(c.H, Box(.06, .06, .16), hex, { x: .1, y: .04, z: z * 1.9 }); }
+  c.eyes = [-.12, .12].map(z => c.M(c.H, Box(.04, .05, .04), C.eye, { x: .33, y: 0, z, emit: 1 }));
   c.kind = 'cow'; c.phase = Math.random() * 6; return c;
 }
 function makeDog() {
-  const c = creature(), hex = '#c49a5c';
+  const c = creature(), hex = C.dog;
   c.M(c.B, Box(.66, .24, .22), hex, { y: .46 });
   c.legs = legs(c, hex, [-.24, .24], [-.07, .07], .34, .07, .36);
   c.H = new THREE.Group(); c.H.position.set(.36, .6, 0); c.B.add(c.H);
   c.M(c.H, Box(.24, .2, .18), hex, { x: .08 });
-  c.M(c.H, Box(.12, .1, .12), '#a07a45', { x: .24, y: -.04 });
-  for (const z of [-.06, .06]) c.M(c.H, Box(.05, .1, .04), '#8a6438', { x: .02, y: .14, z });
-  c.eyes = [-.06, .06].map(z => c.M(c.H, Box(.03, .03, .03), '#ffe9a0', { x: .2, y: .03, z, emit: 1 }));
+  c.M(c.H, Box(.12, .1, .12), C.dogMuzzle, { x: .24, y: -.04 });
+  for (const z of [-.06, .06]) c.M(c.H, Box(.05, .1, .04), C.dogEar, { x: .02, y: .14, z });
+  c.eyes = [-.06, .06].map(z => c.M(c.H, Box(.03, .03, .03), C.eye, { x: .2, y: .03, z, emit: 1 }));
   c.tail = new THREE.Group(); c.tail.position.set(-.33, .54, 0); c.B.add(c.tail); c.M(c.tail, new THREE.CylinderGeometry(.02, .025, .26, 4), hex, { y: .12, rz: .6 });
   c.kind = 'dog'; c.phase = 0; return c;
 }
@@ -383,23 +299,23 @@ function makePerson(top, bottom, extra) {
   const c = creature();
   c.legs = [-.08, .08].map(z => { const L = new THREE.Group(); L.position.set(0, .6, z); c.B.add(L); c.M(L, Box(.12, .58, .12), bottom, { y: -.29 }); return L; });
   c.M(c.B, Box(.3, .55, .26), top, { y: .9 });
-  c.M(c.B, new THREE.SphereGeometry(.12, 10, 8), '#c99772', { y: 1.32 });
-  c.M(c.B, new THREE.SphereGeometry(.125, 10, 6, 0, Math.PI * 2, 0, 1.4), '#1c1714', { y: 1.35, x: -.02 });
+  c.M(c.B, new THREE.SphereGeometry(.12, 10, 8), C.skin, { y: 1.32 });
+  c.M(c.B, new THREE.SphereGeometry(.125, 10, 6, 0, Math.PI * 2, 0, 1.4), C.hair, { y: 1.35, x: -.02 });
   extra(c); c.phase = Math.random() * 6; return c;
 }
-const cows = [makeCow('#8a5a3c', '#e6dccb'), makeCow('#d9d2c4', '#5a4a40')];
+const cows = [makeCow(C.cowBrown, C.cowWhite), makeCow(C.cowPale, C.cowDark)];
 cows[0].home = new THREE.Vector2(985, 666); cows[0].face = new THREE.Vector2(1, .15);
 cows[1].home = new THREE.Vector2(1095, 642); cows[1].face = new THREE.Vector2(-1, .1);
 const dog = makeDog(); dog.home = new THREE.Vector2(1560, 818); dog.state = 'sit'; dog.pos = dog.home.clone(); dog.face = new THREE.Vector2(-1, .2);
-const walker = makePerson('#4b5d78', '#2a2a2e', c => {
-  c.M(c.B, new THREE.CylinderGeometry(.012, .012, .85, 4), '#111215', { x: .14, y: 1.48 });
-  c.M(c.B, new THREE.ConeGeometry(.55, .26, 10), '#141518', { x: .14, y: 1.98 });
+const walker = makePerson(C.walkerShirt, C.walkerLegs, c => {
+  c.M(c.B, new THREE.CylinderGeometry(.012, .012, .85, 4), C.pole, { x: .14, y: 1.48 });
+  c.M(c.B, new THREE.ConeGeometry(.55, .26, 10), C.umbrella, { x: .14, y: 1.98 });
 });
 walker.u = .6; walker.kind = 'walker';
-const basket = makePerson('#7a3b52', '#5a2c3c', c => {
-  c.M(c.B, new THREE.ConeGeometry(.3, .7, 10), '#b88a4a', { x: -.26, y: 1.08, rz: Math.PI });
-  c.M(c.B, Box(.04, .04, .3), '#8a6438', { x: -.08, y: 1.42 });
-  c.M(c.B, new THREE.ConeGeometry(.26, .5, 10), '#7a3b52', { y: .38 });
+const basket = makePerson(C.basketShirt, C.basketSkirt, c => {
+  c.M(c.B, new THREE.ConeGeometry(.3, .7, 10), C.basket, { x: -.26, y: 1.08, rz: Math.PI });
+  c.M(c.B, Box(.04, .04, .3), C.dogEar, { x: -.08, y: 1.42 });
+  c.M(c.B, new THREE.ConeGeometry(.26, .5, 10), C.basketShirt, { y: .38 });
 });
 basket.home = new THREE.Vector2(640, 578); basket.face = new THREE.Vector2(0, 1); basket.kind = 'basket';
 const beings = [...cows, dog, walker, basket];
@@ -633,7 +549,7 @@ function frame(dt) {
   const yaw = Math.atan2(-dir.y * 2.4, dir.x);
   q1.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42); q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
   jeep.quaternion.copy(q1).multiply(q2);
-  body.position.y = Math.sin(U.uTime.value * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(U.uTime.value * 11.9)), 10) * .03;  // road shake + bass thump
+  body.position.y = -PIVOT.y + Math.sin(U.uTime.value * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(U.uTime.value * 11.9)), 10) * .03;  // road shake + bass thump
   // headlights start at the jeep's nose, along the road
   U.uHead.value.set(p.x + dir.x * 58 * sc, p.y + dir.y * 58 * sc - 8 * sc);
   U.uDir.value.copy(dir);

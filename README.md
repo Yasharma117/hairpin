@@ -2,6 +2,8 @@
 
 A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160). About four minutes.
 
+**How it looks is set in [STYLE.md](STYLE.md)**: the house style (the edge painting), the palette in `shared/style.js`, light, line, grain, the per-scene grade, framing, asset rules, and the checks to run before every push (`tools/check_style.py`, `tools/contact_sheet.py`).
+
 ## How it fits together
 
 Hairpin is one page: `index.html` holds the title card, one canvas, one renderer, one AudioContext (unlocked by the Play tap) and the torn sheet between scenes. Each scene is a module, `<folder>/scene.js`, exporting `assets` (its paintings, prefetched while the scene before it plays) and `load(ctx)`, which returns `{ frame, resize, onTap, onHorn, dispose }`. The page swaps scenes in place, so the engine/wind/crickets/rain bed runs unbroken.

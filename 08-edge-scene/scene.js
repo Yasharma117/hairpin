@@ -3,6 +3,7 @@
 // the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
 import * as THREE from 'three';
 import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene } from '../shared/kit.js';
+import { FIGURE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const SPRITES = ['ghost-1', 'ghost-2', 'then-car', 'then-pair', 'truck-lit', 'truck-dark'];
@@ -123,19 +124,19 @@ const back = (fill, extra) => cutout(200, 240, c => {
     c.beginPath(); c.moveTo(18 + dx, 240); c.bezierCurveTo(14 + dx, 150 + dy, 30 + dx, 108 + dy, 100 + dx, 104 + dy); c.bezierCurveTo(170 + dx, 108 + dy, 186 + dx, 150 + dy, 182 + dx, 240); c.fill();
     c.beginPath(); c.ellipse(100 + dx, 62 + dy, 30, 36, 0, 0, Math.PI * 2); c.fill(); if (extra) extra(c, dx, dy);
   };
-  c.fillStyle = '#56608c'; shape(4, -3);   // rim: the cloud's glow catching the right shoulder
+  c.fillStyle = FIGURE.rim; shape(4, -3);   // rim: the cloud's glow catching the right shoulder
   c.fillStyle = fill; shape(0, 0);
 });
 // the passenger you picked: their painted sitting-down sprite if it exists, else the stand-in with their name on its back
 const rider = passenger();
 const riderSit = rider && await loadImg(at(`../people/${rider.id}-sit.png`));
-const passengerTex = riderSit ? tex(riderSit) : back('#191427', (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); });
+const passengerTex = riderSit ? tex(riderSit) : back(FIGURE.backFill[0], (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); });
 if (rider && !riderSit) {
   const c = passengerTex.image.getContext('2d');
-  c.fillStyle = '#efe6cf'; c.fillRect(48, 150, 104, 30); c.fillStyle = '#141826'; c.font = '600 18px "IBM Plex Mono", monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = FIGURE.tag; c.fillRect(48, 150, 104, 30); c.fillStyle = FIGURE.tagText; c.font = '600 18px "IBM Plex Mono", monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText(rider.first.toUpperCase(), 100, 166); passengerTex.needsUpdate = true;
 }
-const walkers = [passengerTex, back('#0b0f1e')].map((map, i) => {
+const walkers = [passengerTex, back(FIGURE.backFill[1])].map((map, i) => {
   const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
   m.visible = false; m.frustumCulled = false; m.renderOrder = 3; scene.add(m);
   // on the lip, spaced so they read side by side: backs to us, bodies over the grass, legs over the drop
