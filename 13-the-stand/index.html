@@ -1,0 +1,249 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hairpin · The Stand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: the roadside stall at Jorabat; the team waits on the kerb in the taxi's headlights; a speech bubble for whoever you're looking at. Single night world by design. */
+:root {
+  --night: #10142a;
+  --paper: #efe6cf;
+  --ink: #141826;
+  --amber: #f6c744;
+  --red: #c8402f;
+  --body: "Archivo", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--paper); font-family: var(--body); }
+[hidden] { display: none !important; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
+.ask { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); background: var(--paper); color: var(--ink); padding: 10px 20px 12px; box-shadow: 5px 5px 0 #000; font-size: clamp(18px, 2.8vw, 26px); font-weight: 800; font-variation-settings: 'wdth' 110; pointer-events: none; white-space: nowrap; }
+.ask small { display: block; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .1em; color: var(--red); margin-bottom: 2px; }
+.hint { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 16px); font-family: var(--mono); font-size: 12px; color: #aab0cc; text-align: right; line-height: 1.5; pointer-events: none; }
+/* one invisible button over each person: hover, focus and click all go through it */
+.who { position: fixed; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 6px; }
+.who:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.bubble { position: fixed; z-index: 5; max-width: min(300px, calc(100vw - 32px)); background: var(--paper); color: var(--ink); padding: 10px 14px 12px; border: 2px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 #000; pointer-events: none; transform: translate(-50%, -100%); }
+.bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -12px; width: 16px; height: 12px; background: var(--paper); border: 2px solid var(--ink); border-top: 0; border-left: 0; transform: translateX(-50%) skewX(-30deg); }
+.bubble b { display: block; font-size: 17px; font-weight: 800; line-height: 1.2; }
+.bubble span { display: block; margin-top: 4px; font-size: 14px; line-height: 1.35; }
+.bubble i { display: block; margin-top: 6px; font-family: var(--mono); font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--red); }
+#msg { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; font-family: var(--mono); font-size: 13px; color: #aab0cc; pointer-events: none; }
+@media (max-width: 560px) { .hint { display: none; } }
+</style>
+
+<canvas id="c" aria-label="A roadside tea stall at Jorabat at night; the team waits on the kerb in the taxi's headlights"></canvas>
+<div class="tag">HAIRPIN · JORABAT</div>
+<div class="ask"><small>LAST TAXI TO SHILLONG</small>Who's riding with me?</div>
+<div class="hint">Hover or Tab to meet them<br>Click or Enter to give them a lift</div>
+<div id="people" role="group" aria-label="Pick a passenger"></div>
+<div class="bubble" id="bubble" hidden aria-live="polite"></div>
+<div id="msg">Loading the paintings…</div>
+
+<script src="../shared/roster.js"></script>
+<script src="../shared/hairpin.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+THREE.ColorManagement.enabled = false;
+const hairpin = window.hairpin;
+
+const IW = 1774, IH = 887;              // jorabat-dark.jpg size in px; the whole scene lives in these units
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (k, dt) => 1 - Math.exp(-k * dt);
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// where they wait: on the far kerb, from just past the lamp post to the right edge; and the lights, as fractions
+const KERB = .676, FROM = .3, TO = .95, PERSON_H = 172;
+const LAMPS = [[.165, .6], [.27, .64]];          // the stall's bulb, and the street lamp's pool
+const HEAD = [-.05, .745], HEAD_DIR = [1, -.1];  // the taxi, just out of frame on the left, pointing along the road
+
+const canvas = $('#c');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); if (!renderer.capabilities.isWebGL2) throw 0; }
+catch (e) { $('#msg').textContent = 'This shot needs WebGL 2.'; throw e; }
+const DPR = Math.min(devicePixelRatio || 1, matchMedia('(pointer: coarse)').matches ? 1.5 : 2);
+renderer.setPixelRatio(DPR);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
+/* ---------- the paintings: jorabat-lit.jpg once it's painted; until then the dark one, lifted warm, stands in ---------- */
+const mkCanvas = (w = IW, h = IH) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const loadImg = url => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+const tex = src => { const t = new THREE.Texture(src); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+function strokeMap(src) {
+  const a = mkCanvas(), ax = a.getContext('2d'); ax.drawImage(src, 0, 0, IW, IH);
+  const m = mkCanvas(IW >> 2, IH >> 2); m.getContext('2d').drawImage(a, 0, 0, m.width, m.height);
+  const s = mkCanvas(IW >> 4, IH >> 4); s.getContext('2d').drawImage(m, 0, 0, s.width, s.height);
+  const b = mkCanvas(); b.getContext('2d').drawImage(s, 0, 0, IW, IH);
+  const A = ax.getImageData(0, 0, IW, IH), B = b.getContext('2d').getImageData(0, 0, IW, IH).data, d = A.data;
+  for (let i = 0; i < d.length; i += 4) { const v = clamp(128 + ((d[i] + d[i + 1] + d[i + 2]) - (B[i] + B[i + 1] + B[i + 2])), 0, 255); d[i] = d[i + 1] = d[i + 2] = v; }
+  ax.putImageData(A, 0, 0); return a;
+}
+function warmLift(src) {   // ponytail: stand-in for the lit painting; swap in jorabat-lit.jpg when it exists
+  const a = mkCanvas(), ax = a.getContext('2d'); ax.drawImage(src, 0, 0, IW, IH);
+  const A = ax.getImageData(0, 0, IW, IH), d = A.data;
+  for (let i = 0; i < d.length; i += 4) { const l = (d[i] + d[i + 1] + d[i + 2]) / 3; d[i] = Math.min(255, d[i] * 1.5 + l * 1.3); d[i + 1] = Math.min(255, d[i + 1] * 1.6 + l * .9); d[i + 2] = Math.min(255, d[i + 2] * .9 + l * .2); }
+  ax.putImageData(A, 0, 0); return a;
+}
+const [iDark, iLit] = await Promise.all([loadImg('jorabat-dark.jpg'), loadImg('jorabat-lit.jpg')]);
+if (!iDark) { $('#msg').textContent = 'The paintings did not load. Serve this folder instead of opening the file.'; throw 0; }
+const srcLit = iLit || warmLift(iDark);
+const U = {
+  tLit: { value: tex(srcLit) }, tDark: { value: tex(iDark) }, tStroke: { value: tex(strokeMap(srcLit)) },
+  uImg: { value: new THREE.Vector2(IW, IH) },
+  uHead: { value: new THREE.Vector2(HEAD[0] * IW, HEAD[1] * IH) }, uDir: { value: new THREE.Vector2(...HEAD_DIR).normalize() },
+  uLamp: { value: LAMPS.map(([x, y]) => new THREE.Vector2(x * IW, y * IH)) }, uTime: { value: 0 },
+};
+$('#msg').hidden = true;
+
+/* ---------- light: the headlights along the road, plus the stall bulb and the street lamp ---------- */
+// the same model on the CPU, so each person knows how lit they are
+const dirN = U.uDir.value;
+function lightCPU(x, y) {
+  const vx = x - U.uHead.value.x, vy = y - U.uHead.value.y, along = vx * dirN.x + vy * dirN.y, perp = Math.hypot(vx - dirN.x * along, vy - dirN.y * along), range = 1350;
+  const cone = (along > 0 ? 1 : 0) * (1 - sstep(along * .22, along * .34 + 6, perp)) * (1 - sstep(range * .5, range, along));
+  let lamps = 0; for (const L of U.uLamp.value) lamps += 1 - sstep(30, 190, Math.hypot(x - L.x, (y - L.y) * 2.2));
+  return cone * 1.4 + lamps * .9;
+}
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
+camera.position.z = 500;
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: /* glsl */`
+    uniform sampler2D tLit, tDark, tStroke; uniform vec2 uImg, uHead, uDir, uLamp[2]; uniform float uTime;
+    varying vec2 vPx;
+    void main(){
+      vec2 uv = vec2(vPx.x / uImg.x, 1. - vPx.y / uImg.y);
+      vec2 v = vPx - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
+      float L = step(0., along) * (1. - smoothstep(along * .22, along * .34 + 6., perp)) * (1. - smoothstep(675., 1350., along)) * 1.4;
+      for (int i = 0; i < 2; i++) L += (1. - smoothstep(30., 190., length((vPx - uLamp[i]) * vec2(1., 2.2)))) * .9;
+      float t = .22 + .6 * (1. - texture2D(tStroke, uv).r);       // bright strokes catch the light first
+      float on = smoothstep(t - .05, t + .05, L);
+      gl_FragColor = vec4(mix(texture2D(tDark, uv).rgb, texture2D(tLit, uv).rgb * vec3(1.05, .97, .86), on), 1.);
+    }`,
+}));
+bg.position.set(IW / 2, -IH / 2, -400);
+scene.add(bg);
+
+/* ---------- the team on the kerb: their painted stand-up if it exists, else a silhouette with a name tag ---------- */
+const people = hairpin.roster.people.filter(p => p.on);
+const SHIRTS = ['#4b5d78', '#7a3b52', '#3f6b4a', '#8a5a3c', '#5a4a78', '#2f5d8a', '#7a6a3a', '#6b3a3a'];
+function standIn(p, i) {   // facing left, one hand half up as if flagging the car
+  const w = 140, h = 300, c = mkCanvas(w, h), x = c.getContext('2d');
+  x.fillStyle = '#1c1a24'; x.fillRect(52, 190, 16, 106); x.fillRect(74, 190, 16, 106);                                   // legs
+  x.fillStyle = SHIRTS[i % SHIRTS.length]; x.beginPath(); x.roundRect(44, 92, 54, 104, 16); x.fill();                   // body
+  x.save(); x.translate(50, 104); x.rotate(-2.3); x.fillRect(-7, 0, 14, 62); x.restore();                                 // the raised arm, out toward the road
+  x.fillStyle = '#c99772'; x.beginPath(); x.arc(70, 62, 24, 0, Math.PI * 2); x.fill();                                    // head
+  x.fillStyle = '#1c1714'; x.beginPath(); x.arc(72, 56, 25, Math.PI * .95, Math.PI * 2.1); x.fill();                      // hair
+  const name = p.first.toUpperCase(); let fs = 15;   // the name tag: as wide as the name, shrinking only past the figure's width
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  do x.font = `600 ${fs}px "IBM Plex Mono", monospace`; while (x.measureText(name).width > 126 && --fs > 10);
+  const tw = clamp(x.measureText(name).width + 14, 80, 138);
+  x.fillStyle = '#efe6cf'; x.fillRect(70 - tw / 2, 132, tw, 26); x.fillStyle = '#141826'; x.fillText(name, 70, 146);
+  return c;
+}
+const pMat = map => new THREE.ShaderMaterial({
+  uniforms: { map: { value: map }, uL: { value: .2 }, uHi: { value: 0 }, uOp: { value: 1 } }, transparent: true, depthWrite: false,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: 'uniform sampler2D map; uniform float uL, uHi, uOp; varying vec2 vUv; void main(){ vec4 c = texture2D(map, vUv); vec3 col = mix(c.rgb * vec3(.2, .24, .38), c.rgb * vec3(1.05, .97, .86), clamp(uL, 0., 1.)); col *= mix(.62, 1., smoothstep(0., .12, vUv.y)); col += vec3(1., .85, .5) * uHi * .18; gl_FragColor = vec4(col, c.a * uOp); }',
+});
+const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
+const POOL = (() => { const c = mkCanvas(64, 16), x = c.getContext('2d'), g = x.createRadialGradient(32, 8, 0, 32, 8, 32); g.addColorStop(0, '#fff'); g.addColorStop(1, '#fff0'); x.setTransform(1, 0, 0, .25, 0, 6); x.fillStyle = g; x.fillRect(0, -24, 64, 64); return tex(c); })();   // a soft pool under the feet
+const stands = await Promise.all(people.map(p => loadImg(`../people/${p.id}-stand.png`)));
+try { await document.fonts.load('600 15px "IBM Plex Mono"'); } catch (e) {}   // for the name tags
+people.forEach((p, i) => {
+  const src = stands[i] || standIn(p, i), k = people.length > 1 ? i / (people.length - 1) : .5;
+  p.px = lerp(FROM, TO, k) * IW; p.py = (KERB + (i % 2) * .012) * IH;   // two loose rows, so a long line doesn't look like a fence
+  p.h = PERSON_H * (1 + (i % 2) * .05); p.w = p.h * src.width / src.height;
+  p.mat = pMat(tex(src)); p.m = new THREE.Mesh(footGeo, p.mat); p.m.frustumCulled = false; p.m.renderOrder = 2 + (i % 2);
+  p.m.position.set(p.px, -p.py, 10 + i % 2); p.m.scale.set(p.w, p.h, 1); scene.add(p.m);
+  p.L = clamp(.15 + lightCPU(p.px, p.py - p.h * .5) * .85, .15, 1.2); p.hi = 0;
+  // shadow pool under the feet
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: POOL, color: 0x05070d, transparent: true, opacity: .45, depthWrite: false }));
+  sh.position.set(p.px, -p.py, 5); sh.scale.set(p.w * .8, 10, 1); sh.renderOrder = 1; scene.add(sh); p.sh = sh;
+});
+
+/* ---------- framing: locked, covering the screen; buttons follow the people on screen ---------- */
+let viewW = IW, viewH = IH;
+const toScreen = (x, y) => [(x - camera.left) / viewW * innerWidth, (y + camera.top) / viewH * innerHeight];
+function resize() {
+  const w = innerWidth, h = innerHeight, aspect = w / h;
+  renderer.setSize(w, h, false);
+  if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
+  const cx = clamp(.55 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
+  camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
+  camera.updateProjectionMatrix();
+  for (const p of people) {
+    const [x0, y0] = toScreen(p.px - p.w / 2, p.py - p.h), [x1, y1] = toScreen(p.px + p.w / 2, p.py);
+    Object.assign(p.btn.style, { left: `${x0}px`, top: `${y0}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
+  }
+}
+
+/* ---------- meeting them: hover or focus shows their bubble; click gives them the lift ---------- */
+let looking = null, chosen = null, leftAt = 0;
+const bubble = $('#bubble');
+function show(p) {
+  looking = p;
+  if (!p) { bubble.hidden = true; return; }
+  bubble.innerHTML = `<b>${p.tagline}</b><span>${p.quip}</span><i>${p.name.toUpperCase()}</i>`;
+  bubble.hidden = false;
+  const [x, y] = toScreen(p.px, p.py - p.h - 14), half = Math.min(150, (innerWidth - 32) / 2);
+  const bx = clamp(x, 16 + half, innerWidth - 16 - half);
+  Object.assign(bubble.style, { left: `${bx}px`, top: `${y}px` });
+  bubble.style.setProperty('--tail', `${clamp(50 + (x - bx) / (half * 2) * 100, 12, 88)}%`);   // the tail still points at them when the bubble is nudged on screen
+}
+function choose(p) {
+  if (chosen) return;
+  chosen = p; hairpin.pick(p.id); show(p); leftAt = U.uTime.value;
+  for (const b of document.querySelectorAll('.who')) b.disabled = true;
+}
+for (const p of people) {
+  const b = document.createElement('button');
+  b.className = 'who'; b.setAttribute('aria-label', `${p.name}: ${p.tagline} ${p.quip}`);
+  b.addEventListener('pointerenter', () => !chosen && show(p));
+  b.addEventListener('pointerleave', () => !chosen && looking === p && show(null));
+  b.addEventListener('focus', () => !chosen && show(p));
+  b.addEventListener('blur', () => !chosen && looking === p && show(null));
+  b.addEventListener('click', () => choose(p));
+  $('#people').appendChild(b); p.btn = b;
+}
+addEventListener('resize', resize); resize();
+hairpin.bed({ engine: .5, crickets: 1 });   // the taxi idling by the stall
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05), t = (U.uTime.value += dt);
+  for (const p of people) {
+    p.hi = lerp(p.hi, looking === p ? 1 : 0, damp(10, dt));
+    p.mat.uniforms.uL.value = p.L + p.hi * .25;
+    p.mat.uniforms.uHi.value = p.hi;
+    let x = p.px, op = 1;
+    if (chosen) {
+      if (chosen === p) {   // walks down the kerb toward the taxi, and is gone
+        const k = clamp((t - leftAt - .8) / 2.4, 0, 1);
+        x = lerp(p.px, -.02 * IW, k * k); op = 1 - sstep(.75, 1, k);
+        p.m.position.y = -p.py + Math.abs(Math.sin(k * 18)) * 3 * (k > 0 ? 1 : 0);
+      } else op = .55;   // the others step back into the dark
+    }
+    p.m.position.x = x; p.sh.position.x = x;
+    p.mat.uniforms.uOp.value = lerp(p.mat.uniforms.uOp.value, op, damp(6, dt));
+    p.sh.material.opacity = .45 * p.mat.uniforms.uOp.value;
+  }
+  if (chosen && t - leftAt > 1.4) bubble.hidden = true;
+  if (chosen && t - leftAt > 3.6) hairpin.tearTo('../10-jorabat-intro/');
+  renderer.render(scene, camera);
+  hairpin.ready();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

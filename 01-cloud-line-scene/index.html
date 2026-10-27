@@ -45,6 +45,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 </div>
 <div id="msg">Loading the paintings…</div>
 
+<script src="../shared/roster.js"></script>
 <script src="../shared/hairpin.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
@@ -779,7 +780,7 @@ function frame() {
   post.uniforms.uJeepScale.value = sc;
   // subtitles
   const next = LINES.findIndex(([at], i) => i > lineIdx && u >= at);
-  if (next >= 0 && next !== lineIdx) { lineIdx = next; typed = 0; $('#who').textContent = LINES[next][1]; $('#line').textContent = ''; $('#sub').classList.remove('off'); lineEnd = U.uTime.value + 4; }
+  if (next >= 0 && next !== lineIdx) { lineIdx = next; typed = 0; $('#who').textContent = window.hairpin ? hairpin.who(LINES[next][1]) : LINES[next][1]; $('#line').textContent = ''; $('#sub').classList.remove('off'); lineEnd = U.uTime.value + 4; }
   if (lineIdx >= 0) {
     const full = LINES[lineIdx][2];
     if (typed < full.length) { typed = Math.min(full.length, typed + dt * 30); $('#line').textContent = full.slice(0, Math.floor(typed)); }

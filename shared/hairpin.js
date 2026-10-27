@@ -26,6 +26,7 @@
   /* ---------- while a scene plays, fetch the next one: its page and its paintings ---------- */
   const SPR01 = ['cow-graze', 'cow-look', 'dog-sit', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'].flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`]);
   const CHAIN = {
+    '13-the-stand': ['10-jorabat-intro', ['dashboard-lit.jpg', 'dashboard-dark.jpg', ...['teleprompter', 'pill-strip', 'test-sheet', 'billing-receipt', 'markon-card', 'star'].map(n => `objects/${n}.png`)]],
     '10-jorabat-intro': ['01-cloud-line-scene', ['lit.jpg', 'dark.jpg', 'strokes.jpg', ...SPR01]],
     '01-cloud-line-scene': ['11-nongpoh', ['nongpoh-lit.jpg', 'nongpoh-dark.jpg']],
     '11-nongpoh': ['12-cloud-line', ['cloudline-lit.jpg', 'cloudline-dark.jpg']],
@@ -100,5 +101,15 @@
     requestAnimationFrame(tick);
   }
 
-  window.hairpin = { play, tearTo, bed, ready };
+  /* ---------- the passenger: picked at the stand, remembered next to the banked wish ---------- */
+  const ROSTER = window.HAIRPIN_ROSTER || { beats: {}, people: [] };   // shared/roster.js
+  const KEY = 'hairpin.passenger';
+  function passenger() { let id = null; try { id = localStorage.getItem(KEY); } catch (e) {} return ROSTER.people.find(p => p.id === id && p.on) || null; }
+  function pick(id) { try { localStorage.setItem(KEY, id); } catch (e) {} }
+  // a subtitle's label: PASSENGER becomes their first name once someone's riding
+  const who = label => { const p = label === 'PASSENGER' && passenger(); return p ? p.first.toUpperCase() : label; };
+  // their own line at a beat: { who, expr, text }, or null with nobody picked
+  function line(beat) { const p = passenger(), l = p && p.lines[beat]; return l ? { who: p.first.toUpperCase(), expr: l[0], text: l[1] } : null; }
+
+  window.hairpin = { play, tearTo, bed, ready, roster: ROSTER, passenger, pick, who, line };
 })();

@@ -18,6 +18,9 @@ A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160).
 | 10-jorabat-intro | Beat 01 on the dashboard paintings (mirrored to right-hand drive): dome light as the passenger gets in, the five objects light up as you point; the paper star if a wish was banked | |
 | 11-nongpoh | Beat 03: the taxi crosses the rainy pineapple stalls; lanterns flicker and streak the wet road; the grandfather line | |
 | 12-cloud-line | Beat 04: seen from behind, the taxi drives up into the wall of cloud until it whites out | |
+| 13-the-stand | Beat 00, before the dashboard: the team waits on the kerb at the Jorabat stall; hover or Tab shows their tagline and quip; click gives them the lift. Uses jorabat-dark with a warm lift standing in for jorabat-lit | |
+| shared/roster.js | The 18 passengers (`on` switches each one on at the stand), their DRAFT line at Jorabat, the hang and Shillong, and the brief for each beat: goal, tone, allowed expressions | |
+| people | Drop `<id>-stand.png` (standing, facing left, a hand half up) and `<id>-sit.png` (at the edge, from behind) here; until then they're silhouettes with a name tag | |
 | source-art | Every painting and cut-out as you sent it | |
 | shared/hairpin.js | Paper-tear transitions, `?play` chaining from scene to scene, and the synthesised audio bed | |
 | index.html | Start page: play from the start, or open any scene | |
@@ -48,6 +51,9 @@ Not used yet: `source-art/rope-puller.png` (the rope rescue was dropped when the
 - 11-nongpoh and 12-cloud-line: `?u=0.5` starts halfway along.
 
 ## Dialogue
+
+The passenger is whoever you pick at the stand; it's kept in `localStorage` as `hairpin.passenger`, next to `hairpin.wish`. Every PASSENGER label shows their first name, and their own line plays at Jorabat, the hang and Shillong, the expression first, then the words. The Shillong quote stays cut B.
+
 
 Every line is a DRAFT for you to rewrite, kept in one list per scene: `SCRIPT` in 08 and 10, `QUOTE` in 09, `LINES` in 11 and 12. The timings next to them (`T` in 08 and 09) are what to retime once there's recorded narration.
 

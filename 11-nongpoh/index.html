@@ -44,6 +44,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 </div>
 <div id="msg">Loading the paintings…</div>
 
+<script src="../shared/roster.js"></script>
 <script src="../shared/hairpin.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
@@ -51,7 +52,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 <script type="module">
 import * as THREE from 'three';
 THREE.ColorManagement.enabled = false;
-const hairpin = window.hairpin || { play: false, tearTo: url => { location.href = url; }, bed() {} };   // shared/hairpin.js, or bare fallbacks when opened alone
+const hairpin = window.hairpin || { play: false, tearTo: url => { location.href = url; }, bed() {}, who: w => w, line: () => null };   // shared/hairpin.js, or bare fallbacks when opened alone
 
 const IW = 1672, IH = 941;              // nongpoh-lit/dark.jpg size in px; the whole scene lives in these units
 const $ = s => document.querySelector(s);
@@ -382,7 +383,9 @@ const LINES = [
   [.74, 'PASSENGER', 'Can we stop for pineapple?'],
 ];
 let lineIdx = 0, typed = 0, full = '', lineEnd = 0;
-function say(who, text, secs) { $('#who').textContent = who; full = text; typed = 0; $('#line').textContent = ''; $('#sub').classList.remove('off'); lineEnd = U.uTime.value + secs; }
+function say(who, text, secs, expr) {   // the expression shows first, then the words
+  $('#who').textContent = hairpin.who(who) + (expr ? ` · ${expr}` : ''); full = text; typed = expr ? -22 : 0; $('#line').textContent = ''; $('#sub').classList.remove('off'); lineEnd = U.uTime.value + secs;
+}
 
 /* ---------- loop: the taxi crosses from left to right, then on to the cloud line ---------- */
 const FROM = -.12 * IW, TO = 1.12 * IW;
@@ -413,7 +416,7 @@ function frame() {
   camera.updateProjectionMatrix();
   if (lineIdx < LINES.length && u >= LINES[lineIdx][0]) { const [, who, text] = LINES[lineIdx++]; say(who, text, 4); }
   if (full) {
-    if (typed < full.length) { typed = Math.min(full.length, typed + dt * 30); $('#line').textContent = full.slice(0, Math.floor(typed)); }
+    if (typed < full.length) { typed = Math.min(full.length, typed + dt * 30); $('#line').textContent = full.slice(0, Math.max(0, Math.floor(typed))); }
     if (t > lineEnd) { $('#sub').classList.add('off'); full = ''; }
   }
   // render: info (taxi mask + normals), colour, then ink and paper rim
