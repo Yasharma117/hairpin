@@ -2,12 +2,12 @@
 // the doors, sitting on the lip, the story wiping to the same cliff decades ago, him in ink with the ember, the flick,
 // the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
 import * as THREE from 'three';
-import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene } from '../shared/kit.js';
+import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene, Stage } from '../shared/kit.js';
 import { FIGURE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const SPRITES = ['ghost-1', 'ghost-2', 'then-car', 'then-pair', 'truck-lit', 'truck-dark'];
-export const assets = ['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg', ...SPRITES.map(n => `sprites/${n}.png`)];
+export const assets = ['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg', 'depth.png', ...SPRITES.map(n => `sprites/${n}.png`)];
 
 const IW = 1672, IH = 941;              // edge-lit/dark/then.jpg size in px; the whole scene lives in these units
 
@@ -25,8 +25,9 @@ const { input, layer, params: QS } = ctx;
 layer.innerHTML = '<div class="tag">HAIRPIN · THE EDGE</div><div class="cue" id="brake" hidden>BRAKE</div>';
 const $ = s => layer.querySelector(s);
 ctx.bed({ engine: 1, wind: .6 });
-const [imgs, spr] = await Promise.all([Promise.all(['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg'].map(f => loadImg(at(f)))), Promise.all(SPRITES.map(n => loadImg(at(`sprites/${n}.png`))))]);
-if (!imgs.every(Boolean) || !spr.every(Boolean)) throw new Error('edge paintings did not load');
+const [imgs, spr, depthImg] = await Promise.all([Promise.all(['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg'].map(f => loadImg(at(f)))), Promise.all(SPRITES.map(n => loadImg(at(`sprites/${n}.png`)))), loadImg(at('depth.png'))]);
+if (!imgs.every(Boolean) || !spr.every(Boolean) || !depthImg) throw new Error('edge paintings did not load');
+const stage = new Stage({ W: IW, H: IH, depth: depthImg, k: .26 });
 const SPR = Object.fromEntries(SPRITES.map((n, i) => [n, spr[i]]));
 const [tLit, tDark, tThen] = imgs.map(tex), tStroke = tex(strokeMap(imgs[0], IW, IH));
 
@@ -58,11 +59,9 @@ float reveal(vec2 p, float L){
 
 /* ---------- the painting, the cloud, the smoke ---------- */
 const scene = new THREE.Scene();
-const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
-camera.position.z = 500;
+const camera = stage.cam;
 const bgMat = new THREE.ShaderMaterial({
   uniforms: U,
-  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: LIGHT + /* glsl */`
     uniform vec4 uEdge; uniform vec3 uEmb; uniform float uFog; uniform sampler2D tThen; uniform float uThen;
     varying vec2 vPx;
@@ -95,8 +94,7 @@ const bgMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(col, 1.);
     }`,
 });
-const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), bgMat);
-bg.position.set(IW / 2, -IH / 2, -400);
+const bg = stage.mesh(bgMat);   // the painting, 2.5D
 scene.add(bg);
 
 const { jeep, hang, body, parts, put, jeepMat, PIVOT } = makeTaxi(U.uMode);
@@ -108,9 +106,8 @@ const doors = [-1, 1].map(side => {
 });
 for (const m of parts) m.layers.enable(1);   // the doors too, for the ink
 // on the side edge near the far corner, nose out over the drop and turned a little away from us
-const CAR = lip(.437), CAR_YAW = .25;
-jeep.position.set(CAR[0], -CAR[1], 150);
-jeep.scale.setScalar(50);
+const CAR = lip(.437), CAR_YAW = .25, CAR_SIZE = 50, CAR_D = stage.depthAt(CAR[0], CAR[1] + 6);
+stage.place(jeep, CAR[0], CAR[1], CAR_SIZE, CAR_D);
 jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), CAR_YAW));
 scene.add(jeep);
 
@@ -160,7 +157,8 @@ const ghostMat = new THREE.ShaderMaterial({
 const ghost = new THREE.Mesh(footGeo, ghostMat); ghost.frustumCulled = false; ghost.renderOrder = 4; scene.add(ghost);
 // sitting on the edge: his seat (a third of the way across the drawing) on the lip, knees and feet out over the drop
 const G = lip(.7), gh = figH(G[1]) * 1.1, gw = gh * SPR['ghost-1'].width / SPR['ghost-1'].height, GX = G[0] + (.5 - .33) * gw;
-ghost.position.set(GX, -G[1], 200 + G[1] * .1); ghost.scale.set(gw, gh, 1);
+const G_D = stage.depthAt(G[0] - 10, G[1] + 4);   // the lip under him
+stage.place(ghost, GX, G[1], [gw, gh], G_D);
 const tipAt = f => [GX + (GHOST[f].tip[0] - .5) * gw, G[1] - GHOST[f].tip[1] * gh];
 const handAt = tipAt(0);
 // the ember: an additive point that swells on each drag
@@ -169,17 +167,17 @@ const emberMat = new THREE.ShaderMaterial({
   vertexShader: QUAD,
   fragmentShader: 'uniform float uI; varying vec2 vUv; void main(){ float d = length(vUv - .5) * 2.; vec3 c = vec3(1., .5, .16) * (exp(-d * d * 18.) + exp(-d * d * 3.) * .25) + vec3(1., .9, .6) * exp(-d * d * 90.); gl_FragColor = vec4(c * uI, 1.); }',
 });
-const ember = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), emberMat); ember.frustumCulled = false; ember.renderOrder = 5; ember.scale.setScalar(34); scene.add(ember);
+const ember = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), emberMat); ember.frustumCulled = false; ember.renderOrder = 5; scene.add(ember);
 const emb = { pos: new THREE.Vector2(...handAt), vel: new THREE.Vector2() };
 
 /* ---------- then: their car went over and the two of them stood here looking down at it. Only in the old painting. ---------- */
 const fading = map => new THREE.MeshBasicMaterial({ map: tex(map), transparent: true, depthWrite: false, opacity: 0 });
 const thenCar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fading(SPR['then-car']));
 const TC = lip(.56), tcw = 240;
-thenCar.position.set(TC[0] + 95, -(TC[1] + 70), 120); thenCar.scale.set(-tcw, tcw * SPR['then-car'].height / SPR['then-car'].width, 1);   // flipped to face the drop
+stage.place(thenCar, TC[0] + 95, TC[1] + 70, [-tcw, tcw * SPR['then-car'].height / SPR['then-car'].width], stage.depthAt(TC[0] - 20, TC[1]));   // flipped to face the drop
 thenCar.rotation.z = -1.05;   // nose down the cliff face
 const thenPair = new THREE.Mesh(footGeo, fading(SPR['then-pair']));
-const tph = 170; thenPair.position.set(.41 * IW, -.5 * IH, 190); thenPair.scale.set(tph * SPR['then-pair'].width / SPR['then-pair'].height, tph, 1);
+const tph = 170; stage.place(thenPair, .41 * IW, .5 * IH, [tph * SPR['then-pair'].width / SPR['then-pair'].height, tph]);
 for (const m of [thenCar, thenPair]) { m.frustumCulled = false; m.renderOrder = 2; scene.add(m); }
 
 /* ---------- the truck: comes round the bend after, and takes you on to Shillong ---------- */
@@ -191,7 +189,7 @@ const truckMat = new THREE.ShaderMaterial({
 const truck = new THREE.Mesh(footGeo, truckMat); truck.frustumCulled = false; truck.renderOrder = 3; truck.visible = false; scene.add(truck);
 const TRUCK = { h: 150, from: -.25 * IW, to: .3 * IW, y: .445 * IH };
 const truckW = TRUCK.h * SPR['truck-lit'].width / SPR['truck-lit'].height;
-truck.scale.set(truckW, TRUCK.h, 1);
+
 
 /* ---------- framing: locked, covering the screen ---------- */
 let viewW = IW, viewH = IH;
@@ -200,9 +198,10 @@ function resize(w, h) {
   const aspect = w / h, Z = aspect < 1 ? 1 : 1.35;
   if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
   viewW /= Z; viewH /= Z;
+  // a little margin, so the camera moves never show past the painting's edge
+  viewW *= .9; viewH *= .9;
   const cx = clamp(CAM[0], viewW / 2, IW - viewW / 2), cy = clamp(CAM[1], viewH / 2, IH - viewH / 2);
-  camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
-  camera.updateProjectionMatrix();
+  stage.view(cx, cy, viewH, aspect);
 }
 
 /* ---------- the hang: set by how long you braked; ?hang=0.7 sets it by hand ---------- */
@@ -281,12 +280,12 @@ function go(next) {
   phase = next; since = 0;
   if (next === 'drive') { Object.assign(drv, { u: 0, v: 180, inWin: 0, heldWin: 0 }); ang = 0; angV = 0; ctx.bed({ engine: 1, wind: .6 }); }
   if (next === 'car') { hangSaid = false; ang = 0; angV = 1.3; creak(1.3); skid(false); ctx.bed({ wind: 1 }); }   // over the lip: the nose drops and seesaws
-  if (next === 'drive') { tips = 0; fallT = -1; ang = reset(); angV = 0; jeep.position.set(CAR[0], -CAR[1], 150); lineI = 0; say(null); doors.forEach(d => d.userData.open = 0); walkers.forEach(w => w.m.visible = false); emb.pos.set(...handAt); truck.visible = false; }
+  if (next === 'drive') { tips = 0; fallT = -1; ang = reset(); angV = 0; stage.place(jeep, CAR[0], CAR[1], CAR_SIZE, CAR_D); lineI = 0; say(null); doors.forEach(d => d.userData.open = 0); walkers.forEach(w => w.m.visible = false); emb.pos.set(...handAt); truck.visible = false; }
   if (next === 'pout' || next === 'yout') {
     const i = next === 'pout' ? 0 : 1, d = doors[i];
     tips++; d.userData.open = 1; creak(1);
-    const p = body.localToWorld(v1.set(.3, .1, d.userData.side * 1.05));
-    Object.assign(walkers[i], { from: [p.x, -p.y], t0: U.uTime.value, k: 0 }); walkers[i].m.visible = true;
+    const p = stage.toPaint(body.localToWorld(v1.set(.3, .1, d.userData.side * 1.05)));
+    Object.assign(walkers[i], { from: p, t0: U.uTime.value, k: 0 }); walkers[i].m.visible = true;
   }
   if (next === 'flick') emb.vel.set(120, -80);
   if (next === 'truck') { if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); }   // far off, round the bend
@@ -310,7 +309,7 @@ function jump(at, secs) {
 if (QS.get('at')) jump(QS.get('at'), +QS.get('t') || 0);
 if (!QS.get('at')) go('drive');
 window.__edge = { phase: () => phase, go, ang: () => ang };
-const ptrPx = () => input.ptr && [camera.left + input.ptr[0] / innerWidth * viewW, -camera.top + input.ptr[1] / innerHeight * viewH];
+const ptrPx = () => input.ptr && stage.screenToPaint(...input.ptr);
 function frame(dt0) {
   const dt = dt0 * SPEED, t = (U.uTime.value += dt);
   const braking = input.hold;   // HOLD: brake (only counts on the drive)
@@ -327,7 +326,7 @@ function frame(dt0) {
     drv.u = Math.min(1, drv.u + drv.v * dt / DRIVE_LEN);
     const p = DRIVE.getPointAt(drv.u), q = DRIVE.getTangentAt(drv.u);
     const yaw = lerp(Math.atan2(-q.y * 2.4, q.x), CAR_YAW, sstep(.85, 1, drv.u));
-    jeep.position.set(p.x, -p.y, 150);
+    stage.place(jeep, p.x, p.y, CAR_SIZE, stage.depthAt(p.x, p.y + 6));
     jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
     body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * drv.v / 120 + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
     ang = braking && win ? .035 : 0;   // the nose dips under braking
@@ -344,7 +343,7 @@ function frame(dt0) {
     // past the balance point: the nose goes, then the whole car slides off the lip into the cloud
     fallT += dt; angV += (2 + Math.sin(ang) * 6) * dt; ang = Math.min(ang + angV * dt, 1.45);
     const f = Math.max(0, fallT - .8);
-    jeep.position.set(CAR[0] + 260 * f, -CAR[1] - 450 * f * f, 150);   // out, clear of the lip, and down
+    stage.place(jeep, CAR[0] + 260 * f, CAR[1] + 450 * f * f, CAR_SIZE, CAR_D);   // out, clear of the lip, and down
   } else if (phase !== 'drive') {
     const target = reset() + tips * lerp(.04, .1, H) + Math.sin(t * .8) * .012 + Math.sin(t * 1.9 + 1) * .005;
     angV += ((target - ang) * 26 - angV * 2.2) * dt; ang += angV * dt;
@@ -354,11 +353,11 @@ function frame(dt0) {
   if (ctx.ac && t > nextCreak) { creak(.35 + Math.random() * .35); nextCreak = t + 6 + Math.random() * 6; }
   jeep.updateMatrixWorld(true);
   // headlights: from the nose, wherever the nose now points
-  const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
-  U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
+  const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
+  U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
   if (truck.visible) {   // the truck rolls in round the bend and stops; now its headlights are the light
     const k = phase === 'truck' ? 1 - Math.pow(1 - clamp(since / 5, 0, 1), 2.2) : 1, x = lerp(TRUCK.from, TRUCK.to, k);
-    truck.position.set(x, -TRUCK.y + (k < 1 ? Math.sin(t * 9) * .8 : 0), 140);
+    stage.place(truck, x, TRUCK.y - (k < 1 ? Math.sin(t * 9) * .8 : 0), [truckW, TRUCK.h], stage.depthAt(clamp(x, 0, IW), TRUCK.y));
     U.uHead.value.set(x + truckW * .48, TRUCK.y - TRUCK.h * .2); U.uDir.value.set(1, .04).normalize();
   }
   // then: the old car and the two of them, only while the story's in the old painting
@@ -372,8 +371,7 @@ function frame(dt0) {
     if (!w.m.visible) continue;
     w.k = clamp((t - w.t0) / 2.4, 0, 1);
     const e = w.k * w.k * (3 - 2 * w.k), x = lerp(w.from[0], w.to[0], e), y = lerp(w.from[1], w.to[1], e), h = figH(y);
-    w.m.position.set(x, -y + Math.abs(Math.sin(w.k * Math.PI * 5)) * 4 * (1 - w.k), 200 + y * .1);
-    w.m.scale.set(h * 200 / 240, h, 1);
+    stage.place(w.m, x, y - Math.abs(Math.sin(w.k * Math.PI * 5)) * 4 * (1 - w.k), [h * 200 / 240, h], stage.depthAt(x - 8, y + 4));
   }
   if (phase === 'car' && since > 2.2 && !hangSaid) { hangSaid = true; const l = line('hang'); if (l) say(l.who, l.text, 3.4, l.expr); }
   if (phase === 'yout' && walkers[1].k >= 1) go('seated');
@@ -397,10 +395,19 @@ function frame(dt0) {
   }
   ember.visible = glow > 0;
   emberMat.uniforms.uI.value = glow;
-  ember.position.set(emb.pos.x, -emb.pos.y, 300);
+  stage.place(ember, emb.pos.x, emb.pos.y, 34, G_D);
   U.uEmb.value.set(emb.pos.x, emb.pos.y, (seated ? sstep(T.ember, T.ember + 2, since) : 0) + (flick ? 1 - sstep(0, 2, since) : 0));
   $('#brake').hidden = !(phase === 'drive' && drv.u > BRAKE_FROM);
   ctx.prompt(ready() && LABEL[phase] || null);
+  // the camera (see STYLE.md: eased, slow): the tip leans in toward the drop; the doors pull back to show the cloud below;
+  // the story holds still; the fall looks down after it
+  const T_ = stage.target, vh = stage.rest.z * Math.tan(stage.fov * Math.PI / 360) * 2;
+  const tip = phase === 'car' ? sstep(0, 2.5, since) : 0, out = phase === 'pout' || phase === 'yout' || phase === 'seated' || phase === 'flick';
+  Object.assign(T_, { dx: 0, dy: 0, dolly: 0, yaw: 0, pitch: 0 });
+  if (tip) Object.assign(T_, { dx: .035 * vh * tip, dolly: .07 * tip, yaw: -.035 * tip });
+  if (out) Object.assign(T_, { dx: .02 * vh, dy: .05 * vh, dolly: -.05, pitch: -.025 });
+  if (phase === 'flick' && fallT > 0) Object.assign(T_, { dx: .05 * vh, dy: .08 * vh, dolly: -.02, pitch: -.045 });
+  stage.update(dt, phase === 'seated' ? .5 : .9);
   // render: colour, then the ink and paper rim around the taxi
   ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .7;
   ctx.ink.render(scene, camera, jeep);

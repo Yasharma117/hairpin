@@ -224,3 +224,88 @@ export function disposeScene(scene) {
     for (const m of [].concat(o.material || [])) { for (const v of Object.values(m.uniforms || {})) v.value?.isTexture && v.value.dispose(); m.map?.dispose(); m.dispose(); }
   });
 }
+
+/* ---------- the stage: every painting becomes 2.5D ---------- */
+// The painting is a subdivided plane whose vertices are pushed toward the camera along their own sight line, by their depth
+// (<scene>/depth.png, near = white). Seen from the rest pose the picture is pixel-identical to the flat painting, so the
+// reveal, the stroke map and every placement stay registered; move the camera and the depth shows as real parallax.
+// People, the taxi and the truck are placed through the same transform, by the depth at their feet, so they stay planted.
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const _v = new THREE.Vector3(), _r = new THREE.Raycaster(), _pl = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), _n2 = new THREE.Vector2();
+export class Stage {
+  // k: how far toward the camera the nearest thing comes (a fraction of the distance). Keep it modest: big steps stretch.
+  constructor({ W, H, depth, k = .28, fov = 24 }) {
+    Object.assign(this, { W, H, k, fov });
+    this.cam = new THREE.PerspectiveCamera(fov, 1, 1, 1e5);
+    this.rest = new THREE.Vector3(W / 2, -H / 2, 1000);
+    this.move = { dx: 0, dy: 0, dolly: 0, yaw: 0, pitch: 0 };   // current camera offset from rest (eased toward target)
+    this.target = { ...this.move };
+    // the depth, on the GPU for the mesh and on the CPU for placing things (a quarter-size copy is plenty)
+    this.tDepth = tex(depth);
+    const w = Math.max(1, W >> 2), h = Math.max(1, H >> 2), c = mkCanvas(w, h), x = c.getContext('2d');
+    x.drawImage(depth, 0, 0, w, h);
+    const px = x.getImageData(0, 0, w, h).data;
+    this.dW = w; this.dH = h; this.dep = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) this.dep[i] = px[i * 4] / 255;
+    this.uniforms = { tDepth: { value: this.tDepth }, uRest: { value: this.rest }, uK: { value: k } };
+  }
+  // the vertex shader for a painting mesh: vPx is the painting pixel, whatever the depth does to the position
+  static VERT = /* glsl */`
+    uniform sampler2D tDepth; uniform vec3 uRest; uniform float uK; uniform vec2 uImg; varying vec2 vPx;
+    void main(){
+      vPx = vec2(uv.x, 1. - uv.y) * uImg;
+      float d = texture2D(tDepth, uv).r;
+      vec3 P = uRest + (vec3(vPx.x, -vPx.y, 0.) - uRest) * (1. - uK * d);
+      gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.);
+    }`;
+  // the painting mesh: drawn first, behind everything (its depth would only clip feet)
+  mesh(material, segs = [256, 128]) {
+    Object.assign(material.uniforms, this.uniforms);
+    material.vertexShader = Stage.VERT; material.depthTest = false; material.depthWrite = false;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, ...segs), material);
+    m.frustumCulled = false; m.renderOrder = -10; return m;
+  }
+  depthAt(x, y) {   // bilinear, in painting px
+    const fx = clamp(x / this.W * this.dW - .5, 0, this.dW - 1.001), fy = clamp(y / this.H * this.dH - .5, 0, this.dH - 1.001);
+    const i = fx | 0, j = fy | 0, u = fx - i, v = fy - j, w = this.dW, d = this.dep;
+    return lerp(lerp(d[j * w + i], d[j * w + i + 1], u), lerp(d[(j + 1) * w + i], d[(j + 1) * w + i + 1], u), v);
+  }
+  shrink(d) { return 1 - this.k * d; }
+  // a painting point (px) at depth d, in the world
+  toWorld(x, y, d = this.depthAt(x, y), out = _v) {
+    const s = this.shrink(d), R = this.rest;
+    return out.set(R.x + (x - R.x) * s, R.y + (-y - R.y) * s, R.z * (1 - s));
+  }
+  // put an object at a painting point, by the depth there (or d), its size (scalar or [w, h]) scaled to match
+  place(obj, x, y, size, d = this.depthAt(x, y)) {
+    const s = this.shrink(d);
+    obj.position.copy(this.toWorld(x, y, d));
+    if (Array.isArray(size)) obj.scale.set(size[0] * s, size[1] * s, 1); else if (size != null) obj.scale.setScalar(size * s);
+    return s;
+  }
+  // a world point back to the painting pixel it sits over, seen from the rest pose
+  toPaint(P) { const R = this.rest, f = R.z / (R.z - P.z); return [R.x + (P.x - R.x) * f, -(R.y + (P.y - R.y) * f)]; }
+  // the screen (css px) to the painting, through the moving camera onto the far plane
+  screenToPaint(sx, sy) {
+    _n2.set(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1); _r.setFromCamera(_n2, this.cam);
+    return _r.ray.intersectPlane(_pl, _v) ? [_v.x, -_v.y] : null;
+  }
+  // the rest framing: centred on painting px (cx, cy), showing viewH of it on screen
+  view(cx, cy, viewH, aspect) {
+    const D = viewH / 2 / Math.tan(this.fov * Math.PI / 360);
+    this.rest.set(cx, -cy, D); this.cam.aspect = aspect; this.cam.near = D * .05; this.cam.far = D * 4;
+    this.cam.updateProjectionMatrix(); this.apply();
+  }
+  // ease the camera toward its target move: dx, dy in painting px, dolly a fraction of the distance, yaw/pitch radians
+  update(dt, rate = .9) {
+    const k = damp(rate, dt), m = REDUCED ? .35 : 1;
+    for (const key in this.move) this.move[key] = lerp(this.move[key], this.target[key] * m, k);
+    this.apply();
+  }
+  apply() {
+    const R = this.rest, m = this.move;
+    this.cam.position.set(R.x + m.dx, R.y - m.dy, R.z * (1 - m.dolly));
+    this.cam.rotation.set(m.pitch, m.yaw, 0);
+    this.cam.updateMatrixWorld();
+  }
+}
