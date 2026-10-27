@@ -1,0 +1,180 @@
+// Nongpoh: the taxi crosses the rainy roadside of pineapple stalls; lanterns flicker and streak the wet road.
+// The grandfather line is said here, once, and dropped. Hold to drive faster.
+import * as THREE from 'three';
+import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene } from '../shared/kit.js';
+
+const at = f => new URL(f, import.meta.url).href;
+export const assets = ['nongpoh-lit.jpg', 'nongpoh-dark.jpg'];
+
+const IW = 1672, IH = 941;              // nongpoh-lit/dark.jpg size in px; the whole scene lives in these units
+
+// the near lane the taxi drives along, and the stalls' lanterns, as fractions of the painting
+const LANE = .76;
+const LANTERNS = [[.127, .418], [.427, .475], [.684, .52], [.866, .542]];
+
+export async function load(ctx) {
+const { input, layer } = ctx;
+layer.innerHTML = '<div class="tag">HAIRPIN · NONGPOH</div>';
+ctx.bed({ engine: 1, rain: 1 });
+const [iLit, iDark] = await Promise.all(assets.map(a => loadImg(at(a))));
+if (!iLit || !iDark) throw new Error('Nongpoh paintings did not load');
+const tLit = tex(iLit), tDark = tex(iDark), tStroke = tex(strokeMap(iLit, IW, IH));
+
+/* ---------- light: headlights, plus the lanterns, each flickering on its own ---------- */
+const U = {
+  tLit: { value: tLit }, tDark: { value: tDark }, tStroke: { value: tStroke },
+  uImg: { value: new THREE.Vector2(IW, IH) },
+  uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1.2 },
+  uLamp: { value: LANTERNS.map(([x, y]) => new THREE.Vector2(x * IW, y * IH)) }, uFl: { value: [1, 1, 1, 1] },
+  uMode: ctx.U.uMode, uTime: { value: 0 },
+};
+const LIGHT = NOISE + /* glsl */`
+uniform vec2 uImg, uHead, uDir, uLamp[4]; uniform float uScale, uMode, uTime, uFl[4];
+uniform sampler2D tLit, tDark, tStroke;
+float coneAt(vec2 p){
+  vec2 v = p - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
+  float range = 560. * uScale;
+  return step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
+}
+float lightAt(vec2 p){
+  vec2 v = p - uHead;
+  float cone = coneAt(p);
+  float spill = 1. - smoothstep(26. * uScale, 120. * uScale, length(v * vec2(1., 2.2)));
+  float lamps = 0.;
+  for (int i = 0; i < 4; i++) {
+    float fl = uFl[i];                                                               // a lantern's flame, set per frame
+    vec2 lv = (p - uLamp[i]) * vec2(1., 1.5);
+    lamps += (1. - smoothstep(20., 190., length(lv))) * fl;
+    lamps += (1. - smoothstep(10., 120., abs(p.x - uLamp[i].x))) * smoothstep(.7 * uImg.y, .74 * uImg.y, p.y) * .55 * fl;   // its streak on the wet road
+  }
+  return cone * 1.5 + spill * 1.1 + lamps;
+}
+vec2 uvOf(vec2 p){ return vec2(p.x / uImg.x, 1. - p.y / uImg.y); }
+float reveal(vec2 p, float L){
+  float s = texture2D(tStroke, uvOf(p)).r;
+  float t = .22 + .6 * (1. - s);          // bright strokes catch the light first
+  float on = smoothstep(t - .05, t + .05, L);
+  return uMode > 1.5 ? 1. : (uMode > .5 ? 0. : on);
+}`;
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
+camera.position.z = 500;
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: LIGHT + /* glsl */`
+    varying vec2 vPx;
+    void main(){
+      vec2 p = vPx;
+      // the wet road shivers under the rain
+      if (p.y > .7 * uImg.y) p.x += (vn2(vec2(p.x * .05, p.y * .2 - uTime * 6.)) - .5) * 3.;
+      vec2 uv = uvOf(p);
+      vec3 lit = texture2D(tLit, uv).rgb, dark = texture2D(tDark, uv).rgb;
+      vec3 col = mix(dark, lit * vec3(1.05, .97, .86), reveal(p, lightAt(p)));
+      col += vec3(1., .9, .65) * coneAt(vPx) * .09 * step(uMode, .5);   // the beam itself, visible in the rain
+      gl_FragColor = vec4(col, 1.);
+    }`,
+}));
+bg.position.set(IW / 2, -IH / 2, -400);
+scene.add(bg);
+
+const { jeep, body, parts, jeepMat, PIVOT } = makeTaxi(U.uMode);
+scene.add(jeep);
+jeep.scale.setScalar(62);
+jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42);   // side on, a touch from above
+// its reflection in the wet road: the same taxi flipped under the tyres, dark and broken up by the rain; its lamps still glow
+const reflMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: U.uTime, uMode: U.uMode }, transparent: true, depthWrite: false,
+  vertexShader: 'attribute vec3 color; attribute float emit; varying vec3 vC; varying float vE; varying vec2 vW; void main(){ vC = color; vE = emit; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: NOISE + `uniform float uTime, uMode; varying vec3 vC; varying float vE; varying vec2 vW;
+    void main(){
+      float rip = .45 + .55 * smoothstep(.2, .6, vn2(vec2(vW.x * .04, vW.y * .35 - uTime * 5.)));
+      float lamp = step(.5, vE) * step(vE, 1.5);
+      vec3 c = mix(vC * .55 + vec3(.03, .04, .07), vC * 1.3, lamp);
+      gl_FragColor = vec4(c, (.5 + .45 * lamp) * rip * step(uMode, .5));
+    }`,
+});
+const refl = jeep.clone(true); refl.traverse(o => { if (o.isMesh) o.material = reflMat; }); scene.add(refl);
+const reflBody = refl.children[0].children[0];
+
+/* ---------- rain: streaks in painting space, dim in the dark, glittering where the light catches them ---------- */
+{
+  const N = ctx.isTouch ? 1200 : 2400, off = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) off.set([Math.random() * (IW + 200) - 100, Math.random() * IH, 700 + Math.random() * 500, 14 + Math.random() * 18], i * 4);
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-.5, 0, 0, .5, 0, 0, .5, 1, 0, -.5, 1, 0], 3)); g.setIndex([0, 1, 2, 0, 2, 3]);
+  g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
+  g.instanceCount = N;
+  const m = new THREE.ShaderMaterial({
+    uniforms: U, transparent: true, depthWrite: false,
+    vertexShader: LIGHT + /* glsl */`
+      attribute vec4 aOff; varying float vL; varying float vV;
+      void main(){
+        float y = mod(aOff.y + uTime * aOff.z, ${IH + 120}.) - 60.;
+        vec2 p = vec2(aOff.x - y * .12 + position.y * aOff.w * .12, y - position.y * aOff.w);   // slanted by the wind
+        p.x += position.x * 1.3;
+        vL = clamp(lightAt(p), 0., 1.6); vV = position.y;   // lit once per streak, not per pixel
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p.x, -p.y, 200., 1.);
+      }`,
+    fragmentShader: /* glsl */`
+      uniform float uMode; varying float vL; varying float vV;
+      void main(){
+        float L = vL;
+        float a = (.16 + .7 * L) * vV * step(uMode, .5);
+        gl_FragColor = vec4(mix(vec3(.55, .6, .75), vec3(1., .95, .8), clamp(L, 0., 1.)), a);
+      }`,
+  });
+  const rain = new THREE.Mesh(g, m); rain.frustumCulled = false; rain.renderOrder = 9; scene.add(rain);
+}
+/* ---------- framing: follows the taxi along the road ---------- */
+let viewW = IW, viewH = IH, camX = 0;
+function resize(w, h) {
+  const aspect = w / h, Z = aspect < 1 ? 1 : 1.3;
+  if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
+  viewW /= Z; viewH /= Z;
+}
+
+/* ---------- the lines, by how far along the road you are ---------- */
+// DRAFT lines. The grandfather line is the seed for the edge: said once, dropped, nobody follows it up.
+const LINES = [
+  [.08, 'PASSENGER', 'Rain. Of course it’s raining.'],
+  [.3, 'YOU', 'Nongpoh. Pineapples, then the real climb.'],
+  [.52, 'YOU', 'My grandfather drove this every weekend. Court in Shillong.'],
+  [.74, 'PASSENGER', 'Can we stop for pineapple?'],
+];
+let lineIdx = 0, done = false;
+
+/* ---------- loop: the taxi crosses from left to right, then on to the cloud line ---------- */
+const FROM = -.12 * IW, TO = 1.12 * IW;
+let x = FROM, speed = 1;
+const U0 = +ctx.params.get('u');   // ?u=0.5 starts halfway along (for checking frames)
+if (U0) x = lerp(FROM, TO, U0);
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+function frame(dt) {
+  const t = (U.uTime.value += dt);
+  speed = lerp(speed, input.hold ? 2.6 : 1, damp(2, dt));   // HOLD: drive faster
+  for (let i = 0; i < 4; i++) U.uFl.value[i] = .85 + .15 * (Math.sin(t * 7.3 + i * 13.1) * .5 + .5) * (Math.sin(t * 17.9 + i * 3.7) * .5 + .5);
+  x += speed * dt * 95;
+  if (x > TO) { x = FROM; lineIdx = 0; if (!done) { done = true; ctx.next(); } }   // across, then the cloud line
+  const u = (x - FROM) / (TO - FROM);
+  jeep.position.set(x, -LANE * IH, 150);
+  body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
+  // the reflection mirrors about the tyres' contact line
+  const sc = jeep.scale.x;
+  refl.position.set(x, -LANE * IH - .05 * sc, 149); refl.quaternion.copy(jeep.quaternion); refl.scale.set(sc, -sc, sc);
+  reflBody.position.copy(body.position);
+  jeep.updateMatrixWorld(true);
+  const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
+  U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
+  // the camera keeps the taxi a little left of centre, so you see what's coming
+  camX = clamp(lerp(camX || x, x + viewW * .15, damp(1.5, dt)), viewW / 2, IW - viewW / 2);
+  const cy = clamp(.6 * IH, viewH / 2, IH - viewH / 2);
+  camera.left = camX - viewW / 2; camera.right = camX + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
+  camera.updateProjectionMatrix();
+  if (lineIdx < LINES.length && u >= LINES[lineIdx][0]) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); }
+  ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .9;
+  ctx.ink.render(scene, camera, jeep);
+}
+return { frame, resize, dispose() { disposeScene(scene); } };
+}
