@@ -26,12 +26,20 @@ export async function load(ctx) {
       .bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -12px; width: 16px; height: 12px; background: var(--paper); border: 2px solid var(--ink); border-top: 0; border-left: 0; transform: translateX(-50%) skewX(-30deg); }
       .bubble b { display: block; font-size: 17px; font-weight: 800; line-height: 1.2; }
       .bubble span { display: block; margin-top: 4px; font-size: 14px; line-height: 1.35; }
+      /* narrow screens: the crowd overlaps, so a strip of faces does the picking. Tap once to find them, again to pick. */
+      .faces { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); display: none; gap: 10px; overflow-x: auto; padding: 8px 16px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
+      .faces::-webkit-scrollbar { display: none; }
+      @media (max-width: 700px), (max-aspect-ratio: 1/1) { .faces { display: flex; } }
+      .face { flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper) center / cover no-repeat; box-shadow: 3px 3px 0 #000; padding: 0; cursor: pointer; scroll-snap-align: center; }
+      .face[aria-pressed="true"] { outline: 3px solid var(--amber); outline-offset: 3px; }
+      .face:focus-visible { outline: 3px solid var(--paper); outline-offset: 3px; }
       .bubble i { display: block; margin-top: 6px; font-family: var(--mono); font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--red); }
     </style>
     <div class="tag">HAIRPIN · JORABAT</div>
     <div class="ask"><small>LAST TAXI TO SHILLONG</small>Who's riding with me?</div>
     <div class="people" role="group" aria-label="Pick a passenger"></div>
-    <div class="bubble" hidden aria-live="polite"></div>`;
+    <div class="bubble" hidden aria-live="polite"></div>
+    <div class="faces" role="group" aria-label="The team: tap a face to find them in the crowd, tap it again to give them the lift"></div>`;
   const $ = s => layer.querySelector(s);
   ctx.bed({ engine: .5, crickets: 1 });   // the taxi idling by the stall
 
@@ -93,6 +101,18 @@ export async function load(ctx) {
   /* ---------- the team: their painted stand-up if it exists, else a silhouette doing what their spot is for ---------- */
   const people = roster.people.filter(p => p.on);
   const SHIRTS = ['#4b5d78', '#7a3b52', '#3f6b4a', '#8a5a3c', '#5a4a78', '#2f5d8a', '#7a6a3a', '#6b3a3a'];
+  // a face for the strip: from their painted stand-up if it exists, else the stand-in's head and shoulders
+  function faceOf(p) {
+    const c = mkCanvas(104, 104), x = c.getContext('2d'), i = people.indexOf(p);
+    x.fillStyle = '#efe6cf'; x.fillRect(0, 0, 104, 104);
+    if (p.sprite) { const sw = p.sprite.width, sh = Math.min(p.sprite.height, sw); x.drawImage(p.sprite, 0, 0, sw, sh * .9, 0, 0, 104, 104 * .9); }
+    else {
+      x.fillStyle = SHIRTS[i % SHIRTS.length]; x.beginPath(); x.ellipse(52, 112, 40, 34, 0, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#c99772'; x.beginPath(); x.arc(52, 52, 24, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#1c1714'; x.beginPath(); x.arc(54, 46, 25, Math.PI * .95, Math.PI * 2.1); x.fill();
+    }
+    return c.toDataURL();
+  }
   function standIn(pose, i) {   // facing left; 140 x 300, feet on the bottom edge
     const c = mkCanvas(140, 300), x = c.getContext('2d'), shirt = SHIRTS[i % SHIRTS.length], skin = '#c99772', hair = '#1c1714', legs = '#1c1a24';
     const head = (hx, hy) => { x.fillStyle = skin; x.beginPath(); x.arc(hx, hy, 23, 0, Math.PI * 2); x.fill(); x.fillStyle = hair; x.beginPath(); x.arc(hx + 2, hy - 6, 24, Math.PI * .95, Math.PI * 2.1); x.fill(); };
@@ -131,7 +151,7 @@ export async function load(ctx) {
   const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
   people.forEach((p, i) => {
     p.pose = POSES[i] || (i % 3 ? 'flag' : 'stand');
-    const src = stands[i] || standIn(p.pose, i);
+    p.sprite = stands[i]; const src = p.sprite || standIn(p.pose, i);
     p.aspect = src.width / src.height;
     p.mat = pMat(tex(src)); p.m = new THREE.Mesh(footGeo, p.mat); p.m.frustumCulled = false; scene.add(p.m);
     p.sh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: POOL, color: 0x05070d, transparent: true, opacity: .45, depthWrite: false })); scene.add(p.sh);
@@ -144,7 +164,7 @@ export async function load(ctx) {
   function place(p, x, y, row) {
     const r = ROWS[row], h = PERSON_H * r.s;   // sitting and crouching are drawn lower in the same frame
     Object.assign(p, { px: x, py: y * IH, h, w: h * p.aspect, row, dim: r.dim });
-    p.m.position.set(x, -p.py, 10 + row); p.m.scale.set(p.w, p.h, 1); p.m.renderOrder = 2 + row;
+    p.m.position.set(x, -p.py, 10 + row); p.m.scale.set(p.w, p.h, 1); p.m.renderOrder = p.ro = 2 + row;
     p.sh.position.set(x, -p.py, 5); p.sh.scale.set(p.w * .8, 10, 1); p.sh.renderOrder = 1;
     p.L = clamp(.12 + lightCPU(x, p.py - p.h * .5) * .85, .12, 1.2) * r.dim;
   }
@@ -190,6 +210,7 @@ export async function load(ctx) {
   const bubble = $('.bubble');
   function show(p) {
     looking = p;
+    for (const q of people) q.face.setAttribute('aria-pressed', String(q === p));
     if (!p) { bubble.hidden = true; return; }
     bubble.innerHTML = `<b>${p.tagline}</b><span>${p.quip}</span><i>${p.name.toUpperCase()}</i>`;
     bubble.hidden = false;
@@ -200,7 +221,7 @@ export async function load(ctx) {
   function choose(p) {
     if (chosen) return;
     chosen = p; pick(p.id); show(p); leftAt = t;
-    for (const b of layer.querySelectorAll('.person')) b.disabled = true;
+    for (const b of layer.querySelectorAll('.person, .face')) b.disabled = true;
   }
   for (const p of people) {
     const b = document.createElement('button');
@@ -211,6 +232,16 @@ export async function load(ctx) {
     on(b, 'blur', () => !chosen && looking === p && show(null));
     on(b, 'click', e => { e.stopPropagation(); choose(p); });
     $('.people').appendChild(b); p.btn = b;
+    // their face, for the strip on narrow screens
+    const f = document.createElement('button');
+    f.className = 'face'; f.setAttribute('aria-label', `${p.name}: ${p.tagline} ${p.quip}`); f.setAttribute('aria-pressed', 'false');
+    f.style.backgroundImage = `url(${faceOf(p)})`;
+    on(f, 'click', e => {
+      e.stopPropagation();
+      if (looking === p) choose(p);   // the second tap picks them
+      else { show(p); f.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }
+    });
+    $('.faces').appendChild(f); p.face = f;
   }
 
   return {
@@ -220,6 +251,7 @@ export async function load(ctx) {
       t = now;
       for (const p of people) {
         p.hi = lerp(p.hi, looking === p ? 1 : 0, damp(10, dt));
+        p.m.renderOrder = looking === p ? 30 : p.ro;   // whoever you're looking at steps out of the crowd
         p.mat.uniforms.uL.value = p.L + p.hi * .25;
         p.mat.uniforms.uHi.value = p.hi;
         p.mat.uniforms.uGlow.value = .3 + .2 * Math.sin(now * 2.3 + p.px);
