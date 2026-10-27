@@ -59,6 +59,28 @@ Every scene goes through one final pass. It applies a per-scene grade (lift, gam
 - The fitted values live in `shared/grade.js`, written by `tools/fit_grade.py`.
 - `tools/check_style.py` compares every painting's statistics to the edge pair, after the grade, and fails on outliers.
 
+## Depth and camera
+
+Every painting is 2.5D, which is what shows this is real-time 3D and not an illustration with effects.
+
+- **Depth maps:** each scene has a depth map, `<scene>/depth.png` (near = white), from `tools/make_depth.py`, which uses Depth Anything V2 small and falls back to hand layers.
+- **The mesh:** the painting is a subdivided mesh, pushed toward the camera along each pixel's own sight line. From the rest pose it is pixel-identical to the flat painting. Moving the camera makes the depth show.
+- **Grounding:** everything that moves is placed by the depth at its feet, so it stays planted.
+- **Moves are eased and slow, and gentler with reduced motion:**
+
+| Scene | Move |
+|---|---|
+| The stand | A slow push-in over the first 8 s. |
+| The dashboard | The engine's idle shifts the dash against the road, just. |
+| The climb | A lateral drift that follows the taxi. |
+| Nongpoh | A lateral drift that follows the taxi. |
+| The cloud line | A creep up the road behind the taxi. |
+| The edge | As the taxi tips, it leans in toward the drop. When the doors open, it pulls back to show the cloud below. It holds still for the story, then tilts down after the fall. |
+| Shillong | A slow rise from the road to the city while the quote sets. |
+
+- **Limits:** keep camera moves small enough that no edge visibly stretches. If a scene needs more, split it into masked layers.
+- **The viewer steers the light** at the stand and the edge: the pointer (a finger drag on phones) swings the headlights within a fixed arc. Left alone, the beam drifts back to its scripted aim.
+
 ## UI
 
 - Torn-paper labels.

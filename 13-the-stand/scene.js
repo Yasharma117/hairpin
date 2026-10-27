@@ -2,7 +2,7 @@
 // Hover or focus shows a person's tagline and quip; a click (or Enter) gives them the lift.
 import * as THREE from 'three';
 import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, makeTaxi, roster, pick, disposeScene } from '../shared/kit.js';
-import { Stage, keyLight, paintFigure } from '../shared/kit.js';
+import { Stage, keyLight, paintFigure, Steer } from '../shared/kit.js';
 import { PALETTE, FIGURE, UTIL } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
@@ -213,6 +213,7 @@ export async function load(ctx) {
 
   /* ---------- meeting them: hover or focus shows their bubble; a click gives them the lift ---------- */
   let looking = null, chosen = null, leftAt = 0, t = 0, since = 0;
+  const steer = new Steer(.3), AIM = U.uDir.value.clone();   // the scripted aim: straight along the road
   const bubble = $('.bubble');
   function show(p) {
     looking = p;
@@ -276,6 +277,9 @@ export async function load(ctx) {
       if (chosen && now - leftAt > 1.4) bubble.hidden = true;
       if (chosen && now - leftAt > 3.6) { chosen = null; ctx.next(); }
       taxi.body.position.y = -taxi.PIVOT.y + Math.sin(now * 13) * .004;   // idling
+      // the viewer steers the headlights: the reveal and how lit each person is follow the beam
+      U.uDir.value.copy(steer.update(dt, U.uHead.value, AIM, ctx.input.ptr && stage.screenToPaint(...ctx.input.ptr), ctx.isTouch, ctx.input.hold));
+      for (const p of people) p.L = clamp(.12 + lightCPU(p.px, p.py - p.h * .5) * .85, .12, 1.2) * p.dim;
       // the camera: a slow push-in over the first eight seconds; the buttons and the bubble ride along with it
       stage.target.dolly = .09 * sstep(0, 8, since += dt);
       stage.update(dt, 4);

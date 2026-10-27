@@ -2,7 +2,7 @@
 // the doors, sitting on the lip, the story wiping to the same cliff decades ago, him in ink with the ember, the flick,
 // the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
 import * as THREE from 'three';
-import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene, Stage, keyLight, paintFigure } from '../shared/kit.js';
+import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene, Stage, keyLight, paintFigure, Steer } from '../shared/kit.js';
 import { FIGURE, PALETTE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
@@ -274,7 +274,7 @@ function skid(on) {   // tyres on gravel: filtered noise while you hold the brak
 }
 let hangSaid = false;
 let phase = 'drive', since = 0, tips = 0, ang = 0, angV = 0, fallT = -1;
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), steer = new Steer(.32), aim = new THREE.Vector2();
 const say = ctx.say;
 function go(next) {
   phase = next; since = 0;
@@ -355,6 +355,8 @@ function frame(dt0) {
   // headlights: from the nose, wherever the nose now points
   const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
   U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
+  // while it hangs, the viewer can swing the beams across the cloud; left alone they settle back to where the nose points
+  if (phase !== 'drive' && fallT < 0) U.uDir.value.copy(steer.update(dt, U.uHead.value, aim.copy(U.uDir.value), ptrPx(), ctx.isTouch, input.hold));
   // the warm key: the cloud its own beams light up, ahead and below (the truck's lights, once it comes)
   keyLight(jeepMat, camera, jeep.position, truck.visible ? truck.position : stage.toWorld(a[0] + 300, a[1] + 160, 0, v2), truck.visible ? .9 : .45);
   if (truck.visible) {   // the truck rolls in round the bend and stops; now its headlights are the light

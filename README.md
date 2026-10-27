@@ -8,6 +8,8 @@ A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160). 
 
 Hairpin is one page: `index.html` holds the title card, one canvas, one renderer, one AudioContext (unlocked by the Play tap) and the torn sheet between scenes. Each scene is a module, `<folder>/scene.js`, exporting `assets` (its paintings, prefetched while the scene before it plays) and `load(ctx)`, which returns `{ frame, resize, onTap, onHorn, dispose }`. The page swaps scenes in place, so the engine/wind/crickets/rain bed runs unbroken.
 
+Every painting is 2.5D: `<scene>/depth.png` (from `tools/make_depth.py`) displaces it as a mesh, seen through a perspective camera; the `Stage` in `shared/kit.js` places everything by the depth at its feet. Camera moves and light steering are listed in STYLE.md.
+
 `shared/kit.js` has what scenes share: the taxi, its ink outline (the full line work only runs inside the taxi's box on screen), the stroke map, small helpers, and the passenger. Each folder's old `index.html` now forwards to `/?scene=<name>`.
 
 Controls, the same everywhere and shown once on the title card: **hold** (mouse, screen or Space) is whatever the taxi does in that scene, drive faster or brake; **tap** or Enter is the next thing; **H** is the horn. With `?debug`, keys 1/2/3 show the lights / the dark painting / the lit painting, and B toggles the line boil. `?fps` shows the frame rate.

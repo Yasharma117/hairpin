@@ -353,3 +353,24 @@ export function paintFigure(src, ink, w = 2) {
   x.globalCompositeOperation = 'source-over';
   return out;
 }
+
+/* ---------- the viewer steers the light: the pointer (a finger drag on phones) swings a beam within a fixed arc ---------- */
+// When nobody's steering (no drag, or the mouse still for a few seconds) it drifts back to the scripted aim.
+const _dir = new THREE.Vector2();
+export class Steer {
+  constructor(arc = .35) { this.arc = arc; this.angle = 0; this.still = 99; this.last = null; }
+  // head: the beam's origin in painting px; base: its scripted direction (a unit Vector2, painting px); ptr: the pointer in painting px, or null
+  update(dt, head, base, ptr, touch, holding) {
+    if (ptr && (!this.last || Math.hypot(ptr[0] - this.last[0], ptr[1] - this.last[1]) > .5)) this.still = 0; else this.still += dt;
+    this.last = ptr;
+    const active = ptr && (touch ? holding : this.still < 2.5);
+    let target = 0;
+    if (active) {
+      const a = Math.atan2(ptr[1] - head.y, ptr[0] - head.x) - Math.atan2(base.y, base.x);
+      target = clamp(Math.atan2(Math.sin(a), Math.cos(a)), -this.arc, this.arc);
+    }
+    this.angle = lerp(this.angle, target, damp(active ? 5 : 1.1, dt));
+    const c = Math.cos(this.angle), s = Math.sin(this.angle);
+    return _dir.set(base.x * c - base.y * s, base.x * s + base.y * c);
+  }
+}
