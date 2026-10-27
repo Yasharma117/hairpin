@@ -89,3 +89,75 @@ export function applyCSS(root = document.documentElement) {
   root.style.setProperty('--black', UTIL.black); root.style.setProperty('--white', UTIL.white);
   root.classList.add('styled');
 }
+
+// the pixel UI (PIXEL.md section 3): pocket.design's cream-paper idiom, warm ink, signal red. CSS vars --ui-<name>,
+// set by applyUICSS() (index.html calls it right after applyCSS)
+export const UI = {
+  cream: '#fff9e5',      // panels, the dialogue box, buttons
+  creamDeep: '#f4e8c4',  // hover and pressed fills, the speaker tab, inset rows
+  ink: '#3a2a1c',        // warm ink: borders, text, hard shadows
+  inkSoft: '#7a6248',    // quiet text on cream (hints, small print)
+  signal: '#fd1500',     // the red accent: the next arrow, the speaker's name, focus
+  wood: '#dfac76',       // the wood trim, the title card's frame
+  olive: '#3d422b',      // the chalkboard green
+  rust: '#a84323',       // deep red: pressed signal, the wordmark's shadow
+};
+export function applyUICSS(root = document.documentElement) {
+  for (const [k, v] of Object.entries(UI)) root.style.setProperty(`--ui-${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}`, v);
+}
+
+// ---- PIXEL_PALETTES: written by tools/fit_palette.py, do not edit by hand ----
+// Per scene, dark to light, fitted in Oklab to its graded paintings (PIXEL.md 1). The final pass in shared/kit.js
+// quantizes every frame to its scene's set, with a light 4x4 ordered dither in gradients.
+export const PIXEL_PALETTES = {
+  stand: ['#070810', '#021634', '#1e1711', '#141826', '#232a18', '#173132', '#0b2a60', '#193047', '#462f22', '#333758', '#2e4125', '#613941', '#37505a', '#40543d', '#3f5d2e', '#3b6464', '#695a43', '#5f7256', '#55783b', '#627398', '#668363', '#8b8550', '#6e984b', '#bd8658', '#9ea15d', '#ff7f29', '#91be58', '#f2c230', '#f7c46b', '#bbed63', '#efe6cf', '#ecf388'],
+  jorabat: ['#000000', '#00000a', '#090206', '#020c22', '#0f0c13', '#141826', '#371408', '#052043', '#2b201d', '#152634', '#0b325b', '#27374c', '#2f3939', '#443327', '#5b331d', '#163f73', '#264d80', '#5a4a42', '#465343', '#46546b', '#7b4a27', '#766344', '#ad692e', '#748493', '#9b8357', '#cb9c4f', '#ff7f29', '#f2c230', '#f7c46b', '#efe6cf', '#ffea5a', '#faedaa'],
+  climb: ['#0b0a12', '#0d122c', '#141826', '#0f1e3a', '#2c1d15', '#152a48', '#3a272b', '#2a3934', '#1c3659', '#513728', '#444d37', '#6e3a4c', '#3a5556', '#325275', '#734b31', '#4b5d37', '#626142', '#426e7c', '#647032', '#6b698e', '#a26031', '#8c7962', '#84802c', '#a88d2c', '#c3916b', '#cd9c36', '#ff7f29', '#f2c230', '#f7c46b', '#b7d5f9', '#efe6cf', '#f4e5e4'],
+  nongpoh: ['#000003', '#060b13', '#23100b', '#03172e', '#141826', '#15231e', '#14273b', '#0c254c', '#41281b', '#32313c', '#1f3654', '#383b1c', '#22413d', '#0a3282', '#384661', '#663d24', '#584442', '#415a7f', '#645d2a', '#89502a', '#1e5ebf', '#637899', '#8d7562', '#b76225', '#ad8227', '#b5825a', '#ff7f29', '#c9a97a', '#f19936', '#f2c230', '#f7c46b', '#efe6cf'],
+  cloud: ['#000208', '#050c05', '#060f19', '#001435', '#141826', '#1d1912', '#0b2034', '#212925', '#342516', '#203450', '#4a3721', '#324663', '#3b4a4a', '#674319', '#644a3e', '#465267', '#435a7a', '#5e6371', '#805d37', '#5f7493', '#767478', '#ac6c28', '#938479', '#b09276', '#ff7f29', '#e49635', '#d3a779', '#f2c230', '#f7c46b', '#b8d8ff', '#ffe276', '#efe6cf'],
+  edge: ['#010204', '#080c10', '#141826', '#221b10', '#091c36', '#182734', '#41291c', '#1d304f', '#313331', '#43391a', '#5a3c3d', '#633b1e', '#4c4470', '#574b3f', '#3a506d', '#2f5952', '#7b4e43', '#745938', '#8c542e', '#546788', '#ae6634', '#96753f', '#8d8176', '#6c85a9', '#b37d5f', '#cf894c', '#b1a285', '#ff7f29', '#e5a766', '#f2c230', '#f7c46b', '#efe6cf'],
+  shillong: ['#100d14', '#141826', '#14193c', '#221e2f', '#1c2350', '#212c41', '#3e2240', '#2e2d3c', '#402b1d', '#3c3a44', '#30405a', '#613457', '#4f475e', '#565044', '#6c4731', '#844b6e', '#6a5d72', '#786a52', '#647395', '#c05377', '#938262', '#a57598', '#b87c51', '#d77a95', '#c294ae', '#ff7f29', '#f7a2bb', '#f2c230', '#f7c46b', '#e4cea8', '#e8cbd8', '#efe6cf'],
+};
+// ---- end PIXEL_PALETTES ----
+
+// ---- FOLK: the pixel people (shared/folk.js). Ramps are [shadow, base, light]; skin adds a blush. These are the lit
+// colours (in warm light); folk.js derives the night ramp with FOLK.night, the same cool ambient paintMat uses. ----
+export const FOLK = {
+  outline: '#1d1620',   // the 1 px line on people: a warm ink
+  eye: '#1a1420', eyeHi: '#fff8ec', mouth: '#6e2a2a',
+  skin: [   // light to deep: [shadow, base, light, blush]
+    ['#d9a183', '#f2c8a6', '#fde3cb', '#ee9f8e'],
+    ['#c4875f', '#e0ab80', '#f2c79e', '#df8b72'],
+    ['#a3653c', '#c88a5a', '#e0a878', '#c9705a'],
+    ['#764628', '#9a633e', '#b98056', '#a55744'],
+    ['#4b2a19', '#6a3e25', '#8a5a3a', '#7d3d32'],
+  ],
+  hair: { black: ['#1c1724', '#322a3e', '#5a4e6c'], brown: ['#2a1a14', '#45291d', '#6e4530'], grey: ['#5c5a62', '#8a8890', '#bdbcc2'] },
+  // tops: [main ramp, second ramp (the tee under a jacket, a check's light stripe, a shirt under a sweater)]
+  top: {
+    tee: [['#a86f18', '#d69a2e', '#f2c35a'], ['#cbbf9f', '#ece2c6', '#fff7e2']],
+    hoodie: [['#28433a', '#3c6253', '#5a8572'], ['#cbbf9f', '#ece2c6', '#fff7e2']],
+    kurta: [['#b3a382', '#ddd0b2', '#f8eed4'], ['#9c6a30', '#c08c46', '#dcae68']],
+    denim: [['#2a466c', '#3c6292', '#5a84b4'], ['#cbbf9f', '#ece2c6', '#fff7e2']],
+    shawl: [['#561c25', '#7a2832', '#9e3c44'], ['#b9a37c', '#e0cda6', '#f4e6c4']],
+    jacket: [['#2b2f1f', '#40472d', '#5a6340'], ['#cbbf9f', '#ece2c6', '#fff7e2']],   // you: dark olive zip jacket, cream tee
+    shirt: [['#b4b1a8', '#e2dfd6', '#fbf9f2'], ['#8a8780', '#b4b1a8', '#e2dfd6']],      // the grandfather: white half-sleeve
+    vest: [['#3e2f22', '#5e4630', '#7e6244'], ['#a9b5c2', '#d0d9e2', '#eef2f6']],       // the friend: sleeveless sweater, pale shirt
+    work: [['#2c3648', '#435470', '#5f7492'], ['#cbbf9f', '#ece2c6', '#fff7e2']],       // the walker's shirt
+    jainsem: [['#561c25', '#7a2832', '#9e3c44'], ['#b9a37c', '#e0cda6', '#f4e6c4']],    // the basket woman: Khasi jainsem, maroon and cream
+  },
+  legs: { jeans: ['#20304a', '#31476b', '#48618c'], grey: ['#4a4c52', '#6b6d74', '#8c8e94'], dark: ['#1c1d24', '#2c2e37', '#42444f'], khaki: ['#5e4f34', '#806c48', '#a08a62'], cloth: ['#3a1820', '#561c25', '#7a2832'] },
+  shoes: { sneaker: ['#5e6066', '#90939a', '#e6e3dc'], white: ['#9c9a94', '#d6d3cb', '#fbfaf5'], dark: ['#181316', '#2c2227', '#4a3c40'], sandal: ['#4a3220', '#6b4a2c', '#8a6440'] },
+  // extras and props: [shadow, base, light] (+ a second ramp where a check or a handle needs one)
+  headphones: [['#9a917c', '#e6dfcc', '#d04a38']],
+  glasses: [['#120e14', '#2a2430', '#cfe6f5']],
+  muffler: [['#8a5a1c', '#c08a2e', '#e8b852'], ['#6e2420', '#9a3428', '#c04a36']],
+  mufflerYou: [['#4e2116', '#733220', '#94462a'], ['#2e1510', '#3e1d14', '#b0683e']],   // red-brown check
+  cap: ['#6e1c18', '#a02c26', '#cc463a'],
+  umbrella: [['#0c0d10', '#1a1b20', '#3a3c46'], ['#3a2a1c', '#6b4a2c', '#8c6640']],
+  basket: [['#6e4a22', '#a07236', '#c99a56'], ['#3e2a1a', '#5e4228', '#82613e']],
+  // night: lit colour x mul + the night sky x add (paintMat's cool ambient); the warm key brightens a lit sprite
+  night: { mul: [0.30, 0.34, 0.52], add: 0.5, sky: PALETTE.night, warm: [1.06, 0.98, 0.88], amber: PALETTE.amber },
+  shadow: UTIL.shadow,
+  sheet: { cream: '#fff9e5', night: PALETTE.night, ink: '#3a2a1c', red: '#fd1500', grid: '#e8dcbc' },   // tools/folk-sheet.html
+};

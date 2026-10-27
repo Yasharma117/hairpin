@@ -4,78 +4,193 @@
 <title>Hairpin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=VT323&family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
-/* Layout: one page. A title card, then every scene swapped in place on one canvas, with a torn sheet between them.
-   Shared overlay: scene tag top-left, the subtitle up top, one advance chip at the bottom. Single night world by design. */
-:root {   /* colours come from shared/style.js (applyCSS); the page stays hidden until they're set */
+/* Layout: one page. A title card, then every scene swapped in place on one canvas, with a pixel sheet between them.
+   Shared overlay: scene tag top-left, mute top-right, the dialogue box up top, one advance button at the bottom.
+   The UI is pocket.design's cream paper on top of our navy night (PIXEL.md section 3). Colours: shared/style.js.
+
+   Shared classes, for scenes to put in their own layer (no need to restyle them):
+     .panel          cream sheet, 2px warm-ink border, hard 4px shadow. Square corners.
+     .btn            VT323 uppercase button, 48px tall, nowrap. Pressed: shadow 0, moved 2px.
+     .btn.on, .btn[aria-pressed="true"]   the chosen one: signal-red fill, cream text.
+     .btn.sm         a 44px button for dense groups (option pickers).
+     .tag            the scene tag, fixed top-left ("HAIRPIN · THE EDGE").
+     .label          a VT323 red caps label (form keys, kickers). On navy add .on-night.
+     .box            the dialogue box: put a .who (speaker tab) and a .line (serif) inside. Add .done for the red ▼.
+     .hint           a floating instruction over the world ("HOLD TO WISH"): cream chip, blinks once shown with .on.
+     .avatar         a round pixel head frame (the only rounded thing), 48px; .avatar.on rings it in red.
+     .cue            an urgent red stamp ("BRAKE").
+   Fonts: --display Young Serif, --serif Newsreader, --pixel VT323. --body/--mono (Archivo, Plex) remain only
+   until the scenes' own styles move to these. */
+:root {   /* colours come from shared/style.js (applyCSS, applyUICSS); the page stays hidden until they're set */
+  --display: "Young Serif", "Newsreader", Georgia, serif;
+  --serif: "Newsreader", Georgia, serif;
+  --pixel: "VT323", ui-monospace, Menlo, monospace;
   --body: "Archivo", system-ui, -apple-system, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --edge: 2px solid var(--ui-ink);
+  --drop: 4px 4px 0 var(--ui-ink);
+  --gutter: 16px;
+  --top: calc(env(safe-area-inset-top, 0px) + var(--gutter));
   color-scheme: dark;
 }
 html:not(.styled) { visibility: hidden; }
-html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--paper); font-family: var(--body); }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--ui-cream); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
 [hidden] { display: none !important; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 #layer { position: fixed; inset: 0; pointer-events: none; }
 #layer > * { pointer-events: auto; }
-.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 var(--black); transform: rotate(-1.5deg); pointer-events: none; }
-.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: max-content; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 var(--black); clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); pointer-events: none; z-index: 10; }
-.sub.off { visibility: hidden; }   /* shown solid or not at all */
-.sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
-.sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
-.sub .line:empty { display: none; }
-.chip { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); z-index: 10; font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: var(--amber); border: 0; padding: 12px 16px; min-height: 44px; box-shadow: 3px 3px 0 var(--black); cursor: pointer; }
-.chip:focus-visible { outline: 2px solid var(--paper); outline-offset: 3px; }
-.cue { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-1deg); z-index: 10; background: var(--red); color: var(--paper); font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: .14em; padding: 8px 14px; box-shadow: 4px 4px 0 var(--black); pointer-events: none; }
-#fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 600 12px var(--mono); color: var(--amber); background: var(--night); padding: 4px 6px; pointer-events: none; }
-/* the torn sheet between scenes */
-.tear { position: fixed; inset: -4% 0; z-index: 50; background: var(--paper); pointer-events: none; transform: translateY(0); transition: transform .75s cubic-bezier(.7, 0, .3, 1);
-  clip-path: polygon(0% 3%, 5% 1%, 11% 3.5%, 18% .5%, 26% 3%, 33% 1%, 41% 4%, 49% .8%, 57% 3.2%, 64% 1%, 72% 3.8%, 80% .6%, 87% 3%, 94% 1.2%, 100% 3.4%, 100% 97%, 94% 99.2%, 87% 96.8%, 80% 99.4%, 72% 96.6%, 64% 99%, 57% 96.8%, 49% 99.2%, 41% 96%, 33% 99%, 26% 97%, 18% 99.5%, 11% 96.5%, 5% 99%, 0% 97%); }
-.tear.up { transform: translateY(-110%); }
-.tear.below { transform: translateY(110%); transition: none; }
-@media (prefers-reduced-motion: reduce) { .tear { transition-duration: .01s; } }
-/* the title card */
-#card { position: fixed; inset: 0; z-index: 40; overflow: auto; display: grid; place-items: center; padding: 40px 16px; box-sizing: border-box; background: var(--night); }
-#card main { width: min(620px, 100%); display: flex; flex-direction: column; gap: 24px; }
-#card h1 { margin: 0; font-size: clamp(64px, 16vw, 128px); line-height: .85; font-weight: 900; font-variation-settings: 'wdth' 125; text-shadow: 6px 6px 0 var(--red); }
-#card p { margin: 0; font-size: 18px; line-height: 1.45; max-width: 52ch; }
-#play { align-self: flex-start; background: var(--amber); color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: 15px; letter-spacing: .06em; padding: 14px 20px; min-height: 48px; border: 0; box-shadow: 4px 4px 0 var(--black); cursor: pointer; }
-#play:focus-visible, #card a:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
-.keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; font-size: 15px; line-height: 1.4; }
-.keys dt { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; color: var(--amber); padding-top: 2px; }
-.keys dd { margin: 0; }
-#card ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-#card ol a { display: block; background: var(--paper); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 700; padding: 6px 10px 7px; box-shadow: 3px 3px 0 var(--black); }
-#card small { font-family: var(--mono); font-size: 11px; color: var(--mist); letter-spacing: .08em; }
+:focus-visible { outline: 3px solid var(--ui-signal); outline-offset: 3px; }
+
+/* ----- the shared pieces ----- */
+.panel { background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); }
+.label { font: 400 18px/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-signal); }
+.label.on-night { color: var(--ui-wood); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 16px; box-sizing: border-box;
+  font: 400 22px/1 var(--pixel); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; text-decoration: none;
+  color: var(--ui-ink); background: var(--ui-cream); border: var(--edge); border-radius: 0; box-shadow: var(--drop); cursor: pointer;
+  -webkit-tap-highlight-color: transparent; user-select: none; transition: transform 90ms steps(2), box-shadow 90ms steps(2), background-color 90ms steps(1); }
+.btn.sm { min-height: 44px; padding: 0 12px; font-size: 20px; }
+.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ui-ink); }
+.btn.on, .btn[aria-pressed="true"] { background: var(--ui-signal); color: var(--ui-cream); }
+.btn:disabled { cursor: progress; }
+@media (hover: hover) and (pointer: fine) { .btn:hover:not(.on):not([aria-pressed="true"]):not(:disabled) { background: var(--ui-cream-deep); } }
+.tag { position: fixed; top: var(--top); left: calc(env(safe-area-inset-left, 0px) + var(--gutter)); z-index: 11; pointer-events: none;
+  background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 5px 10px 3px;
+  font: 400 20px/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.cue { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 10; pointer-events: none;
+  background: var(--ui-signal); color: var(--ui-cream); border: var(--edge); box-shadow: var(--drop); padding: 8px 16px 5px;
+  font: 400 32px/1 var(--pixel); letter-spacing: .16em; animation: blink 1s steps(1) infinite; }
+.hint { position: fixed; left: 50%; transform: translateX(-50%); z-index: 10; pointer-events: none; white-space: nowrap;
+  background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 7px 14px 4px;
+  font: 400 24px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; opacity: 0; transition: opacity 160ms steps(2); }
+.hint.on { opacity: 1; }
+.avatar { width: 48px; height: 48px; border-radius: 50%; overflow: hidden; background: var(--ui-cream-deep); border: var(--edge); image-rendering: pixelated; box-sizing: border-box; }
+.avatar.on { box-shadow: 0 0 0 2px var(--ui-cream), 0 0 0 4px var(--ui-signal); }
+
+/* the dialogue box: sized once for the whole line (the untyped rest is laid out, invisible), then typed out */
+.box { position: relative; background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 14px 34px 16px 20px; box-sizing: border-box; }
+.box .who { position: absolute; left: 14px; bottom: calc(100% - 2px); background: var(--ui-cream); border: var(--edge); border-bottom: 0; padding: 4px 10px 1px;
+  font: 400 20px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-signal); white-space: nowrap; }
+.box .who:empty { display: none; }
+.box .line { font: 500 clamp(18px, 2.3vw, 23px)/1.36 var(--serif); font-optical-sizing: auto; text-wrap: pretty; margin: 0; }
+.box .line .rest { color: transparent; }
+.box::after { content: "▼"; position: absolute; right: 12px; bottom: 9px; font: 400 16px/1 var(--pixel); color: var(--ui-signal); opacity: 0; }
+.box.done::after { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+.sub { position: fixed; left: 50%; top: calc(var(--top) + 64px); transform: translateX(-50%); width: max-content; max-width: min(620px, calc(100% - 2 * var(--gutter))); z-index: 10; pointer-events: none; }
+.sub:not(.off) { animation: pop 160ms steps(2) both; }
+.sub.off { visibility: hidden; }
+@keyframes pop { from { opacity: 0; transform: translate(-50%, 6px); } }
+
+/* the one advance button */
+.chip { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); z-index: 10; max-width: calc(100% - 2 * var(--gutter)); transform: translateX(-50%); }
+.chip::after { content: "▶"; color: var(--ui-signal); font-size: .8em; animation: nudge 1.2s steps(1) infinite; }
+.chip.btn:active:not(:disabled) { transform: translate(calc(-50% + 2px), 2px); }
+@keyframes nudge { 50% { transform: translateX(2px); } }
+
+/* mute, top-right, like their speaker button */
+.mute { position: fixed; top: var(--top); right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); z-index: 45; width: 44px; min-height: 44px; padding: 0; }
+.mute svg { width: 24px; height: 24px; shape-rendering: crispEdges; fill: currentColor; }
+.mute .x { display: none; }
+.mute[aria-pressed="true"] .x { display: inline; } .mute[aria-pressed="true"] .waves { display: none; }
+.mute[aria-pressed="true"] { background: var(--ui-cream); color: var(--ui-ink); }
+.mute[aria-pressed="true"] .x { fill: var(--ui-signal); }
+
+#fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 400 18px var(--pixel); color: var(--amber); background: var(--night); padding: 4px 6px; pointer-events: none; }
+
+/* the sheet between scenes: cream paper with a stepped pixel edge, moved in whole steps */
+.tear { position: fixed; left: 0; right: 0; top: -32px; bottom: -32px; z-index: 50; background: var(--ui-cream); pointer-events: none; display: grid; place-items: center;
+  transform: translateY(0); transition: transform .72s steps(12, jump-end); }
+.tear.up { transform: translateY(calc(-100% - 8px)); }
+.tear.below { transform: translateY(calc(100% + 8px)); transition: none; }
+.tear span { font: 400 clamp(44px, 8vw, 84px)/1 var(--display); color: var(--ui-ink); }
+.tear span::before { content: "▼"; display: block; text-align: center; font: 400 20px/1 var(--pixel); color: var(--ui-signal); margin-bottom: 10px; }
+
+/* the title card: a cream board in a wood frame, on the night */
+#card { position: fixed; inset: 0; z-index: 40; overflow: auto; display: grid; place-items: center; padding: 72px var(--gutter) 40px; box-sizing: border-box;
+  background: var(--night) repeating-conic-gradient(var(--sky) 0 25%, transparent 0 50%) 0 0 / 8px 8px; }
+#card main { width: min(640px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 22px; padding: 36px 40px 34px;
+  background: var(--ui-cream); color: var(--ui-ink); border: 8px solid var(--ui-wood); outline: 2px solid var(--ui-ink); box-shadow: inset 0 0 0 2px var(--ui-ink), 10px 10px 0 2px var(--black); }
+#card .lead, #card .more { display: flex; flex-direction: column; gap: 22px; }
+#card .lead > *, #card .more { animation: rise 240ms steps(3) both; }
+#card .lead > :nth-child(2) { animation-delay: 60ms; } #card .lead > :nth-child(3) { animation-delay: 120ms; } #card .lead > :nth-child(4) { animation-delay: 160ms; } #card .more { animation-delay: 200ms; }
+@media (min-width: 900px) {
+  #card main { width: min(1040px, 100%); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 48px; padding: 44px 48px 44px; }
+  #card main h1 { font-size: clamp(72px, 7.6vw, 100px); }
+  #card .lead { justify-content: center; }
+  #card .more { justify-content: flex-end; }
+  #card .more .keys { border-top: 0; padding-top: 0; }
+  #card .lead { border-right: 2px dashed var(--ui-wood); padding-right: 48px; margin-right: -24px; }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+#card .kicker { margin: 0 0 -14px; }
+#card h1 { margin: 0; font: 400 clamp(76px, 17vw, 144px)/.82 var(--display); letter-spacing: -.02em; color: var(--ui-ink); }
+#card h1 i { color: var(--ui-signal); font-style: normal; }
+#card p { margin: 0; font: 400 19px/1.5 var(--serif); max-width: 46ch; text-wrap: pretty; }
+#play { align-self: flex-start; min-height: 56px; padding: 0 22px; font-size: 28px; background: var(--ui-signal); color: var(--ui-cream); }
+#play::after { content: "▶"; font-size: .7em; }
+#play:disabled::after { content: none; }
+@media (hover: hover) and (pointer: fine) { #play:hover:not(:disabled) { background: var(--ui-rust); } }
+.keys { display: grid; grid-template-columns: max-content 1fr; gap: 10px 14px; margin: 0; padding: 16px 0 0; border-top: 2px dashed var(--ui-wood); font: 400 16px/1.45 var(--serif); }
+.keys dt { justify-self: start; align-self: start; font: 400 18px/1 var(--pixel); letter-spacing: .08em; color: var(--ui-ink); background: var(--ui-cream-deep); border: var(--edge); border-bottom-width: 4px; padding: 3px 8px 1px; min-width: 2ch; text-align: center; }
+.keys dd { margin: 0; padding-top: 2px; }
+#card nav { display: flex; flex-direction: column; gap: 10px; }
+#card ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 10px; counter-reset: s; }
+#card ol .btn { counter-increment: s; gap: 8px; }
+#card ol .btn::before { content: "0" counter(s); color: var(--ui-signal); }
+@media (max-width: 520px) {
+  #card { padding-top: 76px; }
+  #card main { padding: 24px 20px 24px; gap: 18px; }
+  #card p { font-size: 17px; }
+  #card ol .btn { font-size: 19px; min-height: 44px; padding: 0 10px; }
+  .tag { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tear, .tear.up, .tear.below { transform: none; transition: opacity .2s ease; }
+  .tear.up, .tear.below { opacity: 0; }
+  .sub:not(.off), #card .lead > *, #card .more { animation: none; }
+  .cue, .chip::after { animation: none; }
+  .box.done::after { animation: none; opacity: 1; }
+  .btn { transition: none; }
+}
 </style>
 
 <canvas id="c" aria-label="Hairpin: a night drive by taxi from Jorabat to Shillong"></canvas>
 <div id="layer"></div>
-<div class="sub off" id="sub" aria-hidden="true"><div class="who" id="who"></div><div class="line" id="line"></div></div>
+<div class="box sub off" id="sub" aria-hidden="true"><div class="who" id="who"></div><p class="line" id="line"></p></div>
 <div class="visually-hidden" id="said" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
-<button class="chip" id="chip" hidden></button>
-<div class="tear up" id="tear" aria-hidden="true"></div>
+<button class="btn chip" id="chip" type="button" hidden></button>
+<button class="btn mute" id="mute" type="button" aria-pressed="false" aria-label="Mute"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4h3v4H1zM4 3h1v6H4zM5 2h1v8H5zM6 1h1v10H6z"/><path class="waves" d="M8 4h1v4H8zM10 2h1v8h-1z"/><path class="x" d="M8 4h1v1H8zM11 4h1v1h-1zM9 5h2v2H9zM8 7h1v1H8zM11 7h1v1h-1z"/></svg></button>
+<div class="tear up" id="tear" aria-hidden="true"><span></span></div>
 <div id="card">
   <main>
-    <h1>HAIRPIN</h1>
+    <div class="lead">
+    <span class="label kicker">A night drive</span>
+    <h1>Hairpin</h1>
     <p>A night drive by taxi from Jorabat to Shillong. About four minutes. Built around one idea: a wish kept in the bank until you need it.</p>
-    <button id="play">Play →</button>
+    <button id="play" class="btn" type="button">Play</button>
+    </div>
+    <div class="more">
     <dl class="keys" aria-label="Controls">
       <dt>HOLD</dt><dd>the mouse, the screen or Space: whatever the taxi does in that scene. Drive faster, brake.</dd>
       <dt>TAP</dt><dd>or Enter: the next thing.</dd>
       <dt>H</dt><dd>the horn.</dd>
     </dl>
-    <small>OR JUMP TO A SCENE</small>
-    <ol>
-      <li><a href="?scene=stand">The stand</a></li>
-      <li><a href="?scene=jorabat">Jorabat</a></li>
-      <li><a href="?scene=climb">The climb</a></li>
-      <li><a href="?scene=nongpoh">Nongpoh</a></li>
-      <li><a href="?scene=cloud">The cloud line</a></li>
-      <li><a href="?scene=edge">The edge</a></li>
-      <li><a href="?scene=shillong">Shillong</a></li>
-    </ol>
+    <nav aria-labelledby="jump">
+      <span class="label" id="jump">Or jump to a scene</span>
+      <ol>
+        <li><a class="btn sm" href="?scene=stand">The stand</a></li>
+        <li><a class="btn sm" href="?scene=jorabat">Jorabat</a></li>
+        <li><a class="btn sm" href="?scene=climb">The climb</a></li>
+        <li><a class="btn sm" href="?scene=nongpoh">Nongpoh</a></li>
+        <li><a class="btn sm" href="?scene=cloud">The cloud line</a></li>
+        <li><a class="btn sm" href="?scene=edge">The edge</a></li>
+        <li><a class="btn sm" href="?scene=shillong">Shillong</a></li>
+      </ol>
+    </nav>
+    </div>
   </main>
 </div>
 
@@ -86,9 +201,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 <script type="module">
 import * as THREE from 'three';
 import { Ink, clamp, loadImg, who } from './shared/kit.js';
-import { applyCSS } from './shared/style.js';
+import { applyCSS, applyUICSS } from './shared/style.js';
 import { GRADES } from './shared/grade.js';
-applyCSS();
+applyCSS(); applyUICSS();
 THREE.ColorManagement.enabled = false;
 
 // the scenes, in story order; each folder has a scene.js
@@ -103,68 +218,181 @@ let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); if (!renderer.capabilities.isWebGL2) throw 0; }
 catch (e) { $('#card main p').textContent = 'Hairpin needs WebGL 2, which this browser does not have.'; $('#play').hidden = true; throw e; }
 const isTouch = matchMedia('(pointer: coarse)').matches;
-const DPR = isTouch ? 1 : Math.min(devicePixelRatio || 1, 2);   // phones render at 1x: the paint and the ink hide the softness
+// the canvas at the full device resolution, so the pixel grid's edges land on device pixels; the scene itself renders at
+// the low pixel grid (shared/kit.js Ink), so this costs only the upscale
+const DPR = Math.min(devicePixelRatio || 1, 3);
 renderer.setPixelRatio(DPR);
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-const ink = new Ink(renderer, isTouch);
+const ink = new Ink(renderer);
 const U = { uMode: { value: 0 } };   // debug: 0 lights, 1 dark painting, 2 lit painting
 
-/* ---------- sound: one context, unlocked by the Play tap; the bed runs unbroken across scenes ---------- */
-let ac = null, out = null;
+/* ---------- sound: one context, unlocked by the Play tap; the bed runs unbroken across scenes ----------
+   bed layers → bedBus (ducked under lines) ─┐
+   scene cues → out (ctx.out), ctx.voice, ctx.verb ─┴→ master (fade in, mute) → limiter → speakers */
+// levels (calibrated offline, see the report): bed layers at mix 1, the engine's mid path, the rain's patter, the cues' peaks
+const LVL_ENGINE = .042, LVL_WIND = .2, LVL_CRICKETS = .028, LVL_RAIN = .12, MID_ENGINE = .5, PATTER = 1.6;
+const SFX = { horn: .12, tear: .42, tick: 1, door: .67, impact: .45 };
+let ac = null, out = null, voice = null, verb = null, master = null, bedBus = null, engine = null, noiseBuf = null;
+let muted = (() => { try { return localStorage.getItem('hairpin.muted') === '1'; } catch { return false; } })();
+let rpmK = 1, mix = {}, duckTimer = 0, lastTick = 0;
 const bedGain = {};
-function unlock() {
-  if (ac) { ac.resume(); return; }
-  try {
-    ac = new (window.AudioContext || window.webkitAudioContext)();
-    out = ac.createGain(); out.gain.value = 0; out.connect(ac.destination);
-    out.gain.linearRampToValueAtTime(.7, ac.currentTime + 1.5);
-    const noise = () => { const b = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = ac.createBufferSource(); n.buffer = b; n.loop = true; n.start(); return n; };
-    const lfo = (hz, amount, param, type = 'sine') => { const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = hz; g.gain.value = amount; o.connect(g).connect(param); o.start(); };
-    const layer = (name, src, level) => { const g = ac.createGain(); g.gain.value = 0; src.connect(g).connect(out); bedGain[name] = { g, level }; };
-    { // the engine: an 800cc three-cylinder, two detuned saws under a low lid
-      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 170; lfo(.3, 12, f.frequency);
-      for (const hz of [46, 46.7]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz; o.connect(f); o.start(); }
-      layer('engine', f, .07);
-    }
-    { // wind: low noise breathing in and out
-      const f = ac.createBiquadFilter(), g = ac.createGain(); f.type = 'lowpass'; f.frequency.value = 480; lfo(.21, 160, f.frequency);
-      g.gain.value = .8; lfo(.13, .5, g.gain); noise().connect(f).connect(g); layer('wind', g, .06);
-    }
-    { // crickets: a high tone, chirped fast and gated slow
-      const o = ac.createOscillator(), chirp = ac.createGain(), gate = ac.createGain(); o.frequency.value = 4700; chirp.gain.value = 0; gate.gain.value = 0;
-      lfo(31, 1, chirp.gain); lfo(.9, 1, gate.gain, 'square'); o.connect(chirp).connect(gate); o.start(); layer('crickets', gate, .012);
-    }
-    { // rain: soft filtered noise
-      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400; noise().connect(f); layer('rain', f, .05);
-    }
-    bed(mix);
-  } catch (e) { ac = null; }
+function glide(p, v, tau, at = 0) {   // from wherever the param is now, no jump
+  const t = ac.currentTime;
+  if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
+  p.setTargetAtTime(v, t + at, tau);
 }
-let mix = {};
+function unlock() {
+  if (ac) { if (!document.hidden) ac.resume(); return; }
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';   // iOS 17+: play through the silent switch
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const sr = ac.sampleRate, t0 = ac.currentTime;
+    const lim = ac.createDynamicsCompressor();   // the safety limiter: nothing a scene stacks up can clip
+    lim.threshold.value = -6; lim.knee.value = 2; lim.ratio.value = 20; lim.attack.value = .002; lim.release.value = .2;
+    master = ac.createGain(); master.connect(lim).connect(ac.destination);
+    master.gain.setValueAtTime(0, t0); master.gain.linearRampToValueAtTime(muted ? 0 : 1, t0 + 1.5);
+    const bus = level => { const g = ac.createGain(); g.gain.value = level; g.connect(master); return g; };
+    out = bus(.7); voice = bus(1); bedBus = bus(1);
+    const ir = ac.createBuffer(2, sr * 2.5, sr);   // the reverb: 2.5 s of noise falling 60 dB
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-6.9 * i / d.length); }
+    verb = ac.createConvolver(); verb.buffer = ir; verb.connect(bus(.5));
+    noiseBuf = ac.createBuffer(1, sr * 2, sr);
+    { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const loop = buf => { const n = ac.createBufferSource(); n.buffer = buf; n.loop = true; n.start(); return n; };
+    const filt = (type, hz, q = .7) => { const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = hz; f.Q.value = q; return f; };
+    const lfo = (hz, amount, param, type = 'sine', delay = 0) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = hz; g.gain.value = amount; o.connect(g).connect(param); o.start(t0 + delay); return o; };
+    const gain = v => { const g = ac.createGain(); g.gain.value = v; return g; };
+    const layer = (name, src, level) => { const g = gain(0); src.connect(g).connect(bedBus); bedGain[name] = { g, level }; };
+    { // the engine: an 800cc three-cylinder. Two detuned saws: a low path for headphones, a mid path phones can play, a lope
+      const lp = filt('lowpass', 170); lfo(.3, 12, lp.frequency);
+      const lope = gain(1), load = gain(1), lopeOsc = lfo(23, .3, lope.gain);   // AM at 1.5x rev/s (rev/s = pitch / 3)
+      const saws = [1, 1.015].map(m => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 46 * m; o.connect(lp); o.start(); return o; });
+      lp.connect(lope);
+      for (const [hz, q] of [[220, .7], [600, 1.5]]) { const bp = filt('bandpass', hz, q); saws.forEach(o => o.connect(bp)); bp.connect(gain(MID_ENGINE)).connect(lope); }
+      lope.connect(load); layer('engine', load, LVL_ENGINE);
+      engine = { saws, lp, lopeOsc, load, k: -1 };
+    }
+    { // wind: noise breathing in and out under a resonant lid that sweeps through the mids
+      const f = filt('lowpass', 700, 1.5), g = gain(.8); lfo(.21, 300, f.frequency); lfo(.13, .5, g.gain);
+      loop(noiseBuf).connect(f).connect(g); layer('wind', g, LVL_WIND);
+    }
+    { // crickets: two voices, pulsed at ~30 Hz inside chirps; a shaped gate keeps each silent ~75% of the time
+      const g = gain(1), curve = new Float32Array(256).map((_, i) => { const s = clamp((i / 127.5 - 1 - .55) / .25, 0, 1); return s * s * (3 - 2 * s); });
+      for (const [hz, pulse, rate, delay] of [[4400, 31, 1.6, 0], [5100, 27, 1.35, .37]]) {
+        const o = ac.createOscillator(), p = gain(.5), gate = gain(0), sh = ac.createWaveShaper(), l = ac.createOscillator();
+        o.frequency.value = hz; lfo(pulse, .5, p.gain);   // .5 ± .5: the pulses close fully
+        sh.curve = curve; l.frequency.value = rate; l.connect(sh).connect(gate.gain); l.start(t0 + delay);   // offset in phase
+        o.connect(p).connect(gate).connect(g); o.start();
+      }
+      layer('crickets', g, LVL_CRICKETS);
+    }
+    { // rain: a soft hiss, and the patter: sparse droplets up high
+      const g = gain(1), pat = ac.createBuffer(1, sr * 2, sr), d = pat.getChannelData(0);
+      for (let i = 0; i < d.length - 64; i++) if (Math.random() < 500 / sr) { const a = Math.random() ** 2; for (let j = 0; j < 64; j++) d[i + j] += a * (Math.random() * 2 - 1) * Math.exp(-j / 9); }
+      loop(noiseBuf).connect(filt('lowpass', 1400)).connect(g);
+      loop(pat).connect(filt('highpass', 3500)).connect(gain(PATTER)).connect(g);
+      layer('rain', g, LVL_RAIN);
+    }
+    rpm(rpmK); bed(mix);
+  } catch (e) { console.warn('audio', e); ac = null; }
+}
 function bed(m) {   // { engine, wind, crickets, rain }: 0..1 each; anything left out fades to 0
   mix = m;
   if (!ac) return;
-  for (const [name, { g, level }] of Object.entries(bedGain)) { g.gain.cancelScheduledValues(ac.currentTime); g.gain.setTargetAtTime((m[name] || 0) * level, ac.currentTime, .5); }
+  if (m.engine && engine.off) rpm(rpmK);   // the key turned back on
+  for (const [name, { g, level }] of Object.entries(bedGain)) glide(g.gain, (m[name] || 0) * level, .5);
 }
-function honk() {   // the two-tone Maruti horn
-  if (!ac) return;
-  const t0 = ac.currentTime;
-  for (const [f, at] of [[420, 0], [420, .22]]) for (const mul of [1, 1.26]) {
-    const o = ac.createOscillator(), g = ac.createGain(), fl = ac.createBiquadFilter();
-    o.type = 'square'; o.frequency.value = f * mul; fl.type = 'lowpass'; fl.frequency.value = 1800;
-    g.gain.setValueAtTime(.0001, t0 + at); g.gain.exponentialRampToValueAtTime(.08, t0 + at + .01); g.gain.exponentialRampToValueAtTime(.0001, t0 + at + .18);
-    o.connect(fl).connect(g).connect(out); o.start(t0 + at); o.stop(t0 + at + .2);
-  }
+function rpm(k = 1) {   // 0 idle, 1 cruising, 3 holding to go faster; glides with a .25 s time constant. Safe to call every frame
+  k = clamp(k, 0, 3); rpmK = k;
+  if (!engine || (!engine.off && Math.abs(k - engine.k) < .02)) return;
+  engine.k = k; engine.off = false;
+  const hz = k < 1 ? 38 + 8 * k : 46 + 14.5 * (k - 1), cut = k < 1 ? 140 + 30 * k : 170 + 215 * (k - 1);
+  engine.saws.forEach((o, i) => glide(o.frequency, hz * (1 + .015 * i), .25));
+  glide(engine.lopeOsc.frequency, hz / 2, .25); glide(engine.lp.frequency, cut, .25); glide(engine.load.gain, .85 + .15 * k, .25);
+}
+function engineOff() {   // the key turned: the revs sag for 400 ms, the engine dies, the key clicks back
+  mix = { ...mix, engine: 0 };
+  if (!engine) return;
+  engine.off = true;
+  engine.saws.forEach(o => glide(o.frequency, 14, .13)); glide(engine.lopeOsc.frequency, 7, .13);
+  glide(bedGain.engine.g.gain, 0, .1, .12);
+  hit({ at: .42, len: .012, type: 'highpass', hz: 3000, peak: .12 }); hit({ at: .47, len: .02, type: 'bandpass', hz: 1800, q: 3, peak: .1 });   // soft: ~-18 dBFS peak
+}
+function duck(on) { if (bedBus) glide(bedBus.gain, on ? .4 : 1, on ? .027 : .2); }   // -8 dB under a line: 80 ms down, 600 ms back
+function duckFor(secs) { duck(true); clearTimeout(duckTimer); duckTimer = setTimeout(() => duck(false), secs * 1000); }
+function toggleMute() {
+  muted = !muted;
+  try { localStorage.setItem('hairpin.muted', muted ? '1' : '0'); } catch {}
+  if (master) glide(master.gain, muted ? 0 : 1, .05);
+  return muted;
+}
+document.addEventListener('visibilitychange', () => { if (ac) document.hidden ? ac.suspend() : ac.resume(); });
+// one-shots: filtered noise (hit) and a falling sine (thud), into the cue bus unless told otherwise
+function hit({ at = 0, len, type, hz, to, q = .7, peak, atk = .002, dest = out }) {
+  const t = ac.currentTime + at, n = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  f.type = type; f.Q.value = q; f.frequency.setValueAtTime(hz, t); if (to) f.frequency.exponentialRampToValueAtTime(to, t + len);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + atk); g.gain.exponentialRampToValueAtTime(.0001, t + len);
+  n.buffer = noiseBuf; n.connect(f).connect(g).connect(dest); n.start(t, Math.random() * 1.5, len + .02);
+}
+function thud({ at = 0, hz, to, len, peak, dest = out }) {
+  const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.setValueAtTime(hz, t); o.frequency.exponentialRampToValueAtTime(to, t + len);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + len);
+  o.connect(g).connect(dest); o.start(t); o.stop(t + len + .02);
+}
+const sfx = {
+  tear() { if (!ac) return; hit({ len: .4, type: 'bandpass', hz: 1200, to: 5000, q: 1.2, peak: SFX.tear, atk: .06 }); hit({ at: .08, len: .3, type: 'highpass', hz: 6000, peak: SFX.tear * .3, atk: .1 }); },
+  tick() {   // rate-limited: call it per character
+    if (!ac || ac.currentTime - lastTick < .06) return; lastTick = ac.currentTime;
+    hit({ len: .025, type: 'bandpass', hz: 2600 + Math.random() * 900, q: 3, peak: SFX.tick });
+  },
+  door() {   // the latch, then the door seating
+    if (!ac) return;
+    hit({ len: .03, type: 'bandpass', hz: 2800, q: 4, peak: SFX.door }); hit({ at: .035, len: .04, type: 'bandpass', hz: 1900, q: 4, peak: SFX.door * .7 });
+    thud({ at: .07, hz: 95, to: 55, len: .25, peak: SFX.door * .8 }); hit({ at: .07, len: .18, type: 'lowpass', hz: 320, peak: SFX.door * 1.5 });
+  },
+  impact(dist = .7) {   // 0 near .. 1 far: further is quieter, darker and wetter
+    if (!ac) return;
+    const far = clamp(dist, 0, 1), dest = ac.createGain(), wet = ac.createGain();
+    dest.gain.value = 1 - .75 * far; wet.gain.value = .3 + .5 * far; dest.connect(out); dest.connect(wet).connect(verb);
+    thud({ hz: 62, to: 30, len: 1.4, peak: SFX.impact, dest }); hit({ len: 1, type: 'lowpass', hz: 420 - 300 * far, peak: SFX.impact * 1.4, atk: .01, dest });
+  },
+};
+function honk(secs = .45) {   // the two-tone Maruti horn: both tones at once, 5 ms on, flat while held, 30 ms off. Returns release()
+  if (!ac) return () => {};
+  const t0 = ac.currentTime, g = ac.createGain(), fl = ac.createBiquadFilter();
+  fl.type = 'lowpass'; fl.frequency.value = 2400; fl.connect(g).connect(out);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(SFX.horn, t0 + .005);
+  const os = [410, 512].map(f => { const o = ac.createOscillator(); o.type = 'square'; o.frequency.value = f; o.connect(fl); o.start(t0); return o; });
+  const stop = at => { g.gain.cancelScheduledValues(at); g.gain.setValueAtTime(SFX.horn, at); g.gain.linearRampToValueAtTime(0, at + .03); os.forEach(o => o.stop(at + .05)); };
+  stop(t0 + secs);
+  return () => { const at = Math.max(ac.currentTime, t0 + .18); if (at < t0 + secs) stop(at); };
 }
 
-/* ---------- the shared overlay: the subtitle (expression first, then the words) and the advance chip ---------- */
+/* ---------- the shared overlay: the dialogue box (expression first, then the words), the advance button, mute ---------- */
+// The box holds the whole line from the start: typed text in one span, the rest laid out but transparent, so it is
+// sized once and never reflows. A line stays up for its typing plus a reading time, or `secs`, whichever is longer.
+const sub = $('#sub'), typedEl = document.createElement('span'), restEl = document.createElement('span');
+restEl.className = 'rest'; $('#line').append(typedEl, restEl);
 let full = '', typed = 0, lineEnd = 0, now = 0;
 function say(label, text, secs = 4, expr) {
-  if (!label) { $('#sub').classList.add('off'); full = ''; lineEnd = 0; return; }
+  duck(!!label);   // the bed dips under a line (sound: duck/duckFor)
+  if (!label) { sub.classList.add('off'); full = ''; lineEnd = 0; return; }
   const w = who(label);
-  $('#who').textContent = w + (expr ? ` · ${expr}` : ''); $('#line').textContent = '';
-  full = text || ''; typed = expr ? -22 : 0; lineEnd = now + secs; $('#sub').classList.remove('off');
+  $('#who').textContent = w + (expr ? ` · ${expr}` : '');
+  full = text || ''; typed = expr ? -22 : 0;
+  const words = full.split(/\s+/).filter(Boolean).length;
+  lineEnd = now + Math.max(secs, (full.length - typed) / 32 + Math.max(1.6, .28 * words));
+  typedEl.textContent = ''; restEl.textContent = full; sub.classList.toggle('done', !full);
+  sub.classList.remove('off');   // the box pops in only when it was hidden (CSS)
   $('#said').textContent = `${w}${expr ? `, ${expr}` : ''}: ${full}`;   // screen readers get the whole line at once
+}
+function typeTick(dt) {   // 32 characters a second
+  if (typed >= full.length) return;
+  typed = Math.min(full.length, typed + dt * 32);
+  const n = Math.max(0, Math.floor(typed));
+  if (n !== typedEl.textContent.length) { typedEl.textContent = full.slice(0, n); restEl.textContent = full.slice(n); sfx.tick(); }   // tick rate-limits itself
+  if (typed >= full.length) sub.classList.add('done');
 }
 let tapHandler = null;
 function prompt(label) {   // the one advance affordance: a chip, or nothing
@@ -174,6 +402,12 @@ function prompt(label) {   // the one advance affordance: a chip, or nothing
   c.hidden = false;
 }
 $('#chip').addEventListener('click', e => { e.stopPropagation(); tap(); });
+$('#mute').setAttribute('aria-pressed', String(muted));   // remembered across visits (the audio block)
+$('#mute').addEventListener('click', e => {
+  const m = e.currentTarget;
+  m.setAttribute('aria-pressed', String(toggleMute()));
+  if (e.detail) m.blur();   // a click leaves Space and H to the drive
+});
 
 /* ---------- input: HOLD = the taxi's action, TAP or Enter = advance, H = horn ---------- */
 const input = { hold: false, ptr: null };
@@ -191,25 +425,35 @@ addEventListener('keydown', e => {
   unlock();
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) input.hold = true; }
   else if (e.code === 'Enter' && !e.target.closest?.('button')) { e.preventDefault(); tap(); }
-  else if (e.code === 'KeyH' && !e.repeat) { if (!current?.onHorn?.()) honk(); }
+  else if (e.code === 'KeyH' && !e.repeat) { if (!current?.onHorn?.()) hornUp = honk(3); }   // held: the horn lasts until keyup (3 s at most)
   else if (QS.has('debug') && 'Digit1 Digit2 Digit3'.includes(e.code)) U.uMode.value = +e.code.slice(-1) - 1;
   else if (QS.has('debug') && e.code === 'KeyB') ink.uniforms.uBoil.value = 1 - ink.uniforms.uBoil.value;
 });
-addEventListener('keyup', e => { if (e.code === 'Space') input.hold = false; });
+let hornUp = null;
+addEventListener('keyup', e => { if (e.code === 'Space') input.hold = false; if (e.code === 'KeyH') { hornUp?.(); hornUp = null; } });
 function tap() { if (current && !busy) current.onTap?.(); }
 
 /* ---------- scenes: load the next while the sheet covers, swap, draw a frame, lift the sheet ---------- */
 const tear = $('#tear');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 let busy = false, sceneName = null;
-async function sheetDown() { tear.classList.remove('up'); tear.classList.add('below'); tear.getBoundingClientRect(); tear.classList.remove('below'); await wait(780); }
+{ // the sheet's stepped pixel edge, top and bottom (it overhangs the viewport by 32px, so a covering sheet is flat)
+  const cols = 24, step = i => [0, 12, 24, 12, 0, 24][(i * 5 + (i >> 1)) % 6], x = i => `${(i / cols * 100).toFixed(3)}%`, pts = [];
+  for (let i = 0; i < cols; i++) pts.push(`${x(i)} ${step(i)}px`, `${x(i + 1)} ${step(i)}px`);
+  for (let i = cols; i--;) pts.push(`${x(i + 1)} calc(100% - ${step(i + 3)}px)`, `${x(i)} calc(100% - ${step(i + 3)}px)`);
+  tear.style.clipPath = `polygon(${pts.join(', ')})`;
+}
+async function sheetDown(name) {
+  tear.firstChild.textContent = name && $(`#card a[href="?scene=${name}"]`)?.textContent || '';   // the next scene's name on the sheet
+  sfx.tear(); tear.classList.remove('up'); tear.classList.add('below'); tear.getBoundingClientRect(); tear.classList.remove('below'); await wait(780); }
 function sheetUp() { requestAnimationFrame(() => tear.classList.add('up')); }
 function makeCtx(name) {
   const ctrl = new AbortController(), layer = document.createElement('div');
   layer.className = 'scene'; $('#layer').appendChild(layer);
   return {
     THREE, renderer, canvas, layer, isTouch, DPR, ink, U, input, params: QS,
-    get ac() { return ac; }, get out() { return out; },
+    get ac() { return ac; }, get out() { return out; }, get verb() { return verb; }, get voice() { return voice; },
+    rpm, engineOff, duck, duckFor, sfx,
     on: (target, type, fn, opts) => target.addEventListener(type, fn, { ...opts, signal: ctrl.signal }),
     bed, say, prompt, honk,
     next: () => go(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length]),
@@ -225,12 +469,12 @@ function prefetch(name) {   // the next scene's code and paintings, while this o
 async function go(name) {
   if (busy || !SCENES[name]) return;
   busy = true;
-  const covering = sceneName ? sheetDown() : Promise.resolve();
+  const covering = sceneName ? sheetDown(name) : Promise.resolve();
   const [mod] = await Promise.all([load(name), covering]);
-  if (current) { current.dispose?.(); scope.dispose(); }
+  if (current) { current.dispose?.(); scope.dispose(); current = null; }   // the outgoing scene ran under the sheet until here
   say(null); prompt(null);
   scope = makeCtx(name); sceneName = name;
-  ink.setGrade(GRADES[name]);   // every scene graded toward the edge painting
+  ink.setGrade(GRADES[name], name);   // every scene graded toward the edge painting, and quantized to its own palette
   try { current = await mod.load(scope); }
   catch (e) { console.error(e); current = null; }
   resize();
@@ -255,8 +499,8 @@ let fN = 0, fT = 0, fWorst = 0;
 function frame() {
   const dt = Math.min(clock.getDelta(), .05);
   now += dt;
-  if (current && !busy) current.frame?.(dt, now);
-  if (typed < full.length) { typed = Math.min(full.length, typed + dt * 32); $('#line').textContent = full.slice(0, Math.max(0, Math.floor(typed))); }
+  current?.frame?.(dt, now);   // busy only gates input: the outgoing scene keeps moving while the sheet comes down
+  typeTick(dt);
   if (lineEnd && now > lineEnd) say(null);
   if (fps) {   // real time, not the capped step: a slow phone must read as slow
     const t = performance.now(), real = (t - (fps.last || t)) / 1000; fps.last = t;
@@ -274,5 +518,6 @@ else {
   $('#play').addEventListener('click', () => { unlock(); $('#play').textContent = 'Loading…'; $('#play').disabled = true; go('stand'); });
   $('#play').focus();
 }
-window.__hairpin = { go, get scene() { return sceneName; }, get current() { return current; } };
+window.__hairpin = { go, get scene() { return sceneName; }, get current() { return current; },
+  toggleMute, get muted() { return muted; }, audio: { get ac() { return ac; }, bed, rpm, engineOff, duck, honk, sfx } };   // audio: for tools and the console
 </script>

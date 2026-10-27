@@ -1,6 +1,6 @@
 // Shared by every scene: small helpers, the stroke map, the taxi, its ink outline, and the passenger.
 import * as THREE from 'three';
-import { LIVERY, TAXI, TRUCK, UTIL, GLSL_PALETTE } from './style.js';
+import { LIVERY, TAXI, TRUCK, UTIL, GLSL_PALETTE, PIXEL_PALETTES } from './style.js';
 
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -208,90 +208,132 @@ export function makeTruck(uMode) {
   return { truck, mat, parts };
 }
 
-/* ---------- ink + paper rim around the taxi, plus grain and vignette over the whole frame ---------- */
-// One per page. The full ink (edge detection on the taxi's normals) only runs inside the taxi's bounding box on screen.
+/* ---------- the final pass: one pixel grid for the whole frame (PIXEL.md 1) ---------- */
+// The scene renders at a low internal resolution (an integer pixel scale, about 270 px tall in landscape, 300 in portrait),
+// at 2x that grid and box-filtered down so the paintings don't shimmer. The pixel pass then draws a 1 px line round things
+// that move (from a normals pass of layer 1), grades, quantizes to the scene's palette (Oklab, shared/style.js
+// PIXEL_PALETTES) with a light 4x4 ordered dither only in smooth gradients, and the upscale blows it up with nearest
+// filtering, shifted by the camera's sub-pixel remainder (Stage.apply snaps the camera to the grid).
+export const PIX = { scale: 0, w: 0, h: 0 };   // the current pixel grid, for Stage's snapping
+const SS = 2;   // scene supersampling over the pixel grid
+const pixelGrid = (pw, ph) => { const s = Math.max(2, Math.round(ph / (ph > pw ? 300 : 270))); return [s, Math.ceil(pw / s), Math.ceil(ph / s)]; };
+const DITHER = .45;   // how far from a palette colour the dither reaches (1 = full ordered dither, 0 = none)
+const CHROMA = 2;   // Oklab a, b weighed double in the nearest-colour match, as in tools/fit_palette.py: keeps hues apart
+const okLab = hex => {
+  const n = parseInt(hex.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; });
+  const [l, m, s] = [[.4122214708, .5363325363, .0514459929], [.2119034982, .6806995451, .1073969566], [.0883024619, .2817188376, .6299787005]].map(r => Math.cbrt(r[0] * c[0] + r[1] * c[1] + r[2] * c[2]));
+  return new THREE.Vector3(.2104542553 * l + .7936177850 * m - .0040720468 * s, (1.9779984951 * l - 2.4285922050 * m + .4505937099 * s) * CHROMA, (.0259040371 * l + .7827717662 * m - .8086757660 * s) * CHROMA);
+};
+const OKLAB_GLSL = /* glsl */`
+  vec3 oklab(vec3 c){
+    c = mix(c / 12.92, pow((c + .055) / 1.055, vec3(2.4)), step(.04045, c));
+    vec3 lms = pow(mat3(.4122214708, .2119034982, .0883024619, .5363325363, .6806995451, .2817188376, .0514459929, .1073969566, .6299787005) * c, vec3(1. / 3.));
+    return mat3(.2104542553, 1.9779984951, .0259040371, .7936177850, -2.4285922050, .7827717662, -.0040720468, .4505937099, -.8086757660) * lms;
+  }`;
 const infoMat = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying vec3 vN; void main(){ gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
-const box3 = new THREE.Box3(), oneBox = new THREE.Box3(), corner = new THREE.Vector3();
+const quad = mat => { const s = new THREE.Scene(); s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat)); return s; };
+const VERT = 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }';
 export class Ink {
-  constructor(renderer, lowEnd) {
+  constructor(renderer) {
     this.renderer = renderer;
-    this.rtColor = new THREE.WebGLRenderTarget(1, 1, { samples: lowEnd ? 0 : 4 });   // phones: no MSAA, the ink hides the edges
-    this.rtInfo = new THREE.WebGLRenderTarget(1, 1);
-    this.uniforms = { tColor: { value: this.rtColor.texture }, tInfo: { value: this.rtInfo.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uBoil: { value: 1 }, uJeepScale: { value: .7 }, uBox: { value: new THREE.Vector4(2, 2, -1, -1) },
-      uLift: { value: new THREE.Vector3(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Vector3(1, 1, 1) }, uSat: { value: 1 } };
-    this.mat = new THREE.ShaderMaterial({
-      uniforms: this.uniforms, depthTest: false, depthWrite: false,
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-      fragmentShader: NOISE + /* glsl */`
-        uniform sampler2D tColor, tInfo; uniform vec2 uRes; uniform float uTime, uBoil, uJeepScale, uSat; uniform vec4 uBox; uniform vec3 uLift, uGamma, uGain; varying vec2 vUv;
-        float maskAt(vec2 uv){ return texture2D(tInfo, uv).a; }
-        vec2 PX;
-        const vec2 DIRS[8] = vec2[8](vec2(1, 0), vec2(.7071, .7071), vec2(0, 1), vec2(-.7071, .7071), vec2(-1, 0), vec2(-.7071, -.7071), vec2(0, -1), vec2(.7071, -.7071));
-        float edgeAt(vec2 uv, float r){
-          vec4 c = texture2D(tInfo, uv); float ring = 0., dn = 0.;
-          for (int i = 0; i < 8; i++) {
-            vec4 s = texture2D(tInfo, uv + DIRS[i] * r * PX);
-            ring = max(ring, s.a); if (s.a > .5 && c.a > .5) dn = max(dn, length(s.rgb - c.rgb));
-          }
-          return max(step(.5, ring) * (1. - step(.5, c.a)), step(.4, dn));
-        }
+    const nearest = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter };
+    this.rtColor = new THREE.WebGLRenderTarget(1, 1);                       // the scene, at SS x the grid (linear: one tap is a 2x2 box)
+    this.rtInfo = new THREE.WebGLRenderTarget(1, 1, nearest);              // layer 1's normals and coverage, at the grid
+    this.rtPix = new THREE.WebGLRenderTarget(1, 1, { ...nearest, depthBuffer: false });   // the finished pixel frame
+    this.size = new THREE.Vector2(1, 1);   // the pixel grid, in pixels (the scene itself renders at SS x this)
+    this.uniforms = {
+      tColor: { value: this.rtColor.texture }, tInfo: { value: this.rtInfo.texture }, uLow: { value: this.size }, uAnchor: { value: new THREE.Vector2() },
+      uLift: { value: new THREE.Vector3(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Vector3(1, 1, 1) }, uSat: { value: 1 },
+      uPal: { value: Array.from({ length: 32 }, () => new THREE.Vector3()) }, uLab: { value: Array.from({ length: 32 }, () => new THREE.Vector3()) }, uN: { value: 0 }, uDither: { value: DITHER },
+      uTime: { value: 0 }, uBoil: { value: 0 }, uJeepScale: { value: .7 },   // kept for the scenes that still set them; the line no longer boils
+    };
+    this.post = quad(new THREE.ShaderMaterial({
+      uniforms: this.uniforms, depthTest: false, depthWrite: false, vertexShader: VERT,
+      fragmentShader: GLSL_PALETTE + OKLAB_GLSL + `const float CHROMA = ${CHROMA.toFixed(1)};` + /* glsl */`
+        uniform sampler2D tColor, tInfo; uniform vec2 uLow, uAnchor; uniform vec3 uLift, uGamma, uGain, uPal[32], uLab[32]; uniform float uSat, uDither; uniform int uN;
+        const vec3 LUM = vec3(.299, .587, .114);
+        const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
+        vec4 info(ivec2 p){ return texelFetch(tInfo, clamp(p, ivec2(0), ivec2(uLow) - 1), 0); }
+        vec3 at(ivec2 p){ return texture2D(tColor, (vec2(p) + .5) / uLow).rgb; }
         void main(){
-          PX = 1. / uRes;
-          vec3 col = texture2D(tColor, vUv).rgb;
-          // only near the taxi: the boiling line and the colour printed a touch out of register
-          if (all(greaterThan(vUv, uBox.xy)) && all(lessThan(vUv, uBox.zw))) {
-            float frame = floor(uTime * 8.) * uBoil;
-            float base = max(1.2, uRes.y / 700.) * mix(1., 1.5, uJeepScale);   // thin (STYLE.md: a thin, clean line)
-            vec2 w1 = (vec2(vn2(vUv * 45. + frame * 3.1), vn2(vUv * 45. + 17. + frame * 5.3)) - .5) * 2.2 * PX * (.4 + uBoil);
-            float e1 = edgeAt(vUv + w1, base * (.5 + 1.1 * vn2(vUv * 60. + 3.)));
-            vec2 w2 = (vec2(vn2(vUv * 11. + 40. + frame * 2.), vn2(vUv * 11. + 90. + frame * 1.7)) - .5) * 10. * PX;
-            float e2 = edgeAt(vUv + w2, base * .5) * step(.55, vn2(vUv * 26. + frame * 1.3));
-            float ink = max(e1, e2 * .45);   // clean: one confident line, a faint second pass where the sketch went over it
-            vec2 sh = vec2(1.6, -1.3) * PX * mix(.8, 1.4, uJeepScale);
-            if (maskAt(vUv - sh) > .5) col = texture2D(tColor, vUv - sh).rgb;
-            col = mix(col, vec3(.07, .075, .1), ink);
+          ivec2 p = ivec2(gl_FragCoord.xy);
+          // a 3x3 Kuwahara: the flattest 2x2 quadrant's mean, so the painting's brush texture settles into clean pixel
+          // clusters instead of speckle, while edges stay sharp. Its numbers also tell gradients (dithered) from detail.
+          vec3 n[9]; float y[9];
+          for (int j = 0; j < 3; j++) for (int i = 0; i < 3; i++) { n[j * 3 + i] = at(p + ivec2(i - 1, j - 1)); y[j * 3 + i] = dot(n[j * 3 + i], LUM); }
+          vec3 col = n[4]; float best = 1e9;
+          for (int q = 0; q < 4; q++) {
+            int o = (q & 1) + (q >> 1) * 3;   // the quadrant's lower-left sample
+            vec3 m = (n[o] + n[o + 1] + n[o + 3] + n[o + 4]) * .25;
+            float v = dot(abs(n[o] - m) + abs(n[o + 1] - m) + abs(n[o + 3] - m) + abs(n[o + 4] - m), vec3(1));
+            if (v < best) { best = v; col = m; }
           }
-          // the scene's grade (fitted to the edge painting: see STYLE.md and shared/grade.js)
+          // but keep what must stay crisp: things that move (layer 1, drawn in their own pixels) and thin strokes that stand
+          // out from their surroundings (rain, wires, lamps)
+          if (texelFetch(tInfo, p, 0).a > .5 || abs(y[4] - dot(col, LUM)) > .07) col = n[4];
+          vec2 g = vec2(y[5] - y[3], y[7] - y[1]) * .5;   // the slope, and how far the 3x3 strays from that plane: the detail
+          float detail = 0.;
+          for (int j = 0; j < 3; j++) for (int i = 0; i < 3; i++) detail = max(detail, abs(y[j * 3 + i] - y[4] - dot(g, vec2(i - 1, j - 1))));
+          float smooth_ = smoothstep(.0008, .004, length(g)) * (1. - smoothstep(.012, .035, detail));
+          // the line, 1 px: ink just outside the silhouette; a darker local colour on creases inside it (one side only, so 1 px)
+          vec4 c = info(p), l = info(p - ivec2(1, 0)), d = info(p - ivec2(0, 1));
+          bool outer = c.a < .5 && max(max(l.a, info(p + ivec2(1, 0)).a), max(d.a, info(p + ivec2(0, 1)).a)) > .5;
+          if (c.a > .5 && ((l.a > .5 && length(l.rgb - c.rgb) > .45) || (d.a > .5 && length(d.rgb - c.rgb) > .45))) col *= .5;
+          // the scene's grade (fitted to the edge painting: see STYLE.md and shared/grade.js), and a very soft vignette
           col = uLift + (uGain - uLift) * pow(clamp(col, 0., 1.), uGamma);
-          col = mix(vec3(dot(col, vec3(.299, .587, .114))), col, uSat);
-          // the shared paper grain: a soft fibre at a fixed screen scale plus a fine tooth, the same strength everywhere
-          vec2 g = gl_FragCoord.xy / max(1., uRes.y / 900.);
-          float fibre = vn2(g * vec2(.09, .5)) * .6 + vn2(g * vec2(.5, .09)) * .4;
-          col *= 1. + (fibre - .5) * .05 + (h12(g) - .5) * .035;
-          vec2 q = vUv - .5; col *= 1. - dot(q, q) * .4;
-          gl_FragColor = vec4(col, 1.);
+          col = mix(vec3(dot(col, LUM)), col, uSat);
+          vec2 q = gl_FragCoord.xy / uLow - .5; col *= 1. - dot(q, q) * .2;
+          if (outer) col = C_INK;
+          // the palette: the nearest two colours in Oklab, and a Bayer threshold between them, anchored to the painting
+          vec3 L = oklab(clamp(col, 0., 1.)) * vec3(1, CHROMA, CHROMA); float d1 = 1e9, d2 = 1e9; int i1 = 0, i2 = 0;
+          for (int i = 0; i < 32; i++) {
+            if (i >= uN) break;
+            vec3 e = uLab[i] - L; float dd = dot(e, e);
+            if (dd < d1) { d2 = d1; i2 = i1; d1 = dd; i1 = i; } else if (dd < d2) { d2 = dd; i2 = i; }
+          }
+          vec3 ab = uLab[i2] - uLab[i1];
+          float t = clamp(dot(L - uLab[i1], ab) / max(dot(ab, ab), 1e-6), 0., 1.);
+          ivec2 b = (p + ivec2(uAnchor)) & 3;
+          float s = uDither * smooth_ * float(!outer);
+          gl_FragColor = vec4(uPal[(t - .5) + ((BAYER[b.y * 4 + b.x] + .5) / 16. - .5) * s > 0. ? i2 : i1], 1.);
         }`,
-    });
-    this.post = new THREE.Scene(); this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    this.post.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat));
+    }));
+    this.upU = { tPix: { value: this.rtPix.texture }, uLow: { value: this.size }, uPad: { value: new THREE.Vector2() }, uShift: { value: new THREE.Vector2() }, uScale: { value: 1 } };
+    this.up = quad(new THREE.ShaderMaterial({
+      uniforms: this.upU, depthTest: false, depthWrite: false, vertexShader: VERT,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tPix; uniform vec2 uLow, uPad, uShift; uniform float uScale;
+        void main(){ gl_FragColor = texelFetch(tPix, clamp(ivec2(floor((gl_FragCoord.xy + uPad) / uScale + uShift)), ivec2(0), ivec2(uLow) - 1), 0); }`,
+    }));
+    this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.setGrade();
   }
-  // [lift r,g,b, gamma r,g,b, gain r,g,b, saturation], from shared/grade.js
-  setGrade(p = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]) { const u = this.uniforms; u.uLift.value.fromArray(p, 0); u.uGamma.value.fromArray(p, 3); u.uGain.value.fromArray(p, 6); u.uSat.value = p[9]; }
-  resize(pw, ph) { this.rtColor.setSize(pw, ph); this.rtInfo.setSize(pw, ph); this.uniforms.uRes.value.set(pw, ph); }
+  // [lift r,g,b, gamma r,g,b, gain r,g,b, saturation] from shared/grade.js, and the scene's palette (by its name in index.html)
+  setGrade(p = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1], name = 'edge') {
+    const u = this.uniforms; u.uLift.value.fromArray(p, 0); u.uGamma.value.fromArray(p, 3); u.uGain.value.fromArray(p, 6); u.uSat.value = p[9];
+    const pal = (PIXEL_PALETTES[name] || PIXEL_PALETTES.edge).slice(0, 32);
+    pal.forEach((h, i) => { const n = parseInt(h.slice(1), 16); u.uPal.value[i].set((n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); u.uLab.value[i].copy(okLab(h)); });
+    u.uN.value = pal.length;
+  }
+  // pw, ph: the canvas in device px
+  resize(pw, ph) {
+    const [s, w, h] = pixelGrid(pw, ph);
+    Object.assign(PIX, { scale: s, w, h }); this.size.set(w, h);
+    this.rtColor.setSize(w * SS, h * SS); this.rtInfo.setSize(w, h); this.rtPix.setSize(w, h);
+    this.upU.uScale.value = s; this.upU.uPad.value.set((w * s - pw) / 2, (h * s - ph) / 2);
+  }
   // vehicles: the taxi's group, a list of vehicles (the taxi and the truck), or null when there's none in the shot
   render(scene, camera, vehicles, clear = UTIL.clear) {
-    const r = this.renderer, B = this.uniforms.uBox.value;
-    B.set(2, 2, -1, -1);
-    const shown = [].concat(vehicles || []).filter(v => v.visible);
-    if (shown.length) {
-      box3.makeEmpty(); for (const v of shown) box3.union(oneBox.setFromObject(v));
-      if (!box3.isEmpty()) {
-        let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
-        for (let i = 0; i < 8; i++) {
-          corner.set(i & 1 ? box3.max.x : box3.min.x, i & 2 ? box3.max.y : box3.min.y, i & 4 ? box3.max.z : box3.min.z).project(camera);
-          const u = corner.x * .5 + .5, v = corner.y * .5 + .5;
-          x0 = Math.min(x0, u); x1 = Math.max(x1, u); y0 = Math.min(y0, v); y1 = Math.max(y1, v);
-        }
-        const m = 24 / this.uniforms.uRes.value.y;   // a little margin for the line and its wobble
-        B.set(x0 - m, y0 - m, x1 + m, y1 + m);
-        // info pass: just the taxi (layer 1), normals in rgb, coverage in alpha
-        scene.overrideMaterial = infoMat; camera.layers.set(1);
-        r.setRenderTarget(this.rtInfo); r.setClearColor(UTIL.infoClear, 0); r.clear(); r.render(scene, camera);
-        scene.overrideMaterial = null; camera.layers.set(0);
-      }
+    const r = this.renderer, px = camera.userData.pix || [0, 0, 0, 0];
+    r.setRenderTarget(this.rtInfo); r.setClearColor(UTIL.infoClear, 0); r.clear();
+    if ([].concat(vehicles || []).some(v => v.visible)) {   // info pass: layer 1 only, normals in rgb, coverage in alpha
+      scene.overrideMaterial = infoMat; camera.layers.set(1); r.render(scene, camera);
+      scene.overrideMaterial = null; camera.layers.set(0);
     }
     r.setRenderTarget(this.rtColor); r.setClearColor(clear, 1); r.clear(); r.render(scene, camera);
-    r.setRenderTarget(null); r.render(this.post, this.postCam);
+    this.uniforms.uAnchor.value.set(px[2], px[3]); this.upU.uShift.value.set(px[0], px[1]);
+    r.setRenderTarget(this.rtPix); r.render(this.post, this.postCam);
+    r.setRenderTarget(null); r.render(this.up, this.postCam);
   }
 }
 
@@ -328,6 +370,7 @@ export class Stage {
     this.rest = new THREE.Vector3(W / 2, -H / 2, 1000);
     this.move = { dx: 0, dy: 0, dolly: 0, yaw: 0, pitch: 0 };   // current camera offset from rest (eased toward target)
     this.target = { ...this.move };
+    this.vel = { ...this.move };   // the spring's velocity per axis
     // the depth, on the GPU for the mesh and on the CPU for placing things (a quarter-size copy is plenty)
     this.tDepth = tex(depth);
     const w = Math.max(1, W >> 2), h = Math.max(1, H >> 2), c = mkCanvas(w, h), x = c.getContext('2d');
@@ -390,17 +433,31 @@ export class Stage {
     this.rest.set(cx, -cy, D); this.cam.aspect = aspect; this.cam.near = D * .05; this.cam.far = D * 4;
     this.cam.updateProjectionMatrix(); this.apply();
   }
-  // ease the camera toward its target move: dx, dy in painting px, dolly a fraction of the distance, yaw/pitch radians
+  // ease the camera toward its target move: dx, dy in painting px, dolly a fraction of the distance, yaw/pitch radians.
+  // A critically damped spring per axis (exact step, so any dt is stable): moves start from rest and settle without
+  // overshoot. rate: as before, higher is snappier (the spring's mean lag is about 1 / rate seconds).
   update(dt, rate = .9) {
-    const k = damp(rate, dt), m = REDUCED ? .35 : 1;
-    for (const key in this.move) this.move[key] = lerp(this.move[key], this.target[key] * m, k);
+    const w = 2 * rate, e = Math.exp(-w * dt), m = REDUCED ? .35 : 1;
+    for (const key in this.move) {
+      const T = this.target[key] * m, x0 = this.move[key] - T, c2 = this.vel[key] + w * x0;
+      this.move[key] = T + (x0 + c2 * dt) * e;
+      this.vel[key] = (c2 - w * (x0 + c2 * dt)) * e;
+    }
     this.apply();
   }
   apply() {
-    const R = this.rest, m = this.move;
-    this.cam.position.set(R.x + m.dx, R.y - m.dy, R.z * (1 - m.dolly));
-    this.cam.rotation.set(m.pitch, m.yaw, 0);
-    this.cam.updateMatrixWorld();
+    const R = this.rest, m = this.move, c = this.cam;
+    c.position.set(R.x + m.dx, R.y - m.dy, R.z * (1 - m.dolly));
+    // snap to the pixel grid on the painting plane (z = 0), so the paintings don't shimmer; the remainder (in pixels)
+    // goes to the upscale (Ink), so slow moves stay smooth. userData.pix: [shift x, shift y, grid x, grid y]
+    const px = PIX.h && 2 * c.position.z * Math.tan(this.fov * Math.PI / 360) / PIX.h;
+    if (px > 0) {
+      const ix = Math.round(c.position.x / px), iy = Math.round(c.position.y / px);
+      c.userData.pix = [c.position.x / px - ix, c.position.y / px - iy, ix, iy];
+      c.position.x = ix * px; c.position.y = iy * px;
+    }
+    c.rotation.set(m.pitch, m.yaw, 0);
+    c.updateMatrixWorld();
   }
 }
 

@@ -1,0 +1,125 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Folk sheet</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; font: 12px/1.3 monospace; background: var(--cream); color: var(--ink); }
+  section { padding: 10px 16px 14px; } section.night { background: var(--night); color: var(--cream); }
+  h2 { font-size: 12px; margin: 6px 0 8px; text-transform: uppercase; letter-spacing: .12em; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: flex-end; }
+  figure { margin: 0; text-align: center; } figcaption { font-size: 10px; opacity: .65; }
+  canvas { image-rendering: pixelated; display: block; }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<body></body>
+<script type="module">
+// Every Folk character, size, view and animation, at 4x with nearest, on cream and on night. ?still freezes the clock.
+import * as THREE from 'three';
+import * as folk from '../shared/folk.js';
+import { FOLK } from '../shared/style.js';
+const R = document.documentElement.style;
+R.setProperty('--cream', FOLK.sheet.cream); R.setProperty('--night', FOLK.sheet.night); R.setProperty('--ink', FOLK.sheet.ink);
+const Z = 4, live = [], memo = new Map(), still = location.search.includes('still');
+const fc = (who, o) => { const k = JSON.stringify([who, o]); if (!memo.has(k)) memo.set(k, folk.frameCanvas(who, o)); return memo.get(k); };
+function cell(parent, label, draw, z = Z) {   // draw(ms) -> canvas
+  const f = document.createElement('figure'), cv = document.createElement('canvas'), cap = document.createElement('figcaption');
+  cap.textContent = label; f.append(cv, cap); parent.append(f);
+  let last = null;
+  const paint = ms => { const src = draw(ms); if (src === last) return; last = src; cv.width = src.width * z; cv.height = src.height * z; const x = cv.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(src, 0, 0, cv.width, cv.height); };
+  paint(0); live.push(paint);
+}
+// an animation playing: its frame at time ms
+const frameAt = (anim, view, ms) => { const fr = folk.ANIMS[anim].frames[view === 'right' ? 'left' : view] || folk.ANIMS[anim].frames.all, tot = fr.reduce((a, f) => a + f.ms, 0); let t = folk.ANIMS[anim].loop ? ms % tot : Math.min(ms % (tot + 800), tot - 1), i = 0; while (t >= fr[i].ms) { t -= fr[i].ms; i++; } return i; };
+const anim = (who, size, view, a, extra = {}) => ms => fc(who, { size, view, anim: a, i: frameAt(a, view, ms), blink: a === 'idle' && view !== 'back' && ms % 3000 > 2860, ...extra });
+function block(title, night, fill) {
+  const s = document.createElement('section'); if (night) s.className = 'night';
+  s.innerHTML = `<h2>${title}</h2>`; const r = document.createElement('div'); r.className = 'row'; s.append(r); document.body.append(s); fill(r, s);
+}
+const PASSENGER = { name: 'passenger', build: 'f', skin: 1, hair: 'long', top: 'hoodie', extra: 'headphones' };
+const WHO = ['you', 'grandpa', 'friend', 'walker', 'basket'];
+
+for (const night of [false, true]) {
+  const L = night ? .6 : 1;
+  block(`near: the characters, idle (front, three-quarter, back)${night ? ' — night, light step 2, rim on' : ''}`, night, r => {
+    for (const who of [...WHO, PASSENGER]) for (const v of ['front', 'left', 'back']) cell(r, `${who.name || who} ${v}`, anim(who, 'near', v, 'idle', { light: L, rim: night }));
+  });
+  block(`near: walk (4 frames, 8 fps), wave, sit down + sit (from behind)${night ? ' — night' : ''}`, night, r => {
+    for (const who of ['you', PASSENGER]) {
+      for (const v of ['left', 'right', 'front', 'back']) cell(r, `walk ${v}`, anim(who, 'near', v, 'walk', { light: L, rim: night }));
+      for (const v of ['front', 'left', 'right']) cell(r, `wave ${v}`, anim(who, 'near', v, 'wave', { light: L, rim: night }));
+      cell(r, 'sitdown', anim(who, 'near', 'back', 'sitdown', { light: L, rim: night }));
+      cell(r, 'sit', anim(who, 'near', 'back', 'sit', { light: L, rim: night }));
+    }
+  });
+  block(`far: every character, idle / walk / wave / sit${night ? ' — night' : ''}`, night, r => {
+    for (const who of [...WHO, PASSENGER]) {
+      for (const v of ['front', 'left', 'back']) cell(r, `${who.name || who} ${v}`, anim(who, 'far', v, 'idle', { light: L, rim: night }));
+      for (const v of ['left', 'right']) cell(r, `walk ${v}`, anim(who, 'far', v, 'walk', { light: L, rim: night }));
+    }
+    for (const who of ['you', PASSENGER]) {
+      cell(r, 'walk front', anim(who, 'far', 'front', 'walk', { light: L })); cell(r, 'walk back', anim(who, 'far', 'back', 'walk', { light: L }));
+      cell(r, 'wave', anim(who, 'far', 'front', 'wave', { light: L })); cell(r, 'wave left', anim(who, 'far', 'left', 'wave', { light: L }));
+      cell(r, 'sitdown', anim(who, 'far', 'back', 'sitdown', { light: L })); cell(r, 'sit', anim(who, 'far', 'back', 'sit', { light: L }));
+    }
+  });
+}
+
+// every frame, still, so each can be judged
+block('near: every frame, still (you)', false, r => {
+  for (const [a, A] of Object.entries(folk.ANIMS)) for (const v of A.views) (A.frames[v] || A.frames.all).forEach((_, i) => cell(r, `${a} ${v} ${i}`, () => fc('you', { size: 'near', view: v, anim: a, i }), 3));
+  cell(r, 'blink', () => fc('you', { size: 'near', view: 'front', blink: true }), 3);
+  cell(r, 'blink 3/4', () => fc('you', { size: 'near', view: 'left', blink: true }), 3);
+});
+block('far: every frame, still (walker, basket)', false, r => {
+  for (const who of ['walker', 'basket']) for (const [a, A] of Object.entries(folk.ANIMS)) for (const v of A.views) (A.frames[v] || A.frames.all).forEach((_, i) => cell(r, `${a} ${v} ${i}`, () => fc(who, { size: 'far', view: v, anim: a, i }), 3));
+});
+
+// customising: every option, by construction
+for (const size of ['near', 'far']) block(`${size}: customising (build x hair x top, then skins, then extras)`, false, r => {
+  for (const build of ['f', 'm']) for (const [hair] of folk.OPTIONS.hair) for (const [top] of folk.OPTIONS.top) {
+    const look = { build, hair, top, skin: (hair.length + top.length) % 5 };
+    cell(r, `${build} ${hair} ${top}`, () => fc(look, { size, view: 'front' }), size === 'near' ? 2 : 3);
+  }
+  for (let skin = 0; skin < 5; skin++) for (const build of ['f', 'm']) cell(r, `skin ${skin}`, () => fc({ build, skin }, { size, view: 'front' }), 3);
+  for (const [extra] of folk.OPTIONS.extra) for (const v of ['front', 'left', 'back']) cell(r, `${extra} ${v}`, () => fc({ build: 'm', skin: 2, hair: 'curly', top: 'denim', extra }, { size, view: v }), 3);
+  for (const [hair] of folk.OPTIONS.hair) for (const v of ['left', 'back']) cell(r, `${hair} ${v}`, () => fc({ build: 'f', skin: 3, hair, top: 'kurta' }, { size, view: v }), 3);
+  for (const [top] of folk.OPTIONS.top) for (const v of ['left', 'back']) cell(r, `${top} ${v}`, () => fc({ build: 'm', skin: 1, hair: 'short', top }, { size, view: v }), 3);
+});
+
+block('light: the five steps (night .. warm), rim from the left and from the right; avatars and preview', true, r => {
+  for (const L of [0, .3, .6, .95, 1.2]) for (const side of [-1, 1]) cell(r, `L ${L} ${side < 0 ? 'from left' : 'from right'}`, () => fc('you', { size: 'near', view: 'left', light: L, rim: true, side }), 3);
+  for (const who of [...WHO, PASSENGER, { build: 'm', skin: 4, hair: 'cap', top: 'tee', extra: 'glasses' }]) cell(r, 'avatar 52', () => folk.avatar(who, 52), 1);
+  cell(r, 'preview', () => folk.preview(PASSENGER), 2);
+});
+
+// three.js: the real shader. Walkers move by p.update(dt) * stride, so their feet stay planted.
+block('three.js: person() on the GPU (orthographic, 1 sprite px = 3 screen px), night with a moving light', true, (r, s) => {
+  const W = 960, H = 260, PX = 3, renderer = new THREE.WebGLRenderer({ antialias: false });
+  renderer.setSize(W, H); renderer.setPixelRatio(1); renderer.setClearColor(new THREE.Color(FOLK.sheet.night)); r.append(renderer.domElement);
+  const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(0, W / PX, H / PX, 0, -10, 10);
+  const people = [
+    ['you', 'near', 'walk', 'left', 300], [PASSENGER, 'near', 'walk', 'right', 20], ['walker', 'far', 'walk', 'left', 250], ['basket', 'far', 'walk', 'right', 60],
+    ['grandpa', 'near', 'idle', 'left', 120], ['friend', 'near', 'wave', 'front', 160], [PASSENGER, 'near', 'sitdown', 'back', 200], ['you', 'far', 'sit', 'back', 230],
+  ].map(([who, size, a, dir, x], n) => {
+    const p = folk.person(who, { size }); p.play(a); p.face(dir);
+    p.obj.position.set(x, n < 4 ? 40 + (size === 'far' ? 4 : 0) - n * 3 : 2, n < 4 ? 0 : 1); scene.add(p.obj); return { p, dir };
+  });
+  let last = performance.now(), T = 0;
+  const tick = now => {
+    const dt = still ? 0 : Math.min(.05, (now - last) / 1000); last = now; T += dt;
+    for (const { p, dir } of people) {
+      const moved = p.update(dt); p.obj.position.x += moved * (p.facing === 'left' ? -1 : 1);
+      if (p.obj.position.x < 10) p.face('right'); if (p.obj.position.x > W / PX - 10) p.face('left');
+      p.setLight(.6 + .6 * Math.sin(T * .8 + p.obj.position.x * .02), Math.sin(T * .3) < 0 ? -1 : 1);
+    }
+    renderer.render(scene, cam); requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+});
+
+let t0 = performance.now();
+const loop = now => { const ms = still ? 0 : now - t0; for (const paint of live) paint(ms); requestAnimationFrame(loop); };
+requestAnimationFrame(loop);
+for (const b of folk.lint()) console.error("folk.lint", b);
+window.__folkReady = true;
+</script>
