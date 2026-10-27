@@ -2,17 +2,19 @@
 // the doors, sitting on the lip, the story wiping to the same cliff decades ago, him in ink with the ember, the flick,
 // the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
 import * as THREE from 'three';
-import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene, Stage, keyLight, paintFigure, Steer } from '../shared/kit.js';
+import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, makeTruck, LIVERY, passenger, line, disposeScene, Stage, keyLight, paintFigure, Steer } from '../shared/kit.js';
 import { FIGURE, PALETTE } from '../shared/style.js';
+import { dress, you } from '../shared/look.js';
 
 const at = f => new URL(f, import.meta.url).href;
-const SPRITES = ['ghost-1', 'ghost-2', 'then-car', 'then-pair', 'truck-lit', 'truck-dark'];
+const SPRITES = ['ghost-1', 'ghost-2', 'then-car', 'then-pair'];
 export const assets = ['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg', 'depth.png', ...SPRITES.map(n => `sprites/${n}.png`)];
 
 const IW = 1672, IH = 941;              // edge-lit/dark/then.jpg size in px; the whole scene lives in these units
 
 // The cliff's side edge, traced off the painting as fractions: from the plateau's far corner down toward us, to where the rock face takes over.
 const EDGE = [[.522, .432], [.5, .55], [.478, .65], [.475, .72]];
+const SEATS = [[.445, .418], [.4, .42]];   // where the two of you sit: the passenger, then you, on the far lip
 const lip = y => {   // the point on the edge at height y (a fraction of the painting), in painting px
   const i = clamp(EDGE.findIndex(([, ey]) => ey >= y), 1, EDGE.length - 1), [x0, y0] = EDGE[i - 1], [x1, y1] = EDGE[i];
   return [lerp(x0, x1, clamp((y - y0) / (y1 - y0), 0, 1)) * IW, y * IH];
@@ -124,21 +126,23 @@ const back = (fill, extra) => cutout(200, 240, c => {
   c.fillStyle = FIGURE.rim; shape(4, -3);   // rim: the cloud's glow catching the right shoulder
   c.fillStyle = fill; shape(0, 0);
 });
-// the passenger you picked: their painted sitting-down sprite if it exists, else the stand-in with their name on its back
+// the passenger as dressed at the stand, and you, sitting, from behind (shared/look.js); silhouettes stand in until the images exist,
+// the passenger's with their name on its back
 const rider = passenger();
-const riderSit = rider && await loadImg(at(`../people/${rider.id}-sit.png`));
+const [riderSit, youSit] = await Promise.all([rider ? dress(rider, 'sit') : null, you('sit')]);
 const passengerTex = riderSit ? tex(riderSit) : back(FIGURE.backFill[0], (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); });
 if (rider && !riderSit) {
   const c = passengerTex.image.getContext('2d');
   c.fillStyle = FIGURE.tag; c.fillRect(48, 150, 104, 30); c.fillStyle = FIGURE.tagText; c.font = '600 18px "IBM Plex Mono", monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText(rider.first.toUpperCase(), 100, 166); passengerTex.needsUpdate = true;
 }
-const walkers = [passengerTex, back(FIGURE.backFill[1])].map((map, i) => {
+const walkers = [[passengerTex, riderSit], [youSit ? tex(youSit) : back(FIGURE.backFill[1]), youSit]].map(([map, img], i) => {
   const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
   m.visible = false; m.frustumCulled = false; m.renderOrder = 3; scene.add(m);
-  // on the lip, spaced so they read side by side: backs to us, bodies over the grass, legs over the drop
-  const seat = lip(i ? .615 : .53);
-  return { m, from: [0, 0], to: [seat[0] - figH(seat[1]) * .25, seat[1]], t0: 0, k: 0 };
+  // side by side on the far lip, just short of the corner where the taxi hangs: backs to us, looking out over the drop.
+  // You on the left turning right, the passenger on the right turning left: toward each other
+  const seat = SEATS[i];
+  return { m, from: [0, 0], to: [seat[0] * IW, seat[1] * IH], t0: 0, k: 0, aspect: img ? img.width / img.height : 200 / 240 };
 });
 // him: two ink-only frames (cigarette down, and the drag), pale, boiling slower than the taxi's line.
 // He's in neither painting, so the headlights can't touch him.
@@ -181,14 +185,11 @@ const tph = 170; stage.place(thenPair, .41 * IW, .5 * IH, [tph * SPR['then-pair'
 for (const m of [thenCar, thenPair]) { m.frustumCulled = false; m.renderOrder = 2; scene.add(m); }
 
 /* ---------- the truck: comes round the bend after, and takes you on to Shillong ---------- */
-const truckMat = new THREE.ShaderMaterial({
-  uniforms: { tL: { value: tex(SPR['truck-lit']) }, tD: { value: tex(SPR['truck-dark']) }, uL: { value: .25 }, uMode: U.uMode }, transparent: true, depthWrite: false,
-  vertexShader: QUAD,
-  fragmentShader: 'uniform sampler2D tL, tD; uniform float uL, uMode; varying vec2 vUv; void main(){ vec4 l = texture2D(tL, vUv), d = texture2D(tD, vUv); float k = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : uL); gl_FragColor = vec4(mix(d.rgb, l.rgb, k), l.a); }',
-});
-const truck = new THREE.Mesh(footGeo, truckMat); truck.frustumCulled = false; truck.renderOrder = 3; truck.visible = false; scene.add(truck);
-const TRUCK = { h: 150, from: -.25 * IW, to: .3 * IW, y: .445 * IH };
-const truckW = TRUCK.h * SPR['truck-lit'].width / SPR['truck-lit'].height;
+// built in 3D like the taxi (shared/kit.js), seen from the same height, turned a little to show its painted nose
+const { truck, mat: truckMat } = makeTruck(U.uMode); truck.visible = false; scene.add(truck);
+truck.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .2).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -.3));
+const TRUCK = { size: 44, from: -.25 * IW, to: .3 * IW, y: .445 * IH };
+const truckW = TRUCK.size * 7.6 * Math.cos(.3), truckH = TRUCK.size * 3.3;   // its footprint on the painting, px
 
 
 /* ---------- framing: locked, covering the screen ---------- */
@@ -359,10 +360,11 @@ function frame(dt0) {
   if (phase !== 'drive' && fallT < 0) U.uDir.value.copy(steer.update(dt, U.uHead.value, aim.copy(U.uDir.value), ptrPx(), ctx.isTouch, input.hold));
   // the warm key: the cloud its own beams light up, ahead and below (the truck's lights, once it comes)
   keyLight(jeepMat, camera, jeep.position, truck.visible ? truck.position : stage.toWorld(a[0] + 300, a[1] + 160, 0, v2), truck.visible ? .9 : .45);
+  if (truck.visible) keyLight(truckMat, camera, truck.position, stage.toWorld(.8 * IW, .7 * IH, 0, v2), .15);   // the moonlit cloud ahead
   if (truck.visible) {   // the truck rolls in round the bend and stops; now its headlights are the light
     const k = phase === 'truck' ? 1 - Math.pow(1 - clamp(since / 5, 0, 1), 2.2) : 1, x = lerp(TRUCK.from, TRUCK.to, k);
-    stage.place(truck, x, TRUCK.y - (k < 1 ? Math.sin(t * 9) * .8 : 0), [truckW, TRUCK.h], stage.depthAt(clamp(x, 0, IW), TRUCK.y));
-    U.uHead.value.set(x + truckW * .48, TRUCK.y - TRUCK.h * .2); U.uDir.value.set(1, .04).normalize();
+    stage.place(truck, x, TRUCK.y - (k < 1 ? Math.sin(t * 9) * .8 : 0), TRUCK.size, stage.depthAt(clamp(x, 0, IW), TRUCK.y));
+    U.uHead.value.set(x + truckW * .5, TRUCK.y - truckH * .38); U.uDir.value.set(1, .04).normalize();
   }
   // then: the old car and the two of them, only while the story's in the old painting
   thenCar.material.opacity = thenPair.material.opacity = sstep(.55, .95, U.uThen.value);
@@ -375,7 +377,7 @@ function frame(dt0) {
     if (!w.m.visible) continue;
     w.k = clamp((t - w.t0) / 2.4, 0, 1);
     const e = w.k * w.k * (3 - 2 * w.k), x = lerp(w.from[0], w.to[0], e), y = lerp(w.from[1], w.to[1], e), h = figH(y);
-    stage.place(w.m, x, y - Math.abs(Math.sin(w.k * Math.PI * 5)) * 4 * (1 - w.k), [h * 200 / 240, h], stage.depthAt(x - 8, y + 4));
+    stage.place(w.m, x, y - Math.abs(Math.sin(w.k * Math.PI * 5)) * 4 * (1 - w.k), [h * w.aspect, h], stage.depthAt(x - 8, y + 4));
   }
   if (phase === 'car' && since > 2.2 && !hangSaid) { hangSaid = true; const l = line('hang'); if (l) say(l.who, l.text, 3.4, l.expr); }
   if (phase === 'yout' && walkers[1].k >= 1) go('seated');
@@ -414,7 +416,7 @@ function frame(dt0) {
   stage.update(dt, phase === 'seated' ? .5 : .9);
   // render: colour, then the ink and paper rim around the taxi
   ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .7;
-  ctx.ink.render(scene, camera, jeep);
+  ctx.ink.render(scene, camera, [jeep, truck]);
 }
 return {
   frame, resize,

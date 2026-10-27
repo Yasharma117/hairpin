@@ -5,7 +5,7 @@ import { disposeScene, makeTaxi, colorize, Stage, loadImg as loadImage, keyLight
 import { CLIMB_STANDINS as C } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
-const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-bark-1', 'dog-bark-2', 'dog-bark-3', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'];
+const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-bark-1', 'dog-bark-2', 'dog-bark-3', 'walker-1', 'walker-2', 'basket'];
 export const assets = ['lit.jpg', 'dark.jpg', 'strokes.jpg', 'depth.png', ...SPRITES.flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`])];
 
 export async function load(ctx) {
@@ -226,12 +226,12 @@ scene.add(jeep);
 
 
 /* ---------- framing: cover the screen, follow the jeep ---------- */
-let viewW = IW, viewH = IH, ZOOM = 1.5, baseW = IW, baseH = IH, zoomK = 1;
+let viewW = IW, viewH = IH, ZOOM = 1.5, baseW = IW, baseH = IH;
 function resize(w, h) {
   const aspect = w / h;
   const Z = ZOOM;
   if (aspect > IW / IH) { baseW = IW; baseH = IW / aspect; } else { baseH = IH; baseW = IH * aspect; }
-  viewW = baseW / (Z * zoomK); viewH = baseH / (Z * zoomK);
+  viewW = baseW / Z; viewH = baseH / Z;
   stage.view(IW / 2, IH / 2, baseH / Z, aspect);   // the rest pose; following the taxi moves the camera from here
 }
 
@@ -304,7 +304,7 @@ function makePerson(top, bottom, extra) {
 const cows = [makeCow(C.cowBrown, C.cowWhite), makeCow(C.cowPale, C.cowDark)];
 cows[0].home = new THREE.Vector2(985, 666); cows[0].face = new THREE.Vector2(1, .15);
 cows[1].home = new THREE.Vector2(1095, 642); cows[1].face = new THREE.Vector2(-1, .1);
-const dog = makeDog(); dog.home = new THREE.Vector2(1560, 818); dog.state = 'sit'; dog.pos = dog.home.clone(); dog.face = new THREE.Vector2(-1, .2);
+const dog = makeDog(); dog.home = new THREE.Vector2(1560, 818); dog.pos = dog.home.clone(); dog.face = new THREE.Vector2(-1, .2);
 const walker = makePerson(C.walkerShirt, C.walkerLegs, c => {
   c.M(c.B, new THREE.CylinderGeometry(.012, .012, .85, 4), C.pole, { x: .14, y: 1.48 });
   c.M(c.B, new THREE.ConeGeometry(.55, .26, 10), C.umbrella, { x: .14, y: 1.98 });
@@ -318,7 +318,7 @@ const basket = makePerson(C.basketShirt, C.basketSkirt, c => {
 basket.home = new THREE.Vector2(640, 578); basket.face = new THREE.Vector2(0, 1); basket.kind = 'basket';
 const beings = [...cows, dog, walker, basket];
 for (const b of beings) b.R.visible = false;  // placeholders: replaced by painted cut-outs
-let honkT = 0, lapDogDone = false, barkT = 0, dogBarked = false;
+let honkT = 0, barkT = 0, dogBarked = false;
 const ZERO = new THREE.Vector2(), KEY_TO = new THREE.Vector3();
 const tiltQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42), yawQ = new THREE.Quaternion();
 function place(c, x, y, f, par) {
@@ -350,25 +350,13 @@ function updateLife(dt, car, dir, sCar, par) {
     c.H.rotation.y = lerp(c.H.rotation.y, alert ? clamp(Math.atan2(-(car.y - c.home.y) * 2.4, car.x - c.home.x) - Math.atan2(-c.face.y * 2.4, c.face.x), -.8, .8) : 0, damp(3, dt));
     place(c, c.home.x, c.home.y, c.face, par);
   }
-  // the dog: sits under the lamp, chases the taxi once per lap, gives up, trots home
-  if (sCar < 5) { lapDogDone = false; dogBarked = false; }
+  // the dog: stays sitting under the lamp and barks at the taxi as it comes, once a lap (and at the horn)
+  if (sCar < 5) dogBarked = false;
   const dd = Math.hypot(dog.pos.x - car.x, (dog.pos.y - car.y) * 1.8);
-  // the dog sits up and barks at the taxi as it comes (and at the horn), then gives chase
   barkT = Math.max(0, barkT - dt);
-  if (dog.state === 'sit' && !lapDogDone && !dogBarked && dd < 560) { dogBarked = true; barkT = 1.4; bark(); }
-  if (dog.state === 'sit' && !lapDogDone && barkT <= 0 && (dd < 330 || honkT > 0 && dd < 900)) { dog.state = 'chase'; dog.until = t + 5.5; bark(); }
-  if (dog.state === 'chase') {
-    const side = roadSide((sCar + (88 + Math.sin(t * 2.3) * 18) * sizeAt(car.y) / 34) / total, 0, 12 * sizeAt(car.y) / 34);   // on the tarmac, just ahead of the bumper, inside the beam
-    dog.pos.lerp(new THREE.Vector2(side.x, side.y), damp(4, dt)); dog.face.copy(side.d);
-    walkLegs(dog, t * 16, 1); dog.tail.rotation.z = Math.sin(t * 20) * .5;
-    dog.B.position.y = Math.abs(Math.sin(t * 16)) * .06;
-    if (t > dog.until) { dog.state = 'home'; lapDogDone = true; }
-  } else if (dog.state === 'home') {
-    const v = new THREE.Vector2().subVectors(dog.home, dog.pos); const L = v.length();
-    if (L < 4) { dog.state = 'sit'; dog.face.set(-1, .2); } else { dog.pos.addScaledVector(v.normalize(), Math.min(L, dt * 90)); dog.face.copy(v); walkLegs(dog, t * 9, .7); }
-    dog.B.position.y = 0;
-  } else { walkLegs(dog, 0, 0); dog.tail.rotation.z = Math.sin(t * 3) * .2; dog.B.position.y = 0; }
-  dog.H.rotation.z = lerp(dog.H.rotation.z, dog.state === 'sit' ? .1 + Math.sin(t * .7) * .05 : .25, damp(4, dt));
+  if (!dogBarked && dd < 560) { dogBarked = true; barkT = 1.4; bark(); }
+  walkLegs(dog, 0, 0); dog.tail.rotation.z = Math.sin(t * 3) * .2;
+  dog.H.rotation.z = lerp(dog.H.rotation.z, .1 + Math.sin(t * .7) * .05, damp(4, dt));
   place(dog, dog.pos.x, dog.pos.y, dog.face, par);
   // the walker: heads downhill on the far shoulder; stops and turns when you honk
   const stop = honkT > 0;
@@ -386,9 +374,9 @@ function updateLife(dt, car, dir, sCar, par) {
 
 /* ---------- painted cut-outs: people and animals as lit/dark sprite pairs ---------- */
 // Each frame lives at sprites/<name>-lit.png and sprites/<name>-dark.png (transparent PNG). Missing files are skipped.
-const SPRITE_H = { 'cow-graze': 1.75, 'cow-look': 1.9, 'dog-sit': 1.1, 'dog-bark-1': 1.4, 'dog-bark-2': 1.4, 'dog-bark-3': 1.4, 'dog-run-1': 1.15, 'dog-run-2': 1.15, 'walker-1': 2.4, 'walker-2': 2.4, 'basket': 2.05 };
+const SPRITE_H = { 'cow-graze': 1.75, 'cow-look': 1.9, 'dog-sit': 1.1, 'dog-bark-1': 1.4, 'dog-bark-2': 1.4, 'dog-bark-3': 1.4, 'walker-1': 2.4, 'walker-2': 2.4, 'basket': 2.05 };
 // where the eyes are in each frame (uv, figure facing right), so they can catch the headlights
-const EYES = { 'cow-graze': [[.889, .28]], 'cow-look': [[.898, .8], [.788, .791]], 'dog-sit': [[.837, .826]], 'dog-bark-1': [[.83, .866]], 'dog-bark-2': [[.837, .866]], 'dog-bark-3': [[.83, .862]], 'dog-run-1': [[.85, .779]], 'dog-run-2': [[.872, .775]] };
+const EYES = { 'cow-graze': [[.889, .28]], 'cow-look': [[.898, .8], [.788, .791]], 'dog-sit': [[.837, .826]], 'dog-bark-1': [[.83, .866]], 'dog-bark-2': [[.837, .866]], 'dog-bark-3': [[.83, .862]] };
 function trimmed(img) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
   const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
@@ -490,9 +478,8 @@ function updateSprites(car, par) {
     const alert = Math.hypot(c.home.x - car.x, (c.home.y - car.y) * 1.8) < 260 || honkT > 0;
     showFrame(sCows[i], alert && FRAMES['cow-look'] ? 'cow-look' : 'cow-graze', c.home.x, c.home.y, i ? -1 : 1, par);
   });
-  const running = dog.state === 'chase' || dog.state === 'home';
-  const dogFrame = running ? (Math.floor(t * 8) % 2 ? 'dog-run-1' : 'dog-run-2') : barkT > 0 ? `dog-bark-${[1, 2, 3, 2][Math.floor(t * 9) % 4]}` : 'dog-sit';
-  showFrame(sDog, FRAMES[dogFrame] ? dogFrame : 'dog-sit', dog.pos.x, dog.pos.y, dog.face.x, par, running ? Math.abs(Math.sin(t * 16)) * .05 : 0);
+  const dogFrame = barkT > 0 ? `dog-bark-${[1, 2, 3, 2][Math.floor(t * 9) % 4]}` : 'dog-sit';
+  showFrame(sDog, FRAMES[dogFrame] ? dogFrame : 'dog-sit', dog.pos.x, dog.pos.y, dog.face.x, par);
   const ws = roadSide(walker.u, -1), stopped = honkT > 0;
   showFrame(sWalker, stopped ? 'walker-1' : (Math.floor(t * 3) % 2 ? 'walker-1' : 'walker-2'), ws.x, ws.y, stopped ? car.x - ws.x : -ws.d.x, par, stopped ? 0 : Math.abs(Math.sin(t * 3 * Math.PI)) * .02);
   showFrame(sBasket, 'basket', basket.home.x, basket.home.y, car.x - basket.home.x, par, Math.sin(t * 1.4) * .006);
@@ -517,7 +504,7 @@ const total = curve.getLength();
 let s = 0, speed = 1, camX = IW / 2, camY = IH / 2;
 let done = false;
 const tmp = new THREE.Vector3(), q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
-window.__cl = { dog: () => ({ st: dog.state, x: dog.pos.x|0, y: dog.pos.y|0, vis: sDog.m.visible, fr: sDog.frame, sc: sDog.m.scale.x|0, frames: Object.keys(FRAMES), car: curve.getPointAt(s / total) }), s: () => s / total, zoom: z => { ZOOM = z; resize(); } };
+window.__cl = { dog: () => ({ x: dog.pos.x|0, y: dog.pos.y|0, vis: sDog.m.visible, fr: sDog.frame, sc: sDog.m.scale.x|0, frames: Object.keys(FRAMES), car: curve.getPointAt(s / total) }), s: () => s / total, zoom: z => { ZOOM = z; resize(); } };
 function frame(dt) {
   U.uTime.value += dt;
   const fast = input.hold;   // HOLD: drive faster
@@ -530,15 +517,12 @@ function frame(dt) {
   const dir = new THREE.Vector2(pa.x - p.x, pa.y - p.y).normalize();
   const n = depthN(p.y), sc = lerp(.32, 1, n);
   // camera follows, then parallax shifts nearer things more
-  const dogMoment = dog.state === 'chase';
-  zoomK = lerp(zoomK, dogMoment ? 1.55 : 1, damp(dogMoment ? 1.6 : .9, dt));
-  viewW = baseW / (ZOOM * zoomK); viewH = baseH / (ZOOM * zoomK);
-  const fx = dogMoment ? (p.x + dog.pos.x) / 2 : p.x, fy = dogMoment ? (p.y + dog.pos.y) / 2 - 20 : p.y - 30;
+  const fx = p.x, fy = p.y - 30;
   const mW = viewW * .08, mH = viewH * .1;   // keep clear of the edges: the near ground moves further than the frame
   camX = lerp(camX, clamp(fx, viewW / 2 + mW, IW - viewW / 2 - mW), damp(1.4, dt));
   camY = lerp(camY, clamp(fy, viewH / 2 + mH, IH - viewH / 2 - mH), damp(1.4, dt));
-  // the camera follows the taxi: a translation from the rest pose, so the hills slide past each other (real parallax), and a dolly for the dog
-  Object.assign(stage.move, { dx: camX - IW / 2, dy: camY - IH / 2, dolly: 1 - 1 / zoomK });
+  // the camera follows the taxi: a translation from the rest pose, so the hills slide past each other (real parallax)
+  Object.assign(stage.move, { dx: camX - IW / 2, dy: camY - IH / 2 });
   stage.apply();
   const par = () => ZERO;   // the old fake parallax: the depth does it now
   // jeep pose: size by depth, yaw from the road's direction on the ground
@@ -568,7 +552,7 @@ function frame(dt) {
 }
 return {
   frame, resize,
-  onHorn() { honkT = 2.2; if (dog.state === 'sit') { barkT = 1.4; bark(); } return false; },   // they look up; the page plays the horn itself
+  onHorn() { honkT = 2.2; barkT = 1.4; bark(); return false; },   // they look up; the page plays the horn itself
   dispose() { disposeScene(scene); delete window.__cl; },
 };
 }

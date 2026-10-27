@@ -1,6 +1,6 @@
 // Shared by every scene: small helpers, the stroke map, the taxi, its ink outline, and the passenger.
 import * as THREE from 'three';
-import { LIVERY, TAXI, UTIL, GLSL_PALETTE } from './style.js';
+import { LIVERY, TAXI, TRUCK, UTIL, GLSL_PALETTE } from './style.js';
 
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -34,20 +34,20 @@ export function colorize(g, hex, emit = 0) {
   for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
 }
-export function makeTaxi(uMode) {
+export function paintMat(uMode) {
   // Painted, not flat-shaded (STYLE.md): three-tone cel shading, a warm key from the nearest real light (uKey: its direction
   // in view space; uL: how strong), cool navy ambient, a moonlit rim along the top edges, and a brush-stroke texture that also
   // breaks up the band edges so they read as painted.
-  const jeepMat = new THREE.ShaderMaterial({
-    uniforms: { uL: { value: .3 }, uKey: { value: new THREE.Vector3(-.4, .7, .6).normalize() }, uMode },
+  return new THREE.ShaderMaterial({
+    uniforms: { uL: { value: .3 }, uKey: { value: new THREE.Vector3(-.4, .7, .6).normalize() }, uMode, uLamp: { value: 1 }, uExposure: { value: 1 } },
     vertexShader: /* glsl */`
       attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
       void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
     fragmentShader: NOISE + GLSL_PALETTE + /* glsl */`
-      uniform float uL, uMode; uniform vec3 uKey; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+      uniform float uL, uMode, uLamp, uExposure; uniform vec3 uKey; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
       void main(){
         vec3 n = normalize(vN);
-        if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }   // its own lamps
+        if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * mix(.22, 1.08, uLamp), 1.); return; }   // its own lamps (uLamp: 0 = off)
         // brush: long strokes along the body, used to jitter the bands and to texture the paint
         float brush = vn2(vec2(vP.x * 9. + vP.z * 3., vP.y * 34.)) * .7 + vn2(vec2(vP.x * 23., vP.y * 70. + vP.z * 11.)) * .3;
         float k = dot(n, normalize(uKey)) + (brush - .5) * .35;
@@ -66,27 +66,33 @@ export function makeTaxi(uMode) {
           float streak = smoothstep(.72, .8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2 + brush * .15));
           col = mix(C_NIGHT * 1.2, C_CLOUD * .85, streak * .5 + step(.55, n.y) * .2 + lit * .1);
         }
-        col *= .84 + brush * .3;   // the paint isn't flat
+        col *= (.84 + brush * .3) * uExposure;   // the paint isn't flat (uExposure: how much of the night it sits in)
         col *= mix(.82, 1.06, smoothstep(-1.7, 1.7, vP.x + vP.y * .6));   // and each panel falls off a little, front to back, like a painted shape
         gl_FragColor = vec4(col, 1.);
       }`,
   });
-
-
-  // jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
-  const PIVOT = new THREE.Vector3(.55, .2, 0);
-  const jeep = new THREE.Group(), hang = new THREE.Group(), body = new THREE.Group();
-  jeep.add(hang); hang.add(body); hang.position.copy(PIVOT); body.position.copy(PIVOT).negate();
+}
+// a vehicle's parts: geometry coloured per vertex, all on one painted material, all on layer 1 for the ink pass
+function builder(mat, root) {
   const parts = [];
-  const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}, parent = body) => {
+  const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}, parent = root) => {
     geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
-    const m = new THREE.Mesh(colorize(geo, hex, emit), jeepMat); parent.add(m); parts.push(m); return m;
+    const m = new THREE.Mesh(colorize(geo, hex, emit), mat); parent.add(m); parts.push(m); return m;
   };
   const extrude = (pts, depth, bevel) => {
     const sh = new THREE.Shape(); sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
     const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
     g.translate(0, 0, -depth / 2); return g;
   };
+  return { parts, put, extrude };
+}
+export function makeTaxi(uMode) {
+  const jeepMat = paintMat(uMode);
+  // jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
+  const PIVOT = new THREE.Vector3(.55, .2, 0);
+  const jeep = new THREE.Group(), hang = new THREE.Group(), body = new THREE.Group();
+  jeep.add(hang); hang.add(body); hang.position.copy(PIVOT); body.position.copy(PIVOT).negate();
+  const { parts, put, extrude } = builder(jeepMat, body);
   // lower body: short sloping bonnet, flat sides, near-vertical hatch
   put(extrude([[-1.62, .24], [-1.66, .52], [-1.62, .84], [.95, .88], [1.56, .74], [1.64, .66], [1.64, .3], [1.58, .24]], 1.36, .06), LIVERY.body);
   // cabin: tall glasshouse, slight tumblehome
@@ -134,10 +140,78 @@ export function makeTaxi(uMode) {
   return { jeep, hang, body, parts, put, jeepMat, PIVOT };
 }
 
+// The truck, built like the taxi so the two belong together: same painted material, same line. Nose toward +x, wheels on
+// y = 0, about 7.6 long and 3.3 tall (the taxi is 3.4 long). The truck-art bands, posts, eyes and flowers are painted shapes.
+export function makeTruck(uMode) {
+  const mat = paintMat(uMode), truck = new THREE.Group();
+  mat.uniforms.uExposure.value = .72;   // its colours are loud; at night they sit back
+  const { parts, put, extrude } = builder(mat, truck);
+  const T = TRUCK;
+  // chassis, tank, the cab: short rounded bonnet, upright windscreen, a painted crown board over the visor
+  put(new THREE.BoxGeometry(7.2, .22, 1.1), T.chassis, { x: -.1, y: .82 });
+  put(new THREE.BoxGeometry(1.1, .42, .5), T.tank, { x: .4, y: .7, z: .85 });
+  put(extrude([[1.85, .95], [1.85, 3.0], [2.72, 3.0], [2.98, 2.12], [3.6, 2.0], [3.86, 1.75], [3.86, 1.02], [3.74, .92]], 2.16, .08), T.cab);
+  put(new THREE.BoxGeometry(1.0, .34, 2.3), T.crown, { x: 2.3, y: 3.22 });
+  put(new THREE.BoxGeometry(.95, .08, 2.34), T.band, { x: 2.3, y: 3.05 });
+  put(new THREE.BoxGeometry(.42, .08, 2.36), T.crown, { x: 2.86, y: 3.06, rz: -.18 });   // the visor
+  put(new THREE.BoxGeometry(.02, .78, 1.9), T.glass, { x: 2.86, y: 2.56, rz: .27, emit: 2 });
+  put(new THREE.BoxGeometry(.04, .66, .86), T.green, { x: 3.9, y: 1.42 });            // the painted grille
+  for (let i = -3; i <= 3; i++) put(new THREE.BoxGeometry(.05, .6, .025), T.crown, { x: 3.92, y: 1.42, z: i * .11 });
+  put(new THREE.BoxGeometry(.2, .3, 2.3), T.band, { x: 3.92, y: .8 });                // bumper, with tassels under it
+  T.tassels.forEach((c, i) => [-1, 1].forEach(sgn => put(new THREE.ConeGeometry(.055, .3, 6), c, { x: 3.95, y: .5, z: sgn * (.15 + i * .2) })));
+  for (const sgn of [-1, 1]) {
+    put(new THREE.CylinderGeometry(.15, .15, .06, 16), T.lamp, { x: 3.88, y: 1.28, z: sgn * .72, rz: Math.PI / 2, emit: 1 });
+    put(new THREE.CylinderGeometry(.06, .06, .05, 10), T.crown, { x: 3.86, y: 1.62, z: sgn * .9, rz: Math.PI / 2, emit: 1 });
+    put(new THREE.BoxGeometry(.62, .56, .02), T.glass, { x: 2.32, y: 2.5, z: sgn * 1.12, emit: 2 });
+    put(new THREE.BoxGeometry(.05, .5, .05), T.mirror, { x: 3.1, y: 2.35, z: sgn * 1.22 });
+    put(new THREE.BoxGeometry(.06, .34, .16), T.mirror, { x: 3.1, y: 2.5, z: sgn * 1.3 });
+    put(new THREE.TorusGeometry(.66, .09, 6, 18, Math.PI), T.green, { x: 2.65, y: .62, z: sgn * 1.06 });   // front arch
+    // an eye on each door
+    const eye = (x, y, z) => {
+      put(new THREE.CylinderGeometry(.17, .17, .02, 18).scale(1.7, 1, 1), T.eye, { x, y, z, rx: Math.PI / 2 });
+      put(new THREE.CylinderGeometry(.09, .09, .02, 14), T.iris, { x, y, z: z + sgn * .01, rx: Math.PI / 2 });
+      put(new THREE.CylinderGeometry(.04, .04, .02, 10), T.pupil, { x, y, z: z + sgn * .02, rx: Math.PI / 2 });
+    };
+    eye(2.32, 1.6, sgn * 1.13);
+    // the cargo body's side: painted bands, red posts, a flower or an eye in each yellow panel, the top rail
+    const z = sgn * 1.2;
+    for (const [y0, y1, c] of [[1.1, 1.45, T.band], [1.45, 1.58, T.post], [1.58, 2.36, T.panel], [2.36, 2.48, T.post], [2.48, 2.8, T.green], [2.8, 2.92, T.post]])
+      put(new THREE.BoxGeometry(5.5, y1 - y0, .05), c, { x: -.98, y: (y0 + y1) / 2, z });
+    for (let i = 0; i <= 7; i++) put(new THREE.BoxGeometry(.1, 1.86, .08), T.post, { x: -3.7 + i * .78, y: 2.0, z: z + sgn * .02 });
+    for (let i = 0; i < 7; i++) {
+      const x = -3.31 + i * .78;
+      if (i === 0 || i === 6) eye(x, 1.97, z + sgn * .03);
+      else {
+        put(new THREE.CylinderGeometry(.2, .2, .02, 6), T.flower, { x, y: 1.97, z: z + sgn * .03, rx: Math.PI / 2 });
+        put(new THREE.CylinderGeometry(.07, .07, .02, 8), T.crown, { x, y: 1.97, z: z + sgn * .045, rx: Math.PI / 2 });
+      }
+      put(new THREE.CylinderGeometry(.08, .08, .02, 5), T.flower, { x, y: 1.27, z: z + sgn * .03, rx: Math.PI / 2 });
+    }
+    // the tarp's ropes, down from the top to the rail
+    for (let i = 0; i <= 7; i++) put(new THREE.CylinderGeometry(.018, .018, .5, 4), T.rope, { x: -3.7 + i * .78, y: 2.95, z: z + sgn * .06 });
+    put(new THREE.BoxGeometry(.06, .6, .5), T.chassis, { x: -2.95, y: .7, z: sgn * 1.0 });   // mud flap
+    put(new THREE.BoxGeometry(.04, .14, .16), T.tail, { x: -3.78, y: 1.0, z: sgn * .95, emit: 1 });
+  }
+  put(new THREE.BoxGeometry(5.5, .15, 2.45), T.post, { x: -.98, y: 1.03 });   // the bed
+  for (const [x, c] of [[-3.73, T.band], [1.76, T.cab]]) put(new THREE.BoxGeometry(.06, 1.82, 2.36), c, { x, y: 2.0 });
+  // the tarp: a slack, rounded hump over the load
+  put(extrude([[-1.25, 0], [-1.2, .2], [-.9, .34], [0, .38], [.9, .34], [1.2, .2], [1.25, 0]], 5.6, .06), T.tarp, { x: -.98, y: 2.9, ry: Math.PI / 2 });
+  // wheels: single at the front, doubled at the back
+  for (const [x, zs] of [[2.65, [1.0]], [-2.2, [1.0, .62]]]) for (const sgn of [-1, 1]) for (const zz of zs) {
+    put(new THREE.CylinderGeometry(.55, .55, .34, 20), T.tyre, { x, y: .55, z: sgn * zz, rx: Math.PI / 2 });
+    if (zz === zs[0]) {
+      put(new THREE.CylinderGeometry(.3, .3, .02, 16), T.rim, { x, y: .55, z: sgn * (zz + .18), rx: Math.PI / 2 });
+      put(new THREE.CylinderGeometry(.1, .1, .03, 8), T.hub, { x, y: .55, z: sgn * (zz + .19), rx: Math.PI / 2 });
+    }
+  }
+  for (const m of parts) m.layers.enable(1);
+  return { truck, mat, parts };
+}
+
 /* ---------- ink + paper rim around the taxi, plus grain and vignette over the whole frame ---------- */
 // One per page. The full ink (edge detection on the taxi's normals) only runs inside the taxi's bounding box on screen.
 const infoMat = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying vec3 vN; void main(){ gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
-const box3 = new THREE.Box3(), corner = new THREE.Vector3();
+const box3 = new THREE.Box3(), oneBox = new THREE.Box3(), corner = new THREE.Vector3();
 export class Ink {
   constructor(renderer, lowEnd) {
     this.renderer = renderer;
@@ -194,12 +268,13 @@ export class Ink {
   // [lift r,g,b, gamma r,g,b, gain r,g,b, saturation], from shared/grade.js
   setGrade(p = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]) { const u = this.uniforms; u.uLift.value.fromArray(p, 0); u.uGamma.value.fromArray(p, 3); u.uGain.value.fromArray(p, 6); u.uSat.value = p[9]; }
   resize(pw, ph) { this.rtColor.setSize(pw, ph); this.rtInfo.setSize(pw, ph); this.uniforms.uRes.value.set(pw, ph); }
-  // taxi: the jeep group, or null when there's no taxi in the shot
-  render(scene, camera, taxi, clear = UTIL.clear) {
+  // vehicles: the taxi's group, a list of vehicles (the taxi and the truck), or null when there's none in the shot
+  render(scene, camera, vehicles, clear = UTIL.clear) {
     const r = this.renderer, B = this.uniforms.uBox.value;
     B.set(2, 2, -1, -1);
-    if (taxi && taxi.visible) {
-      box3.setFromObject(taxi);
+    const shown = [].concat(vehicles || []).filter(v => v.visible);
+    if (shown.length) {
+      box3.makeEmpty(); for (const v of shown) box3.union(oneBox.setFromObject(v));
       if (!box3.isEmpty()) {
         let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
         for (let i = 0; i < 8; i++) {
@@ -221,10 +296,10 @@ export class Ink {
 }
 
 /* ---------- the passenger: picked at the stand, remembered next to the banked wish ---------- */
-const ROSTER = window.HAIRPIN_ROSTER || { beats: {}, people: [] };   // shared/roster.js
-export const roster = ROSTER;
-export function passenger() { let id = null; try { id = localStorage.getItem('hairpin.passenger'); } catch (e) {} return ROSTER.people.find(p => p.id === id && p.on) || null; }
-export function pick(id) { try { localStorage.setItem('hairpin.passenger', id); } catch (e) {} }
+const ROSTER = window.HAIRPIN_ROSTER || { beats: {}, lines: {} };   // shared/roster.js
+// { name, build, skin, hair, top, acc }, as dressed at the stand (shared/look.js); an old saved pick (a teammate's id) reads as none
+export function passenger() { let p = null; try { p = JSON.parse(localStorage.getItem('hairpin.passenger')); } catch (e) {} return p && typeof p.name === 'string' && p.name.trim() ? { ...p, first: p.name.trim(), lines: ROSTER.lines } : null; }
+export function pick(look) { try { localStorage.setItem('hairpin.passenger', JSON.stringify(look)); } catch (e) {} }
 // a subtitle's label: PASSENGER becomes their first name once someone's riding
 export const who = label => { const p = label === 'PASSENGER' && passenger(); return p ? p.first.toUpperCase() : label; };
 // their own line at a beat: { who, expr, text }, or null with nobody picked

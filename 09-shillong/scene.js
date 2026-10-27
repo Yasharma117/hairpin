@@ -1,11 +1,15 @@
-// Shillong: the truck that gave you a lift parks at the viewpoint above the city. The engine goes off and ticks as it cools;
-// the passenger signs off; a shooting star crosses (hold while it's up to bank the wish); the quote sets itself on torn paper.
+// Shillong: the truck that gave you a lift parks at the viewpoint above the city. It's November, and the cherry is in bloom:
+// a tree over the railing, blossom down the slopes, petals in the air (blossom.js). The engine goes off and ticks as it cools;
+// the passenger signs off; a shooting star crosses on a gust (hold while it's up to bank the wish, and the tree lets go of a
+// shower of petals); the quote sets itself on torn paper.
 import * as THREE from 'three';
-import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, disposeScene, Stage, paintFigure } from '../shared/kit.js';
+import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, passenger, disposeScene, Stage, paintFigure, makeTruck, keyLight } from '../shared/kit.js';
 import { SHILLONG_PLACEHOLDER, FIGURE, PALETTE } from '../shared/style.js';
+import { paintTree, paintOverlay, treeMesh, Petals, TREE } from './blossom.js';
+import { dress, you } from '../shared/look.js';
 
 const at = f => new URL(f, import.meta.url).href;
-export const assets = ['../08-edge-scene/sprites/truck-lit.png', '../08-edge-scene/sprites/truck-dark.png'];
+export const assets = [];
 
 const IW = 1774, IH = 887;              // painting size in px; the whole scene lives in these units
 
@@ -122,6 +126,30 @@ const bg = stage.mesh(new THREE.ShaderMaterial({
 }));
 scene.add(bg);
 
+/* ---------- the cherry blossom: trees down the slopes and petals on the ground, then the tree over the railing ---------- */
+const [oL, oD] = paintOverlay(IW, IH, HORIZON, RAIL, !(iLit && iDark)).map(tex);   // the real painting brings its own trees
+const overlay = stage.mesh(new THREE.ShaderMaterial({
+  uniforms: { ...U, tOL: { value: oL }, tOD: { value: oD } }, transparent: true,
+  fragmentShader: LIGHT + /* glsl */`
+    uniform sampler2D tOL, tOD; varying vec2 vPx;
+    void main(){
+      vec2 uv = uvOf(vPx); vec4 l = texture2D(tOL, uv), d = texture2D(tOD, uv);
+      if (d.a < .01) discard;
+      gl_FragColor = vec4(mix(d.rgb, l.rgb, reveal(vPx, lightAt(vPx))), d.a);
+    }`,
+}));
+overlay.renderOrder = -9; scene.add(overlay);
+const tree = treeMesh(U, LIGHT, paintTree()); scene.add(tree);
+const TREE_D = .97;   // right at the front: it moves most when the camera rises
+const touch = ctx.isTouch;
+const petals = [
+  new Petals({ stage, U, light: LIGHT, n: touch ? 120 : 320, d0: .25, d1: .75, size: [4, 7], IW, IH, HORIZON, RAIL, near: false }),
+  new Petals({ stage, U, light: LIGHT, n: touch ? 60 : 150, d0: .86, d1: .97, size: [8, 14], IW, IH, HORIZON, RAIL, near: true }),
+];
+for (const p of petals) scene.add(p.points);
+let gust = 0, gustTo = 0, windy = false;
+const bufSize = new THREE.Vector2();
+
 /* ---------- the two of us at the railing, seen from behind ---------- */
 const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(paintFigure(c, PALETTE.ink, 3)); };   // painted to match, with the thin line
 const back = (fill, extra) => cutout(200, 240, c => {
@@ -133,23 +161,21 @@ const back = (fill, extra) => cutout(200, 240, c => {
   c.fillStyle = fill; shape(0, 0);
 });
 const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
-[[back(FIGURE.backFill[0], (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), .55], [back(FIGURE.backFill[1]), .61]].forEach(([map, x]) => {
-  const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
+// you on the left, the passenger on the right (as dressed at the stand), turned toward each other; silhouettes until the images exist
+const rider = passenger();
+const [youSit, riderSit] = await Promise.all([you('sit'), rider ? dress(rider, 'sit') : null]);
+[[youSit, back(FIGURE.backFill[1]), .55], [riderSit, back(FIGURE.backFill[0], (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), .61]].forEach(([img, stand, x]) => {
+  const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map: img ? tex(img) : stand, transparent: true, depthWrite: false }));
   const y = RAIL * IH + 30, h = 150;
-  stage.place(m, x * IW, y, [h * 200 / 240, h]); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
+  stage.place(m, x * IW, y, [h * (img ? img.width / img.height : 200 / 240), h]); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
 });
 
 /* ---------- the truck that gave you a lift, parked nose to the railing ---------- */
-const [tkL, tkD] = await Promise.all(['truck-lit', 'truck-dark'].map(n => loadImg(at(`../08-edge-scene/sprites/${n}.png`))));
-const truckMat = new THREE.ShaderMaterial({
-  uniforms: { tL: { value: tex(tkL) }, tD: { value: tex(tkD) }, uL: { value: .2 }, uMode: U.uMode }, transparent: true, depthWrite: false,
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-  fragmentShader: 'uniform sampler2D tL, tD; uniform float uL, uMode; varying vec2 vUv; void main(){ vec4 l = texture2D(tL, vUv), d = texture2D(tD, vUv); float k = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : uL); gl_FragColor = vec4(mix(d.rgb, l.rgb, k), l.a); }',
-});
-const TRUCK = { x: .2 * IW, y: .93 * IH, h: 230 }, truckW = TRUCK.h * tkL.width / tkL.height;
-const truck = new THREE.Mesh(footGeo, truckMat); truck.frustumCulled = false; truck.renderOrder = 2;
-stage.place(truck, TRUCK.x, TRUCK.y, [truckW, TRUCK.h]); scene.add(truck);
-U.uHead.value.set(TRUCK.x + truckW * .47, TRUCK.y - TRUCK.h * .2); U.uDir.value.set(1, -.12).normalize(); U.uScale.value = 1.2;
+const { truck, mat: truckMat } = makeTruck(U.uMode);   // built in 3D like the taxi (shared/kit.js)
+truck.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .2).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -.25));
+const TRUCK = { x: .2 * IW, y: .93 * IH, size: 66 }, truckW = TRUCK.size * 7.6 * Math.cos(.25), truckH = TRUCK.size * 3.3;
+stage.place(truck, TRUCK.x, TRUCK.y, TRUCK.size); scene.add(truck);
+U.uHead.value.set(TRUCK.x + truckW * .5, TRUCK.y - truckH * .38); U.uDir.value.set(1, -.12).normalize(); U.uScale.value = 1.2;
 
 /* ---------- the shooting star ---------- */
 const STAR = { from: [.16 * IW, .2 * IH], to: [.78 * IW, .36 * IH] };   // low enough to cross the frame before the camera rises
@@ -159,7 +185,7 @@ const starMat = new THREE.ShaderMaterial({
   // vUv.x: 0 at the tail, 1 at the head
   fragmentShader: 'uniform float uI; varying vec2 vUv; void main(){ float w = 1. - abs(vUv.y - .5) * 2.; float a = pow(vUv.x, 2.5) * w * w + exp(-pow((1. - vUv.x) * 26., 2.)) * w * 1.5; gl_FragColor = vec4(vec3(1., .96, .85) * a * uI, 1.); }',
 });
-const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), starMat); star.frustumCulled = false; star.renderOrder = 5; star.visible = false; scene.add(star);
+const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), starMat); star.frustumCulled = false; star.renderOrder = 8;   // over the tree: it must be seen star.visible = false; scene.add(star);
 const starDir = new THREE.Vector2(STAR.to[0] - STAR.from[0], STAR.to[1] - STAR.from[1]), starLen = starDir.length(); starDir.normalize();
 star.rotation.z = Math.atan2(-starDir.y, starDir.x);
 
@@ -171,6 +197,14 @@ function resize(w, h) {
   viewW /= Z; viewH /= Z;
   const cx = clamp(.45 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.5 * IH, viewH / 2, IH - viewH / 2);
   stage.view(cx, cy, viewH, aspect);
+  // the tree: its trunk at the right edge of the frame (just past it in portrait, so only the crown reaches in) and its foot
+  // well below it (the camera rises later), the crown overhead
+  const H = viewH + 100, W = H * TREE.w / TREE.h, ax = cx + viewW / 2 + (aspect < 1 ? 110 : -30), ay = cy + viewH / 2 + 160;
+  stage.place(tree, ax, ay, [W, H], TREE_D);
+  tree.material.uniforms.uAnchor.value.set(ax, ay); tree.material.uniforms.uSize.value.set(W, H);
+  const view = { x0: cx - viewW / 2, x1: cx + viewW / 2, y0: cy - viewH / 2 - 100, y1: cy + viewH / 2 };
+  const crown = { x0: ax - W * TREE.anchorU * .9, x1: ax + W * (1 - TREE.anchorU), y0: ay - H * .95, y1: ay - H * .45 };
+  for (const p of petals) p.setView(view, crown);
 }
 
 /* ---------- sound: the engine ticking as it cools ---------- */
@@ -216,6 +250,7 @@ const bye = line('shillong');   // the passenger's sign-off, before the star: ne
 let byeSaid = false;
 function bankWish() {
   banked = true; chime();
+  gustTo = 1; petals[1].shower(.4);   // the tree lets go
   try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}   // read by the dashboard: a paper star on your next visit
 }
 function go(next) {
@@ -243,6 +278,7 @@ function frame(dt) {
     if (ctx.ac && since > nextTick) { tick(); tickGap *= 1.18; nextTick = since + tickGap * (.7 + Math.random() * .6); }
     // the star: up for starDur seconds; holding while it's up banks the wish
     const k = (since - T.star) / T.starDur, up = k > 0 && k < 1;
+    if (k > -.15 && k < 0) gustTo = Math.max(gustTo, .75);   // the star comes in on a gust
     star.visible = up;
     if (up) {
       if (held && !banked) { heldFor += dt; if (heldFor > HOLD_TO_BANK) bankWish(); }
@@ -262,11 +298,21 @@ function frame(dt) {
   ctx.prompt(ready() ? LABEL[phase] : null);
   // engine off: the headlights die back to a faint parking light
   U.uHeadI.value = phase === 'arrive' ? 1 : .12 + .88 * (1 - Math.min(1, since / 1.4));
+  truckMat.uniforms.uLamp.value = U.uHeadI.value;
+  keyLight(truckMat, camera, truck.position, stage.toWorld(.6 * IW, .55 * IH, 0), .2);   // the city's glow below
   // the camera: low on the road at first, then a slow rise to the city while the quote sets
   const rise = phase === 'arrive' ? 0 : sstep(T.quote[0] - 1, T.quote[T.quote.length - 1] + 2, since);
   Object.assign(stage.target, { dy: lerp(.1, -.08, rise) * IH, pitch: lerp(-.01, .025, rise) });
   stage.update(dt, phase === 'arrive' ? 4 : 1);
-  ctx.ink.render(scene, camera, null);   // no taxi here: just the grain and vignette
+  // the wind: a slow breathing, raised by the star and the wish; the petals and the tree go with it, and so does the sound
+  gustTo = Math.max(0, gustTo - dt * .3);
+  gust = lerp(gust, Math.max(gustTo, .28 * Math.max(0, Math.sin(t * .21) * Math.sin(t * .13 + 1))), 1 - Math.exp(-2 * dt));
+  if (windy !== gust > .45) { windy = !windy; ctx.bed({ crickets: 1, wind: windy ? 1 : .4 }); }
+  tree.material.uniforms.uSway.value = 1 + gust * 3;
+  ctx.renderer.getDrawingBufferSize(bufSize);
+  const ptr = input.ptr && stage.screenToPaint(...input.ptr);
+  for (const p of petals) { p.mat.uniforms.uScreen.value = bufSize.y / (2 * Math.tan(stage.fov * Math.PI / 360)); p.update(dt, t, gust, ptr); }
+  ctx.ink.render(scene, camera, truck);
 }
 return { frame, resize, onTap: advance, dispose() { disposeScene(scene); } };
 }

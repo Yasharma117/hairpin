@@ -29,6 +29,28 @@ export const TAXI = {
   tyre: '#0b0c0e', arch: '#0d0e10', wheel: '#121316', alloy: '#4d5158', alloyLip: '#c9ccd1', hub: '#24262a',
 };
 
+// the truck that gives you a lift: a Tata-style goods truck in hand-painted truck art (source-art/truck.png)
+export const TRUCK = {
+  cab: '#e3702b', crown: '#f0b23a', panel: '#efb03a', band: '#2c5aa8', green: '#2f8a4c', post: '#d24f2a', flower: '#d8342c',
+  eye: '#f1ead8', iris: '#2b56b8', pupil: '#0b0b0d', tarp: '#5a4632', rope: '#a8875a', chassis: '#1a1918', tank: '#2b2a28',
+  tyre: '#121212', rim: '#bf452f', hub: '#262626', glass: '#000000', lamp: '#fff2c8', tail: '#c8352a', mirror: '#202022',
+  tassels: ['#d8342c', '#f0b23a', '#2f8a4c', '#2c5aa8', '#e3702b'],
+};
+
+// Shillong in November: the Himalayan cherry in bloom (09-shillong/blossom.js). Deep to pale; lit = in warm light, dark = under the moon.
+export const BLOSSOM = {
+  lit: ['#a8455f', '#d77a95', '#efa7bb', '#fbd6df', '#fff4ee'],
+  dark: ['#1e1530', '#3a2349', '#5a3464', '#80527e', '#aa82a2'],
+  bark: '#16101c', barkLit: '#4a2e22', barkStreak: ['#2a1d2b', '#6b4632'],
+  bulb: '#ffe2a8', bulbGlow: '#ff9dbb',
+  petalDark: '#9c82ad', petalLit: '#ffd6e4', petalCore: '#d8628f', petalGlow: '#ff9a6b',
+};
+
+// the customiser's skin tones, light to deep (shared/look.js recolours the base figure's skin, keeping its shading);
+// the base images are painted at BASE_SKIN
+export const SKIN_TONES = ['#efcdb2', '#d8a983', '#b98059', '#8c593a', '#5a3824'];
+export const BASE_SKIN = 2;
+
 // placeholder people: tinted from the palette, until the painted figures arrive
 export const FIGURE = {
   shirts: ['#3b5068', '#6e3a4c', '#2f5a52', '#7a5434', '#4c4470', '#2b5578', '#6b5e34', '#5e3636'],
