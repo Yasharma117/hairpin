@@ -5,7 +5,7 @@ import { disposeScene, makeTaxi, colorize, Stage, loadImg as loadImage, keyLight
 import { CLIMB_STANDINS as C } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
-const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'];
+const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-bark-1', 'dog-bark-2', 'dog-bark-3', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'];
 export const assets = ['lit.jpg', 'dark.jpg', 'strokes.jpg', 'depth.png', ...SPRITES.flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`])];
 
 export async function load(ctx) {
@@ -318,7 +318,7 @@ const basket = makePerson(C.basketShirt, C.basketSkirt, c => {
 basket.home = new THREE.Vector2(640, 578); basket.face = new THREE.Vector2(0, 1); basket.kind = 'basket';
 const beings = [...cows, dog, walker, basket];
 for (const b of beings) b.R.visible = false;  // placeholders: replaced by painted cut-outs
-let honkT = 0, lapDogDone = false;
+let honkT = 0, lapDogDone = false, barkT = 0, dogBarked = false;
 const ZERO = new THREE.Vector2(), KEY_TO = new THREE.Vector3();
 const tiltQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42), yawQ = new THREE.Quaternion();
 function place(c, x, y, f, par) {
@@ -351,9 +351,12 @@ function updateLife(dt, car, dir, sCar, par) {
     place(c, c.home.x, c.home.y, c.face, par);
   }
   // the dog: sits under the lamp, chases the taxi once per lap, gives up, trots home
-  if (sCar < 5) { lapDogDone = false; }
+  if (sCar < 5) { lapDogDone = false; dogBarked = false; }
   const dd = Math.hypot(dog.pos.x - car.x, (dog.pos.y - car.y) * 1.8);
-  if (dog.state === 'sit' && !lapDogDone && (dd < 330 || honkT > 0 && dd < 900)) { dog.state = 'chase'; dog.until = t + 5.5; bark(); }
+  // the dog sits up and barks at the taxi as it comes (and at the horn), then gives chase
+  barkT = Math.max(0, barkT - dt);
+  if (dog.state === 'sit' && !lapDogDone && !dogBarked && dd < 560) { dogBarked = true; barkT = 1.4; bark(); }
+  if (dog.state === 'sit' && !lapDogDone && barkT <= 0 && (dd < 330 || honkT > 0 && dd < 900)) { dog.state = 'chase'; dog.until = t + 5.5; bark(); }
   if (dog.state === 'chase') {
     const side = roadSide((sCar + (88 + Math.sin(t * 2.3) * 18) * sizeAt(car.y) / 34) / total, 0, 12 * sizeAt(car.y) / 34);   // on the tarmac, just ahead of the bumper, inside the beam
     dog.pos.lerp(new THREE.Vector2(side.x, side.y), damp(4, dt)); dog.face.copy(side.d);
@@ -383,9 +386,9 @@ function updateLife(dt, car, dir, sCar, par) {
 
 /* ---------- painted cut-outs: people and animals as lit/dark sprite pairs ---------- */
 // Each frame lives at sprites/<name>-lit.png and sprites/<name>-dark.png (transparent PNG). Missing files are skipped.
-const SPRITE_H = { 'cow-graze': 1.75, 'cow-look': 1.9, 'dog-sit': 1.1, 'dog-run-1': 1.15, 'dog-run-2': 1.15, 'walker-1': 2.4, 'walker-2': 2.4, 'basket': 2.05 };
+const SPRITE_H = { 'cow-graze': 1.75, 'cow-look': 1.9, 'dog-sit': 1.1, 'dog-bark-1': 1.4, 'dog-bark-2': 1.4, 'dog-bark-3': 1.4, 'dog-run-1': 1.15, 'dog-run-2': 1.15, 'walker-1': 2.4, 'walker-2': 2.4, 'basket': 2.05 };
 // where the eyes are in each frame (uv, figure facing right), so they can catch the headlights
-const EYES = { 'cow-graze': [[.889, .28]], 'cow-look': [[.898, .8], [.788, .791]], 'dog-sit': [[.837, .826]], 'dog-run-1': [[.85, .779]], 'dog-run-2': [[.872, .775]] };
+const EYES = { 'cow-graze': [[.889, .28]], 'cow-look': [[.898, .8], [.788, .791]], 'dog-sit': [[.837, .826]], 'dog-bark-1': [[.83, .866]], 'dog-bark-2': [[.837, .866]], 'dog-bark-3': [[.83, .862]], 'dog-run-1': [[.85, .779]], 'dog-run-2': [[.872, .775]] };
 function trimmed(img) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
   const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
@@ -488,7 +491,7 @@ function updateSprites(car, par) {
     showFrame(sCows[i], alert && FRAMES['cow-look'] ? 'cow-look' : 'cow-graze', c.home.x, c.home.y, i ? -1 : 1, par);
   });
   const running = dog.state === 'chase' || dog.state === 'home';
-  const dogFrame = running ? (Math.floor(t * 8) % 2 ? 'dog-run-1' : 'dog-run-2') : 'dog-sit';
+  const dogFrame = running ? (Math.floor(t * 8) % 2 ? 'dog-run-1' : 'dog-run-2') : barkT > 0 ? `dog-bark-${[1, 2, 3, 2][Math.floor(t * 9) % 4]}` : 'dog-sit';
   showFrame(sDog, FRAMES[dogFrame] ? dogFrame : 'dog-sit', dog.pos.x, dog.pos.y, dog.face.x, par, running ? Math.abs(Math.sin(t * 16)) * .05 : 0);
   const ws = roadSide(walker.u, -1), stopped = honkT > 0;
   showFrame(sWalker, stopped ? 'walker-1' : (Math.floor(t * 3) % 2 ? 'walker-1' : 'walker-2'), ws.x, ws.y, stopped ? car.x - ws.x : -ws.d.x, par, stopped ? 0 : Math.abs(Math.sin(t * 3 * Math.PI)) * .02);
@@ -565,7 +568,7 @@ function frame(dt) {
 }
 return {
   frame, resize,
-  onHorn() { honkT = 2.2; return false; },   // they look up; the page plays the horn itself
+  onHorn() { honkT = 2.2; if (dog.state === 'sit') { barkT = 1.4; bark(); } return false; },   // they look up; the page plays the horn itself
   dispose() { disposeScene(scene); delete window.__cl; },
 };
 }
