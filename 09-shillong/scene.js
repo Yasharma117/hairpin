@@ -1,8 +1,8 @@
 // Shillong: the truck that gave you a lift parks at the viewpoint above the city. The engine goes off and ticks as it cools;
 // the passenger signs off; a shooting star crosses (hold while it's up to bank the wish); the quote sets itself on torn paper.
 import * as THREE from 'three';
-import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, disposeScene, Stage } from '../shared/kit.js';
-import { SHILLONG_PLACEHOLDER, FIGURE } from '../shared/style.js';
+import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, disposeScene, Stage, paintFigure } from '../shared/kit.js';
+import { SHILLONG_PLACEHOLDER, FIGURE, PALETTE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 export const assets = ['../08-edge-scene/sprites/truck-lit.png', '../08-edge-scene/sprites/truck-dark.png'];
@@ -123,7 +123,7 @@ const bg = stage.mesh(new THREE.ShaderMaterial({
 scene.add(bg);
 
 /* ---------- the two of us at the railing, seen from behind ---------- */
-const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(c); };
+const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(paintFigure(c, PALETTE.ink, 3)); };   // painted to match, with the thin line
 const back = (fill, extra) => cutout(200, 240, c => {
   const shape = (dx, dy) => {
     c.beginPath(); c.moveTo(18 + dx, 240); c.bezierCurveTo(14 + dx, 150 + dy, 30 + dx, 108 + dy, 100 + dx, 104 + dy); c.bezierCurveTo(170 + dx, 108 + dy, 186 + dx, 150 + dy, 182 + dx, 240); c.fill();

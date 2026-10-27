@@ -2,7 +2,7 @@
 // Hover or focus shows a person's tagline and quip; a click (or Enter) gives them the lift.
 import * as THREE from 'three';
 import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, makeTaxi, roster, pick, disposeScene } from '../shared/kit.js';
-import { Stage } from '../shared/kit.js';
+import { Stage, keyLight, paintFigure } from '../shared/kit.js';
 import { PALETTE, FIGURE, UTIL } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
@@ -150,7 +150,7 @@ export async function load(ctx) {
   const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
   people.forEach((p, i) => {
     p.pose = POSES[i] || (i % 3 ? 'flag' : 'stand');
-    p.sprite = stands[i]; const src = p.sprite || standIn(p.pose, i);
+    p.sprite = stands[i]; const src = p.sprite || paintFigure(standIn(p.pose, i), PALETTE.ink, 2.5);
     p.aspect = src.width / src.height;
     p.mat = pMat(tex(src)); p.m = new THREE.Mesh(footGeo, p.mat); p.m.frustumCulled = false; scene.add(p.m);
     p.sh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: POOL, color: UTIL.shadow, transparent: true, opacity: .45, depthWrite: false })); scene.add(p.sh);
@@ -207,6 +207,7 @@ export async function load(ctx) {
     taxiX = viewL + 70 + viewW * .05;   // the taxi, nosed into the left of the shot (inside the push-in)
     stage.place(taxi.jeep, taxiX, .775 * IH, 58, stage.depthAt(taxiX, .79 * IH));
     U.uHead.value.set(taxiX + 100, .755 * IH);
+    keyLight(taxi.jeepMat, camera, taxi.jeep.position, stage.toWorld(.165 * IW, .6 * IH, stage.depthAt(.165 * IW, .66 * IH), new THREE.Vector3()), .55);   // the stall's bulb
     layout();
   }
 

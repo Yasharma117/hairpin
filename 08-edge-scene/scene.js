@@ -2,8 +2,8 @@
 // the doors, sitting on the lip, the story wiping to the same cliff decades ago, him in ink with the ember, the flick,
 // the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
 import * as THREE from 'three';
-import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene, Stage } from '../shared/kit.js';
-import { FIGURE } from '../shared/style.js';
+import { clamp, lerp, damp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, LIVERY, passenger, line, disposeScene, Stage, keyLight, paintFigure } from '../shared/kit.js';
+import { FIGURE, PALETTE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const SPRITES = ['ghost-1', 'ghost-2', 'then-car', 'then-pair', 'truck-lit', 'truck-dark'];
@@ -112,7 +112,7 @@ jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new T
 scene.add(jeep);
 
 /* ---------- the two of us, him, the ember ---------- */
-const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(c); };
+const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(paintFigure(c, PALETTE.ink, 3)); };   // painted to match, with the thin line
 const QUAD = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
 const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);   // origin at the bottom edge, where they sit
 // placeholder silhouettes, seen from behind
@@ -355,6 +355,8 @@ function frame(dt0) {
   // headlights: from the nose, wherever the nose now points
   const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
   U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
+  // the warm key: the cloud its own beams light up, ahead and below (the truck's lights, once it comes)
+  keyLight(jeepMat, camera, jeep.position, truck.visible ? truck.position : stage.toWorld(a[0] + 300, a[1] + 160, 0, v2), truck.visible ? .9 : .45);
   if (truck.visible) {   // the truck rolls in round the bend and stops; now its headlights are the light
     const k = phase === 'truck' ? 1 - Math.pow(1 - clamp(since / 5, 0, 1), 2.2) : 1, x = lerp(TRUCK.from, TRUCK.to, k);
     stage.place(truck, x, TRUCK.y - (k < 1 ? Math.sin(t * 9) * .8 : 0), [truckW, TRUCK.h], stage.depthAt(clamp(x, 0, IW), TRUCK.y));

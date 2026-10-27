@@ -1,7 +1,7 @@
 // The climb: painted hills, the headlight reveal, wind in the grass, cows, a dog that chases, a walker, the woman with the basket.
 // Hold to drive faster; the horn makes them look up.
 import * as THREE from 'three';
-import { disposeScene, makeTaxi, colorize, Stage, loadImg as loadImage } from '../shared/kit.js';
+import { disposeScene, makeTaxi, colorize, Stage, loadImg as loadImage, keyLight } from '../shared/kit.js';
 import { CLIMB_STANDINS as C } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
@@ -319,7 +319,7 @@ basket.home = new THREE.Vector2(640, 578); basket.face = new THREE.Vector2(0, 1)
 const beings = [...cows, dog, walker, basket];
 for (const b of beings) b.R.visible = false;  // placeholders: replaced by painted cut-outs
 let honkT = 0, lapDogDone = false;
-const ZERO = new THREE.Vector2();
+const ZERO = new THREE.Vector2(), KEY_TO = new THREE.Vector3();
 const tiltQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42), yawQ = new THREE.Quaternion();
 function place(c, x, y, f, par) {
   const o = par(y), sz = sizeAt(y);
@@ -551,7 +551,9 @@ function frame(dt) {
   U.uDir.value.copy(dir);
   U.uScale.value = sc;
   let Lj = .25; for (const L of LAMPS) Lj += Math.max(0, 1 - Math.hypot(p.x - L.x, (p.y - L.y) * 2.4) / 170) * 1.1;
-  jeepMat.uniforms.uL.value = clamp(Lj, .25, 1.2);
+  // the warm key: the nearest street lamp's bulb
+  const lamp = LAMPS.reduce((a, b) => Math.hypot(a.x - p.x, a.y - p.y) < Math.hypot(b.x - p.x, b.y - p.y) ? a : b);
+  keyLight(jeepMat, camera, jeep.position, stage.toWorld(lamp.x, lamp.y - 150, stage.depthAt(lamp.x, lamp.y), KEY_TO), clamp(Lj, .25, 1.2));
   ctx.ink.uniforms.uJeepScale.value = sc; ctx.ink.uniforms.uTime.value = U.uTime.value;
   // subtitles
   const next = LINES.findIndex(([at], i) => i > lineIdx && u >= at);

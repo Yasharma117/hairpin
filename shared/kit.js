@@ -1,6 +1,6 @@
 // Shared by every scene: small helpers, the stroke map, the taxi, its ink outline, and the passenger.
 import * as THREE from 'three';
-import { LIVERY, TAXI, UTIL } from './style.js';
+import { LIVERY, TAXI, UTIL, GLSL_PALETTE } from './style.js';
 
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -35,30 +35,43 @@ export function colorize(g, hex, emit = 0) {
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
 }
 export function makeTaxi(uMode) {
+  // Painted, not flat-shaded (STYLE.md): three-tone cel shading, a warm key from the nearest real light (uKey: its direction
+  // in view space; uL: how strong), cool navy ambient, a moonlit rim along the top edges, and a brush-stroke texture that also
+  // breaks up the band edges so they read as painted.
   const jeepMat = new THREE.ShaderMaterial({
-    uniforms: { uL: { value: .3 }, uMode },
+    uniforms: { uL: { value: .3 }, uKey: { value: new THREE.Vector3(-.4, .7, .6).normalize() }, uMode },
     vertexShader: /* glsl */`
       attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
       void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
-    fragmentShader: /* glsl */`
-      uniform float uL, uMode; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+    fragmentShader: NOISE + GLSL_PALETTE + /* glsl */`
+      uniform float uL, uMode; uniform vec3 uKey; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
       void main(){
         vec3 n = normalize(vN);
-        if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }
-        float k = dot(n, normalize(vec3(-.4, .7, .6)));
-        float lit = step(.15, k * (.45 + uL)) * clamp(uL, .25, 1.);
-        if (uMode > 1.5) lit = step(-.25, k);       // lit painting: the car in full daylight colour
-        else if (uMode > .5) lit = 0.;             // dark painting: the car fully in night tones
-        vec3 col = mix(vC * vec3(.30, .34, .52), vC * vec3(1.03, .96, .86), lit);
-        col += vec3(.05, .06, .1) * step(.72, n.y);
-        col += vec3(.035, .04, .06) + vec3(.09, .11, .18) * smoothstep(.45, .8, 1. - abs(n.z));
-        if (vE > 1.5) {
-          float streak = step(.8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2));
-          col = mix(vec3(.07, .09, .15), vec3(.36, .43, .56), streak * .55 + step(.55, n.y) * .18 + lit * .12);
+        if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }   // its own lamps
+        // brush: long strokes along the body, used to jitter the bands and to texture the paint
+        float brush = vn2(vec2(vP.x * 9. + vP.z * 3., vP.y * 34.)) * .7 + vn2(vec2(vP.x * 23., vP.y * 70. + vP.z * 11.)) * .3;
+        float k = dot(n, normalize(uKey)) + (brush - .5) * .35;
+        float key = clamp(uL, .2, 1.2);
+        // three tones: shadow, mid, lit
+        float mid = smoothstep(-.12, -.04, k), lit = smoothstep(.38, .46, k) * smoothstep(.15, .5, key);
+        if (uMode > 1.5) { mid = 1.; lit = smoothstep(-.1, 0., k); } else if (uMode > .5) { lit = 0.; }
+        vec3 shade = vC * COOL_AMBIENT + C_NIGHT * .5;
+        vec3 midC = mix(vC * COOL_AMBIENT * 1.35 + C_RIDGE * .18, vC * WARM_KEY * .72 + C_AMBER * .05, clamp(key * .6, 0., 1.));
+        vec3 litC = vC * WARM_KEY * (.5 + key * .3) + C_AMBER * .035 * key;
+        vec3 col = mix(mix(shade, midC, mid), litC, lit);
+        // the moon on the top edges
+        float rim = smoothstep(.55, .92, 1. - abs(n.z)) * smoothstep(-.1, .5, n.y);
+        col += C_CLOUD * .35 * rim * (1. - lit * .6);
+        if (vE > 1.5) {   // glass: dark, with a painted streak of reflected sky
+          float streak = smoothstep(.72, .8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2 + brush * .15));
+          col = mix(C_NIGHT * 1.2, C_CLOUD * .85, streak * .5 + step(.55, n.y) * .2 + lit * .1);
         }
+        col *= .84 + brush * .3;   // the paint isn't flat
+        col *= mix(.82, 1.06, smoothstep(-1.7, 1.7, vP.x + vP.y * .6));   // and each panel falls off a little, front to back, like a painted shape
         gl_FragColor = vec4(col, 1.);
       }`,
   });
+
 
   // jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
   const PIVOT = new THREE.Vector3(.55, .2, 0);
@@ -154,13 +167,13 @@ export class Ink {
           // only near the taxi: the boiling line and the colour printed a touch out of register
           if (all(greaterThan(vUv, uBox.xy)) && all(lessThan(vUv, uBox.zw))) {
             float frame = floor(uTime * 8.) * uBoil;
-            float base = max(1.6, uRes.y / 520.) * mix(1., 1.8, uJeepScale);
+            float base = max(1.2, uRes.y / 700.) * mix(1., 1.5, uJeepScale);   // thin (STYLE.md: a thin, clean line)
             vec2 w1 = (vec2(vn2(vUv * 45. + frame * 3.1), vn2(vUv * 45. + 17. + frame * 5.3)) - .5) * 2.2 * PX * (.4 + uBoil);
             float e1 = edgeAt(vUv + w1, base * (.5 + 1.1 * vn2(vUv * 60. + 3.)));
             vec2 w2 = (vec2(vn2(vUv * 11. + 40. + frame * 2.), vn2(vUv * 11. + 90. + frame * 1.7)) - .5) * 10. * PX;
-            float e2 = edgeAt(vUv + w2, base * .55) * step(.42, vn2(vUv * 26. + frame * 1.3));
-            float ink = max(e1 * step(.14, vn2(vUv * 130. + frame)), e2 * .85);
-            vec2 sh = vec2(2.6, -2.1) * PX * mix(.8, 1.7, uJeepScale);
+            float e2 = edgeAt(vUv + w2, base * .5) * step(.55, vn2(vUv * 26. + frame * 1.3));
+            float ink = max(e1, e2 * .45);   // clean: one confident line, a faint second pass where the sketch went over it
+            vec2 sh = vec2(1.6, -1.3) * PX * mix(.8, 1.4, uJeepScale);
             if (maskAt(vUv - sh) > .5) col = texture2D(tColor, vUv - sh).rgb;
             col = mix(col, vec3(.07, .075, .1), ink);
           }
@@ -314,4 +327,29 @@ export class Stage {
     this.cam.rotation.set(m.pitch, m.yaw, 0);
     this.cam.updateMatrixWorld();
   }
+}
+
+// point the taxi's warm key at a real light: from (the taxi) and to (the light) in world space; strength 0..1.2
+const _k = new THREE.Vector3();
+export function keyLight(jeepMat, camera, from, to, strength) {
+  _k.copy(to).sub(from).normalize().transformDirection(camera.matrixWorldInverse);
+  jeepMat.uniforms.uKey.value.copy(_k); jeepMat.uniforms.uL.value = strength;
+}
+
+// placeholder figures, painted to match (STYLE.md): a flat two-tone shade (lit from the upper left) and a thin ink outline
+export function paintFigure(src, ink, w = 2) {
+  const W = src.width, H = src.height, pad = Math.ceil(w) + 1;
+  const tint = mkCanvas(W, H), tx = tint.getContext('2d');   // the silhouette, in ink
+  tx.drawImage(src, 0, 0); tx.globalCompositeOperation = 'source-in'; tx.fillStyle = ink; tx.fillRect(0, 0, W, H);
+  const out = mkCanvas(W, H), x = out.getContext('2d');
+  for (let a = 0; a < 12; a++) x.drawImage(tint, Math.cos(a / 12 * Math.PI * 2) * w, Math.sin(a / 12 * Math.PI * 2) * w);   // the line, all round
+  x.drawImage(src, 0, 0);
+  // shade: the side away from the light a step darker, cut on a soft diagonal like a painted plane change
+  x.globalCompositeOperation = 'source-atop';
+  const g = x.createLinearGradient(W * .35, 0, W * .75, H * .3);
+  const shade = k => UTIL.black + Math.round(k * 255).toString(16).padStart(2, '0');   // black at strength k
+  g.addColorStop(0, shade(0)); g.addColorStop(.48, shade(0)); g.addColorStop(.52, shade(.28)); g.addColorStop(1, shade(.34));
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.globalCompositeOperation = 'source-over';
+  return out;
 }

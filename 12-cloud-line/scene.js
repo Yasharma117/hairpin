@@ -1,6 +1,6 @@
 // The cloud line: seen from behind, the taxi drives up into the wall of cloud until it whites out. Hold to drive faster.
 import * as THREE from 'three';
-import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene, Stage } from '../shared/kit.js';
+import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene, Stage, keyLight } from '../shared/kit.js';
 
 const at = f => new URL(f, import.meta.url).href;
 export const assets = ['cloudline-lit.jpg', 'cloudline-dark.jpg', 'depth.png'];
@@ -64,7 +64,7 @@ const bg = stage.mesh(new THREE.ShaderMaterial({
 }));
 scene.add(bg);
 
-const { jeep, body, PIVOT } = makeTaxi(U.uMode);
+const { jeep, body, PIVOT, jeepMat } = makeTaxi(U.uMode);
 scene.add(jeep);
 ctx.bed({ engine: 1, wind: .6 });
 
@@ -105,6 +105,7 @@ function frame(dt) {
   jeep.updateMatrixWorld(true);
   const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
   U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
+  keyLight(jeepMat, camera, jeep.position, stage.toWorld(b[0], b[1] - 80, 0, v2), .35);   // the fog its beams light up, ahead
   U.uScale.value = .3 + sc / 260;   // the beam's reach shrinks with distance too
   ctx.ink.uniforms.uJeepScale.value = clamp(sc / 190, .2, 1); ctx.ink.uniforms.uTime.value = t;
   U.uFog.value = Math.pow(clamp((u - .25) / .7, 0, 1), 1.3) * .95;

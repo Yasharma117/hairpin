@@ -1,7 +1,7 @@
 // Nongpoh: the taxi crosses the rainy roadside of pineapple stalls; lanterns flicker and streak the wet road.
 // The grandfather line is said here, once, and dropped. Hold to drive faster.
 import * as THREE from 'three';
-import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene, Stage } from '../shared/kit.js';
+import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene, Stage, keyLight } from '../shared/kit.js';
 
 const at = f => new URL(f, import.meta.url).href;
 export const assets = ['nongpoh-lit.jpg', 'nongpoh-dark.jpg', 'depth.png'];
@@ -167,6 +167,9 @@ function frame(dt) {
   jeep.updateMatrixWorld(true);
   const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
   U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
+  // the warm key: the nearest lantern, and how close it is
+  const ln = U.uLamp.value.reduce((p, q) => Math.abs(p.x - x) < Math.abs(q.x - x) ? p : q), near = 1 - clamp(Math.abs(ln.x - x) / 500, 0, 1);
+  keyLight(jeepMat, camera, jeep.position, stage.toWorld(ln.x, ln.y, stage.depthAt(ln.x, ln.y), v2), .3 + .7 * near);
   // the camera keeps the taxi a little left of centre, so you see what's coming
   // a translation from the rest pose: the stalls and the forest behind them slide at different speeds
   const mW = viewW * .08;
