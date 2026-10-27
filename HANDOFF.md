@@ -85,3 +85,8 @@ only; wave has no back view; no line-only ghost style.
   skips), rpm follows hold, Jorabat tap picks objects (only Drive/Enter leaves; phones pan between objects), touch HORN
   button in index.html. Open: Jorabat object lines are empty (Yash's); phone left-tap wraps from first to last object;
   far people murky in the dark; the walker still jumps back up the road at the end of his stretch.
+- Phase 2 S3 (Shillong) **done**: pixel tree/petals/star on the frame grid, seated pair with a warm town rim, quote boxes,
+  hint with a hold fill, 9 s star window, engine off. Needs: folk heads-up frame for the star, a built-in back-view rim;
+  Ink smoothing blurs low-contrast pixel art (skip "already pixel art"); a pale patch where the beam hits the tree;
+  "Again" sits between the truck and the pair.
+- **Phase 2 committed** on `pixel`. Phase 3 (critics vs pocket.design, then fixes) next.
