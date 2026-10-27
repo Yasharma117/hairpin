@@ -1,12 +1,12 @@
 // The climb: painted hills, the headlight reveal, wind in the grass, cows, a dog that chases, a walker, the woman with the basket.
 // Hold to drive faster; the horn makes them look up.
 import * as THREE from 'three';
-import { disposeScene, makeTaxi, colorize } from '../shared/kit.js';
+import { disposeScene, makeTaxi, colorize, Stage, loadImg as loadImage } from '../shared/kit.js';
 import { CLIMB_STANDINS as C } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'];
-export const assets = ['lit.jpg', 'dark.jpg', 'strokes.jpg', ...SPRITES.flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`])];
+export const assets = ['lit.jpg', 'dark.jpg', 'strokes.jpg', 'depth.png', ...SPRITES.flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`])];
 
 export async function load(ctx) {
 const { renderer, canvas, layer, input } = ctx;
@@ -22,6 +22,7 @@ const loader = new THREE.TextureLoader();
 const load = url => new Promise((res, rej) => loader.load(url, t => { t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; res(t); }, undefined, rej));
 let tLit, tDark, tStroke;
 [tLit, tDark, tStroke] = await Promise.all(['lit.jpg', 'dark.jpg', 'strokes.jpg'].map(f => load(at(f))));
+const stage = new Stage({ W: IW, H: IH, depth: await loadImage(at('depth.png')), k: .2 });   // gentle: the camera travels a long way here
 
 /* ---------- shared light model, in painting pixels ---------- */
 const LAMPS = [new THREE.Vector2(560, 600), new THREE.Vector2(1180, 520)];
@@ -56,11 +57,9 @@ float reveal(vec2 p, float L){
 
 /* ---------- the painting ---------- */
 const scene = new THREE.Scene();
-const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
-camera.position.z = 500;
+const camera = stage.cam;
 const bgMat = new THREE.ShaderMaterial({
   uniforms: U,
-  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: LIGHT + /* glsl */`
     varying vec2 vPx;
     void main(){
@@ -87,8 +86,7 @@ const bgMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(col, 1.);
     }`,
 });
-const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), bgMat);
-bg.position.set(IW / 2, -IH / 2, -400);
+const bg = stage.mesh(bgMat);   // the painting, 2.5D
 scene.add(bg);
 
 /* ---------- the road: a switchback laid over the slopes ---------- */
@@ -114,11 +112,10 @@ const roadW = y => lerp(12, 64, depthN(y));
   g.setAttribute('road', new THREE.Float32BufferAttribute(A, 2));
   g.setIndex(I);
   const m = new THREE.ShaderMaterial({
-    uniforms: U, transparent: false, side: THREE.DoubleSide,
-    vertexShader: /* glsl */`
-      uniform vec2 uPar; attribute vec2 road; varying vec2 vPx; varying vec2 vRoad;
-      float depthN(float y){ return clamp((y - 300.) / 587., 0., 1.); }
-      void main(){ vPx = position.xy; vRoad = road; vec2 s = position.xy - uPar * (1. - depthN(position.y)); gl_Position = projectionMatrix * modelViewMatrix * vec4(s.x, -s.y, -300., 1.); }`,
+    uniforms: { ...U, ...stage.uniforms }, transparent: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false,
+    vertexShader: Stage.GLSL + /* glsl */`
+      uniform vec2 uImg; attribute vec2 road; varying vec2 vPx; varying vec2 vRoad;
+      void main(){ vPx = position.xy; vRoad = road; gl_Position = projectionMatrix * viewMatrix * vec4(stageAt(vPx, stageDepth(vPx, uImg)), 1.); }`,
     fragmentShader: LIGHT + /* glsl */`
       varying vec2 vPx; varying vec2 vRoad;
       void main(){
@@ -136,7 +133,7 @@ const roadW = y => lerp(12, 64, depthN(y));
         gl_FragColor = vec4(col, 1.);
       }`,
   });
-  const road = new THREE.Mesh(g, m); road.frustumCulled = false; scene.add(road);
+  const road = new THREE.Mesh(g, m); road.frustumCulled = false; road.renderOrder = -9; scene.add(road);
 }
 
 
@@ -177,9 +174,9 @@ const roadW = y => lerp(12, 64, depthN(y));
   g.setAttribute('aShape', new THREE.InstancedBufferAttribute(new Float32Array(shape), 3));
   g.instanceCount = base.length / 2;
   const m = new THREE.ShaderMaterial({
-    uniforms: U, side: THREE.DoubleSide,
-    vertexShader: /* glsl */`
-      uniform vec2 uPar; uniform float uTime;
+    uniforms: { ...U, ...stage.uniforms }, side: THREE.DoubleSide,
+    vertexShader: Stage.GLSL + /* glsl */`
+      uniform vec2 uImg; uniform float uTime;
       attribute vec2 aBase; attribute vec3 aLit, aDark, aShape;
       varying vec2 vB; varying vec3 vLit, vDark; varying float vV, vU;
       float depthN(float y){ return clamp((y - 300.) / 587., 0., 1.); }
@@ -193,9 +190,9 @@ const roadW = y => lerp(12, 64, depthN(y));
         float w = (vn2(vec2(aBase.x * .02 - uTime * 1.3, aBase.y * .05)) - .5) * .8 + gust * .9;
         float lean = aShape.z + w * 1.1;
         vec2 p = aBase + vec2(position.x * wid * (1. - v * .9) * (1. - .3 * v * v) + lean * len * v * v, -v * len * (1. - .15 * abs(lean)));
-        p -= uPar * (1. - n);
         vB = aBase; vLit = aLit; vDark = aDark; vV = v; vU = position.x;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p.x, -p.y, aBase.y * .2 - .5, 1.);
+        float d = stageDepth(aBase, uImg);   // the whole blade at its root's depth, so it doesn't bend across a step
+        gl_Position = projectionMatrix * viewMatrix * vec4(stageAt(p, d) + vec3(0., 0., v * .5), 1.);
       }`,
     fragmentShader: LIGHT + /* glsl */`
       varying vec2 vB; varying vec3 vLit, vDark; varying float vV, vU;
@@ -219,7 +216,7 @@ for (const L of LAMPS) {
   arm.position.set(L.x + 20 * s, -(L.y - 150 * s - 12 * s), -200); lampGroup.add(arm);
   const bulb = new THREE.Mesh(new THREE.BoxGeometry(14 * s, 8 * s, 2), flatMat(C.bulb));
   bulb.position.set(L.x + 2 * s, -(L.y - 146 * s - 12 * s), -199); lampGroup.add(bulb);
-  pole.userData.base = pole.position.clone(); arm.userData.base = arm.position.clone(); bulb.userData.base = bulb.position.clone();
+  for (const o of [pole, arm, bulb]) { const px = o.position.x, py = -o.position.y; stage.place(o, px, py, 1, stage.depthAt(L.x + 40 * s, L.y)); o.renderOrder = -8; }
   pole.userData.y = arm.userData.y = bulb.userData.y = L.y;
 }
 
@@ -235,6 +232,7 @@ function resize(w, h) {
   const Z = ZOOM;
   if (aspect > IW / IH) { baseW = IW; baseH = IW / aspect; } else { baseH = IH; baseW = IH * aspect; }
   viewW = baseW / (Z * zoomK); viewH = baseH / (Z * zoomK);
+  stage.view(IW / 2, IH / 2, baseH / Z, aspect);   // the rest pose; following the taxi moves the camera from here
 }
 
 /* ---------- the lines along the climb ---------- */
@@ -321,6 +319,7 @@ basket.home = new THREE.Vector2(640, 578); basket.face = new THREE.Vector2(0, 1)
 const beings = [...cows, dog, walker, basket];
 for (const b of beings) b.R.visible = false;  // placeholders: replaced by painted cut-outs
 let honkT = 0, lapDogDone = false;
+const ZERO = new THREE.Vector2();
 const tiltQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42), yawQ = new THREE.Quaternion();
 function place(c, x, y, f, par) {
   const o = par(y), sz = sizeAt(y);
@@ -463,8 +462,7 @@ function showFrame(a, name, x, y, faceX, par, bob = 0) {
   }
   const o = par(y), sz = sizeAt(y), W = f.h * f.aspect * sz, H = f.h * sz;
   const bx = x - o.x, by = -(y - o.y), z = y * .2 + 1 + (carY !== null && y > carY + 4 ? 80 : 0);   // in front of the taxi when nearer the camera
-  a.m.position.set(bx, by + bob * sz - H * .03, z + .02);
-  a.m.scale.set(W, H, 1);
+  const dd = stage.depthAt(x, y), ss = stage.place(a.m, x, y - bob * sz + H * .03, [W, H], dd);
   const flip = faceX >= 0 ? 1 : -1;
   u.uFlip.value = flip; a.shMat.uniforms.uFlip.value = flip;
   const lc = lightCPU(x, y);
@@ -474,12 +472,11 @@ function showFrame(a, name, x, y, faceX, par, bob = 0) {
   // headlight shadow: from the lamp position through the feet, stretched along the ground
   const h = U.uHead.value, dx = x - h.x, dy = y - h.y, dl = Math.hypot(dx, dy) || 1;
   const len = H * clamp(260 / dl, .7, 2.2);
-  a.sh.position.set(bx, by - H * .02, z + .01);
+  stage.place(a.sh, x, y + H * .02, 1, dd);
   a.shMat.uniforms.uW.value = W;
   a.shMat.uniforms.uShear.value.set(dx / dl * len, -dy / dl * len * .42);
   a.shMat.uniforms.uOp.value = U.uMode.value < .5 ? clamp(lc.cone * 1.2, 0, .62) : 0;
-  a.bl.position.set(bx, by, z);
-  a.bl.scale.set(W * .95, W * .2, 1);
+  stage.place(a.bl, x, y, [W * .95, W * .2], dd);
   a.blMat.uniforms.uOp.value = U.uMode.value > 1.5 ? .35 : .5;
   return true;
 }
@@ -534,18 +531,17 @@ function frame(dt) {
   zoomK = lerp(zoomK, dogMoment ? 1.55 : 1, damp(dogMoment ? 1.6 : .9, dt));
   viewW = baseW / (ZOOM * zoomK); viewH = baseH / (ZOOM * zoomK);
   const fx = dogMoment ? (p.x + dog.pos.x) / 2 : p.x, fy = dogMoment ? (p.y + dog.pos.y) / 2 - 20 : p.y - 30;
-  camX = lerp(camX, clamp(fx, viewW / 2, IW - viewW / 2), damp(1.4, dt));
-  camY = lerp(camY, clamp(fy, viewH / 2, IH - viewH / 2), damp(1.4, dt));
-  camera.left = camX - viewW / 2; camera.right = camX + viewW / 2; camera.top = -(camY - viewH / 2); camera.bottom = -(camY + viewH / 2);
-  camera.updateProjectionMatrix();
-  U.uPar.value.set((camX - IW / 2) * .07, (camY - IH / 2) * .05);
-  const par = (y) => U.uPar.value.clone().multiplyScalar(1 - depthN(y));
-  for (const o of lampGroup.children) { const o2 = par(o.userData.y); o.position.set(o.userData.base.x - o2.x, o.userData.base.y + o2.y, o.userData.base.z); }
+  const mW = viewW * .08, mH = viewH * .1;   // keep clear of the edges: the near ground moves further than the frame
+  camX = lerp(camX, clamp(fx, viewW / 2 + mW, IW - viewW / 2 - mW), damp(1.4, dt));
+  camY = lerp(camY, clamp(fy, viewH / 2 + mH, IH - viewH / 2 - mH), damp(1.4, dt));
+  // the camera follows the taxi: a translation from the rest pose, so the hills slide past each other (real parallax), and a dolly for the dog
+  Object.assign(stage.move, { dx: camX - IW / 2, dy: camY - IH / 2, dolly: 1 - 1 / zoomK });
+  stage.apply();
+  const par = () => ZERO;   // the old fake parallax: the depth does it now
   // jeep pose: size by depth, yaw from the road's direction on the ground
   const off = par(p.y);
   const size = 34 * sc;
-  jeep.position.set(p.x - off.x, -(p.y - off.y) + 4 * sc, p.y * .2 + 2);
-  jeep.scale.setScalar(size);
+  stage.place(jeep, p.x, p.y - 4 * sc, size, stage.depthAt(p.x, p.y));
   const yaw = Math.atan2(-dir.y * 2.4, dir.x);
   q1.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42); q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
   jeep.quaternion.copy(q1).multiply(q2);

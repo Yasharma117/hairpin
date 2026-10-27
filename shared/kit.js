@@ -258,6 +258,11 @@ export class Stage {
       vec3 P = uRest + (vec3(vPx.x, -vPx.y, 0.) - uRest) * (1. - uK * d);
       gl_Position = projectionMatrix * viewMatrix * vec4(P, 1.);
     }`;
+  // for other shaders that live in painting px (a road, grass): where a painting point sits in the world
+  static GLSL = /* glsl */`
+    uniform sampler2D tDepth; uniform vec3 uRest; uniform float uK;
+    float stageDepth(vec2 px, vec2 img){ return texture2D(tDepth, vec2(px.x / img.x, 1. - px.y / img.y)).r; }
+    vec3 stageAt(vec2 px, float d){ return uRest + (vec3(px.x, -px.y, 0.) - uRest) * (1. - uK * d); }`;
   // the painting mesh: drawn first, behind everything (its depth would only clip feet)
   mesh(material, segs = [256, 128]) {
     Object.assign(material.uniforms, this.uniforms);
