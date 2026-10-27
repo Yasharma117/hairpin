@@ -19,8 +19,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 [hidden] { display: none !important; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
-.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: min(620px, calc(100% - 32px)); background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); transition: opacity .4s; pointer-events: none; }
-.sub.off { opacity: 0; }
+.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: max-content; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); pointer-events: none; }
+.sub.off { visibility: hidden; }   /* shown solid or not at all: never a see-through strip */
 .sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
 .sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
 .bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 28px); }
@@ -351,6 +351,7 @@ function frame() {
   for (const m of parts) m.material = jeepMat;
   renderer.setRenderTarget(rtColor); renderer.setClearColor(0x10142a, 1); renderer.clear(); renderer.render(scene, camera);
   renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  window.hairpin?.ready();   // first frame drawn: the paper can lift
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

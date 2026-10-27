@@ -10,16 +10,34 @@
   clip-path: polygon(0% 3%, 5% 1%, 11% 3.5%, 18% .5%, 26% 3%, 33% 1%, 41% 4%, 49% .8%, 57% 3.2%, 64% 1%, 72% 3.8%, 80% .6%, 87% 3%, 94% 1.2%, 100% 3.4%, 100% 97%, 94% 99.2%, 87% 96.8%, 80% 99.4%, 72% 96.6%, 64% 99%, 57% 96.8%, 49% 99.2%, 41% 96%, 33% 99%, 26% 97%, 18% 99.5%, 11% 96.5%, 5% 99%, 0% 97%); }
 .hp-tear.up { transform: translateY(-110%); }
 .hp-tear.down { transform: translateY(110%); transition: none; }
-@media (prefers-reduced-motion: reduce) { .hp-tear { transition-duration: .01s; } }`;
+@media (prefers-reduced-motion: reduce) { .hp-tear { transition-duration: .01s; } }`
+    // the painting/boil/hang controls are for us, not viewers: only with ?debug
+    + (new URLSearchParams(location.search).has('debug') ? '' : '.bar [data-mode], .bar #bBoil, .bar label { display: none !important; }');
   document.head.appendChild(style);
   const sheet = document.createElement('div');
   sheet.className = 'hp-tear' + (play ? '' : ' up');
   sheet.setAttribute('aria-hidden', 'true');
-  const mount = () => {
-    document.body.appendChild(sheet);
-    if (play) requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('up')));
+  document.body ? document.body.appendChild(sheet) : addEventListener('DOMContentLoaded', () => document.body.appendChild(sheet));
+  // the sheet stays down until the scene has drawn its first frame (or 8 s, whichever comes first)
+  let shown = !play;
+  function ready() { if (shown) return; shown = true; requestAnimationFrame(() => sheet.classList.add('up')); }
+  if (play) setTimeout(ready, 8000);
+
+  /* ---------- while a scene plays, fetch the next one: its page and its paintings ---------- */
+  const SPR01 = ['cow-graze', 'cow-look', 'dog-sit', 'dog-run-1', 'dog-run-2', 'walker-1', 'walker-2', 'basket'].flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`]);
+  const CHAIN = {
+    '10-jorabat-intro': ['01-cloud-line-scene', ['lit.jpg', 'dark.jpg', 'strokes.jpg', ...SPR01]],
+    '01-cloud-line-scene': ['11-nongpoh', ['nongpoh-lit.jpg', 'nongpoh-dark.jpg']],
+    '11-nongpoh': ['12-cloud-line', ['cloudline-lit.jpg', 'cloudline-dark.jpg']],
+    '12-cloud-line': ['08-edge-scene', ['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg', ...['ghost-1', 'ghost-2', 'then-car', 'then-pair', 'truck-lit', 'truck-dark'].map(n => `sprites/${n}.png`)]],
+    '08-edge-scene': ['09-shillong', []],
   };
-  document.body ? mount() : addEventListener('DOMContentLoaded', mount);
+  const here = location.pathname.split('/').filter(Boolean).pop();
+  if (play && CHAIN[here]) {
+    const [next, assets] = CHAIN[here];
+    const fetchLater = () => ['', ...assets].forEach(a => { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = `../${next}/${a}`; document.head.appendChild(l); });
+    setTimeout(fetchLater, 3000);   // once this scene's own paintings are in
+  }
 
   let leaving = false;
   function tearTo(url) {
@@ -82,5 +100,5 @@
     requestAnimationFrame(tick);
   }
 
-  window.hairpin = { play, tearTo, bed };
+  window.hairpin = { play, tearTo, bed, ready };
 })();

@@ -38,7 +38,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 @media (max-width: 560px) { .hint { display: none; } }
 </style>
 
-<canvas id="c" aria-label="The taxi parked at a viewpoint above Shillong at night, the city lights spread out below; a shooting star crosses"></canvas>
+<canvas id="c" aria-label="The truck that gave you a lift, parked at a viewpoint above Shillong at night, the city lights spread out below; a shooting star crosses"></canvas>
 <div class="tag">HAIRPIN · SCENE 10 · SHILLONG</div>
 <div class="hint">When the star crosses, hold the mouse, the screen or Space to wish</div>
 <div class="quote" id="quote" aria-live="polite"></div>
@@ -47,7 +47,6 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
   <button data-mode="0" aria-pressed="true">Headlights</button>
   <button data-mode="1" aria-pressed="false">Dark painting</button>
   <button data-mode="2" aria-pressed="false">Lit painting</button>
-  <button id="bBoil" aria-pressed="true">Line boil</button>
   <button id="bNext">Turn the engine off</button>
 </div>
 <div id="msg">Loading the paintings…</div>
@@ -146,18 +145,18 @@ float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mi
 const U = {
   tLit: { value: tLit }, tDark: { value: tDark }, tStroke: { value: tStroke },
   uImg: { value: new THREE.Vector2(IW, IH) },
-  uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1 },
+  uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1 }, uHeadI: { value: 1 },
   uMode: { value: 0 }, uTime: { value: 0 },
 };
 const LIGHT = NOISE + /* glsl */`
-uniform vec2 uImg, uHead, uDir; uniform float uScale, uMode, uTime;
+uniform vec2 uImg, uHead, uDir; uniform float uScale, uMode, uTime, uHeadI;
 uniform sampler2D tLit, tDark, tStroke;
 float lightAt(vec2 p){
   vec2 v = p - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
   float range = 560. * uScale;
   float cone = step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
   float spill = 1. - smoothstep(26. * uScale, 120. * uScale, length(v * vec2(1., 2.2)));
-  return cone * 1.5 + spill * 1.1;
+  return cone * 1.5 * uHeadI + spill * 1.1 * max(uHeadI, .15);   // engine off: just the parking light
 }
 vec2 uvOf(vec2 p){ return vec2(p.x / uImg.x, 1. - p.y / uImg.y); }
 float reveal(vec2 p, float L){
@@ -189,146 +188,6 @@ const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMater
 bg.position.set(IW / 2, -IH / 2, -400);
 scene.add(bg);
 
-/* ---------- the taxi: a modified 80s hatchback, painted two-tone, inked ---------- */
-// Not your taxi: that one went over at the cloud line. Same model, another cab, another colour.
-const LIVERY = { body: '#e4dfd2', roof: '#2f5d8a' };
-const jeepMat = new THREE.ShaderMaterial({
-  uniforms: { uL: { value: .3 }, uMode: U.uMode },
-  vertexShader: /* glsl */`
-    attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
-    void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
-  fragmentShader: /* glsl */`
-    uniform float uL, uMode; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
-    void main(){
-      vec3 n = normalize(vN);
-      if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }
-      float k = dot(n, normalize(vec3(-.4, .7, .6)));
-      float lit = step(.15, k * (.45 + uL)) * clamp(uL, .25, 1.);
-      if (uMode > 1.5) lit = step(-.25, k);       // lit painting: the car in full daylight colour
-      else if (uMode > .5) lit = 0.;             // dark painting: the car fully in night tones
-      vec3 col = mix(vC * vec3(.30, .34, .52), vC * vec3(1.03, .96, .86), lit);
-      col += vec3(.05, .06, .1) * step(.72, n.y);
-      col += vec3(.035, .04, .06) + vec3(.09, .11, .18) * smoothstep(.45, .8, 1. - abs(n.z));
-      if (vE > 1.5) {
-        float streak = step(.8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2));
-        col = mix(vec3(.07, .09, .15), vec3(.36, .43, .56), streak * .55 + step(.55, n.y) * .18 + lit * .12);
-      }
-      gl_FragColor = vec4(col, 1.);
-    }`,
-});
-function colorize(g, hex, emit = 0) {
-  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), e = new Float32Array(n).fill(emit);
-  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
-  g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
-}
-// jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
-const PIVOT = new THREE.Vector3(.55, .2, 0);
-const jeep = new THREE.Group(), hang = new THREE.Group(), body = new THREE.Group();
-jeep.add(hang); hang.add(body); hang.position.copy(PIVOT); body.position.copy(PIVOT).negate();
-const parts = [];
-const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}, parent = body) => {
-  geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
-  const m = new THREE.Mesh(colorize(geo, hex, emit), jeepMat); parent.add(m); parts.push(m); return m;
-};
-const extrude = (pts, depth, bevel) => {
-  const sh = new THREE.Shape(); sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
-  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
-  g.translate(0, 0, -depth / 2); return g;
-};
-// lower body: short sloping bonnet, flat sides, near-vertical hatch
-put(extrude([[-1.62, .24], [-1.66, .52], [-1.62, .84], [.95, .88], [1.56, .74], [1.64, .66], [1.64, .3], [1.58, .24]], 1.36, .06), LIVERY.body);
-// cabin: tall glasshouse, slight tumblehome
-put(extrude([[-1.55, .84], [-1.46, 1.34], [-1.38, 1.39], [.4, 1.39], [.5, 1.33], [.96, .88]], 1.18, .045), LIVERY.body);
-put(new THREE.BoxGeometry(1.66, .03, 1.1), LIVERY.roof, { x: -.49, y: 1.445 });
-// glass
-for (const sgn of [-1, 1]) {
-  put(extrude([[-1.38, .93], [-1.32, 1.3], [.37, 1.31], [.84, .93]], .01, .004), '#000000', { z: sgn * .64, emit: 2 });
-  put(new THREE.BoxGeometry(.07, .42, .025), LIVERY.body, { x: -.36, y: 1.12, z: sgn * .65 });
-  put(new THREE.BoxGeometry(.06, .4, .025), LIVERY.body, { x: -1.0, y: 1.12, z: sgn * .65 });
-}
-put(new THREE.BoxGeometry(.02, .6, 1.08), '#000000', { x: .73, y: 1.12, rz: .82, emit: 2 });
-put(new THREE.BoxGeometry(.02, .41, 1.08), '#000000', { x: -1.53, y: 1.12, rz: -.22, emit: 2 });
-// the sound system, visible through the hatch glass
-for (const zz of [-.3, .3]) {
-  put(new THREE.CylinderGeometry(.11, .11, .02, 18), '#2a2b30', { x: -1.56, y: 1.0, z: zz, rz: Math.PI / 2 });
-  put(new THREE.CylinderGeometry(.045, .045, .025, 12), '#6a6d75', { x: -1.565, y: 1.0, z: zz, rz: Math.PI / 2 });
-}
-// lamps, grille, bumpers, yellow commercial plates
-for (const sgn of [-1, 1]) {
-  put(new THREE.BoxGeometry(.03, .14, .3), '#fff6d6', { x: 1.69, y: .62, z: sgn * .46, emit: 1 });
-  put(new THREE.BoxGeometry(.03, .07, .1), '#ffb347', { x: 1.68, y: .49, z: sgn * .6 });
-  put(new THREE.BoxGeometry(.03, .26, .15), '#c8352a', { x: -1.69, y: .66, z: sgn * .58, emit: 1 });
-  put(new THREE.BoxGeometry(.06, .08, .13), LIVERY.body, { x: .86, y: .98, z: sgn * .76 });
-  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: -.36, y: .6, z: sgn * .755 });
-  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: .9, y: .6, z: sgn * .755 });
-  put(new THREE.BoxGeometry(.1, .025, .02), '#8b8f96', { x: -.46, y: .78, z: sgn * .76 });
-}
-put(new THREE.BoxGeometry(.02, .08, .6), '#0d0e10', { x: 1.7, y: .6 });
-put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: 1.69, y: .32 });
-put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: -1.69, y: .32 });
-put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: 1.76, y: .42 });
-put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: -1.76, y: .5 });
-put(new THREE.CylinderGeometry(.006, .006, .75, 4), '#111215', { x: .7, y: 1.25, z: .66, rz: .35 });
-// wider aftermarket tyres sticking out of the arches, dark alloys with a chrome lip
-for (const [x, sgn] of [[1.07, 1], [1.07, -1], [-1.07, 1], [-1.07, -1]]) {
-  put(new THREE.CylinderGeometry(.33, .33, .02, 20), '#0b0c0e', { x, y: .3, z: sgn * .752, rx: Math.PI / 2 });
-  put(new THREE.TorusGeometry(.34, .04, 6, 18, Math.PI), '#0d0e10', { x, y: .3, z: sgn * .76 });
-  put(new THREE.CylinderGeometry(.29, .29, .28, 20), '#121316', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-  put(new THREE.CylinderGeometry(.18, .18, .29, 16), '#4d5158', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-  put(new THREE.TorusGeometry(.18, .016, 6, 20), '#c9ccd1', { x, y: .29, z: sgn * .867 });
-  put(new THREE.CylinderGeometry(.05, .05, .3, 8), '#24262a', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
-}
-/* ---------- ink + paper rim pass around the taxi ---------- */
-const infoJeep = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying vec3 vN; void main(){ gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
-const rtColor = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
-const rtInfo = new THREE.WebGLRenderTarget(1, 1);
-const post = new THREE.ShaderMaterial({
-  uniforms: { tColor: { value: rtColor.texture }, tInfo: { value: rtInfo.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: U.uTime, uBoil: { value: 1 }, uJeepScale: { value: .7 } },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-  fragmentShader: NOISE + /* glsl */`
-    uniform sampler2D tColor, tInfo; uniform vec2 uRes; uniform float uTime, uBoil, uJeepScale; varying vec2 vUv;
-    float maskAt(vec2 uv){ return texture2D(tInfo, uv).a; }
-    vec2 PX;
-    float edgeAt(vec2 uv, float r){
-      vec4 c = texture2D(tInfo, uv); float ring = 0., dn = 0.;
-      for (int i = 0; i < 8; i++) {
-        float a = float(i) * .785398; vec4 s = texture2D(tInfo, uv + vec2(cos(a), sin(a)) * r * PX);
-        ring = max(ring, s.a); if (s.a > .5 && c.a > .5) dn = max(dn, length(s.rgb - c.rgb));
-      }
-      return max(step(.5, ring) * (1. - step(.5, c.a)), step(.4, dn));
-    }
-    void main(){
-      PX = 1. / uRes;
-      float frame = floor(uTime * 8.) * uBoil;
-      float base = max(1.6, uRes.y / 520.) * mix(1., 1.8, uJeepScale);
-      // main stroke: wobbles a little each frame, pressure swells and thins along its length
-      vec2 w1 = (vec2(vn2(vUv * 45. + frame * 3.1), vn2(vUv * 45. + 17. + frame * 5.3)) - .5) * 2.2 * PX * (.4 + uBoil);
-      float e1 = edgeAt(vUv + w1, base * (.5 + 1.1 * vn2(vUv * 60. + 3.)));
-      // a second, looser pass drawn slightly off the first, the way a sketch gets gone over twice
-      vec2 w2 = (vec2(vn2(vUv * 11. + 40. + frame * 2.), vn2(vUv * 11. + 90. + frame * 1.7)) - .5) * 10. * PX;
-      float e2 = edgeAt(vUv + w2, base * .55) * step(.42, vn2(vUv * 26. + frame * 1.3));
-      float ink = max(e1 * step(.14, vn2(vUv * 130. + frame)), e2 * .85);
-      // flat colour printed a touch out of register with the line
-      vec2 sh = vec2(2.6, -2.1) * PX * mix(.8, 1.7, uJeepScale);
-      vec3 col = texture2D(tColor, vUv).rgb;
-      if (maskAt(vUv - sh) > .5) col = texture2D(tColor, vUv - sh).rgb;
-      col = mix(col, vec3(.07, .075, .1), ink);
-      col += (h12(gl_FragCoord.xy) - .5) * .03;
-      vec2 q = vUv - .5; col *= 1. - dot(q, q) * .4;
-      gl_FragColor = vec4(col, 1.);
-    }`,
-  depthTest: false, depthWrite: false,
-});
-const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
-
-// parked at the viewpoint, nose to the railing, the town ahead
-const CAR = [.27 * IW, .85 * IH];
-jeep.position.set(CAR[0], -CAR[1], 150);
-jeep.scale.setScalar(78);
-jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .3));
-scene.add(jeep);
-
 /* ---------- the two of us at the railing, seen from behind ---------- */
 const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(c); };
 const back = (fill, extra) => cutout(200, 240, c => {
@@ -345,6 +204,18 @@ const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
   const y = RAIL * IH + 30, h = 150;
   m.position.set(x * IW, -y, 250); m.scale.set(h * 200 / 240, h, 1); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
 });
+
+/* ---------- the truck that gave you a lift, parked nose to the railing ---------- */
+const [tkL, tkD] = await Promise.all(['truck-lit', 'truck-dark'].map(n => loadImg(`../08-edge-scene/sprites/${n}.png`)));
+const truckMat = new THREE.ShaderMaterial({
+  uniforms: { tL: { value: tex(tkL) }, tD: { value: tex(tkD) }, uL: { value: .2 }, uMode: U.uMode }, transparent: true, depthWrite: false,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: 'uniform sampler2D tL, tD; uniform float uL, uMode; varying vec2 vUv; void main(){ vec4 l = texture2D(tL, vUv), d = texture2D(tD, vUv); float k = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : uL); gl_FragColor = vec4(mix(d.rgb, l.rgb, k), l.a); }',
+});
+const TRUCK = { x: .2 * IW, y: .93 * IH, h: 230 }, truckW = TRUCK.h * tkL.width / tkL.height;
+const truck = new THREE.Mesh(footGeo, truckMat); truck.frustumCulled = false; truck.renderOrder = 2;
+truck.position.set(TRUCK.x, -TRUCK.y, 150); truck.scale.set(truckW, TRUCK.h, 1); scene.add(truck);
+U.uHead.value.set(TRUCK.x + truckW * .47, TRUCK.y - TRUCK.h * .2); U.uDir.value.set(1, -.12).normalize(); U.uScale.value = 1.2;
 
 /* ---------- the shooting star ---------- */
 const STAR = { from: [.16 * IW, .07 * IH], to: [.78 * IW, .3 * IH] };
@@ -369,7 +240,6 @@ function resize() {
   camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
   camera.updateProjectionMatrix();
   const pw = Math.floor(w * DPR), ph = Math.floor(h * DPR);
-  rtColor.setSize(pw, ph); rtInfo.setSize(pw, ph); post.uniforms.uRes.value.set(pw, ph);
 }
 addEventListener('resize', resize); resize();
 
@@ -380,7 +250,6 @@ for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('cl
   for (const o of document.querySelectorAll('[data-mode]')) o.setAttribute('aria-pressed', String(o === b));
   U.uMode.value = +b.dataset.mode;
 });
-$('#bBoil').addEventListener('click', () => { const b = $('#bBoil'), on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); post.uniforms.uBoil.value = on ? 1 : 0; });
 // holding: the mouse or a finger anywhere on the picture, or Space
 let held = false;
 canvas.addEventListener('pointerdown', () => { held = true; });
@@ -446,12 +315,6 @@ if (QS.has('t')) { go('stop'); since = +QS.get('t'); }
 
 /* ---------- loop ---------- */
 const clock = new THREE.Clock();
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
-jeep.updateMatrixWorld(true);
-{ // headlights: from the nose, along the car
-  const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
-  U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
-}
 function frame() {
   const dt = Math.min(clock.getDelta(), .05), t = (U.uTime.value += dt);
   since += dt;
@@ -480,15 +343,10 @@ function frame() {
   const lab = LABEL[phase], dis = !ready();
   if (bNext.textContent !== lab) bNext.textContent = lab;
   if (bNext.disabled !== dis) bNext.disabled = dis;
-  // render: info (taxi mask + normals), colour, then ink and paper rim
-  for (const m of parts) m.material = infoJeep;
-  const hidden = [];
-  scene.traverse(o => { if (o.isMesh && !parts.includes(o) && o.visible) { o.visible = false; hidden.push(o); } });
-  renderer.setRenderTarget(rtInfo); renderer.setClearColor(0x8080ff, 0); renderer.clear(); renderer.render(scene, camera);
-  for (const o of hidden) o.visible = true;
-  for (const m of parts) m.material = jeepMat;
-  renderer.setRenderTarget(rtColor); renderer.setClearColor(0x10142a, 1); renderer.clear(); renderer.render(scene, camera);
-  renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  // engine off: the headlights die back to a faint parking light
+  U.uHeadI.value = phase === 'arrive' ? 1 : .12 + .88 * (1 - Math.min(1, since / 1.4));
+  renderer.render(scene, camera);
+  window.hairpin?.ready();   // first frame drawn: the paper can lift
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

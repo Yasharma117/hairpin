@@ -19,8 +19,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 [hidden] { display: none !important; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
-.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: min(620px, calc(100% - 32px)); background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); transition: opacity .4s; pointer-events: none; }
-.sub.off { opacity: 0; }
+.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: max-content; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); pointer-events: none; }
+.sub.off { visibility: hidden; }   /* shown solid or not at all: never a see-through strip */
 .sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
 .sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
 .bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 28px); }
@@ -69,10 +69,14 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
-// The cliff's side edge, as fractions of the painting: from the plateau's far corner down toward us.
-const EDGE = [[.52, .41], [.48, .66]];
-const lip = t => [lerp(EDGE[0][0], EDGE[1][0], t) * IW, lerp(EDGE[0][1], EDGE[1][1], t) * IH];
-const figH = y => lerp(70, 118, (y / IH - EDGE[0][1]) / (EDGE[1][1] - EDGE[0][1]));   // a seated figure's height by depth
+// The cliff's side edge, traced off the painting as fractions: from the plateau's far corner down toward us, to where the rock face takes over.
+const EDGE = [[.522, .432], [.5, .55], [.478, .65], [.475, .72]];
+const lip = y => {   // the point on the edge at height y (a fraction of the painting), in painting px
+  const i = clamp(EDGE.findIndex(([, ey]) => ey >= y), 1, EDGE.length - 1), [x0, y0] = EDGE[i - 1], [x1, y1] = EDGE[i];
+  return [lerp(x0, x1, clamp((y - y0) / (y1 - y0), 0, 1)) * IW, y * IH];
+};
+// a seated figure's height by depth: about 50 px a metre at the taxi, more as the edge comes toward us
+const figH = y => lerp(46, 70, (y / IH - EDGE[0][1]) / (EDGE[EDGE.length - 1][1] - EDGE[0][1]));
 
 const canvas = $('#c');
 let renderer;
@@ -117,17 +121,17 @@ const U = {
   uImg: { value: new THREE.Vector2(IW, IH) },
   uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1.1 },
   uMode: { value: 0 }, uTime: { value: 0 },
-  uEdge: { value: new THREE.Vector4(...lip(0), ...lip(1)) }, uEmb: { value: new THREE.Vector3(-999, -999, 0) }, uFog: { value: 0 },
+  uEdge: { value: new THREE.Vector4(...lip(EDGE[0][1]), ...lip(.72)) }, uEmb: { value: new THREE.Vector3(-999, -999, 0) }, uFog: { value: 0 }, uSpill: { value: 1 },
 };
 const LIGHT = NOISE + /* glsl */`
-uniform vec2 uImg, uHead, uDir; uniform float uScale, uMode, uTime;
+uniform vec2 uImg, uHead, uDir; uniform float uScale, uMode, uTime, uSpill;
 uniform sampler2D tLit, tDark, tStroke;
 float lightAt(vec2 p){
   vec2 v = p - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
   float range = 560. * uScale;
   float cone = step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
   float spill = 1. - smoothstep(26. * uScale, 120. * uScale, length(v * vec2(1., 2.2)));
-  return cone * 1.5 + spill * 1.1;
+  return cone * 1.5 + spill * 1.1 * uSpill;
 }
 vec2 uvOf(vec2 p){ return vec2(p.x / uImg.x, 1. - p.y / uImg.y); }
 float reveal(vec2 p, float L){
@@ -164,9 +168,9 @@ const bgMat = new THREE.ShaderMaterial({
       col += vec3(.9, .8, .55) * clamp(L - .2, 0., 1.) * cloudy * .12 * live;
       // smoke off the ember: a thin curl that widens as it rises and goes back into the mist
       vec2 q = p - uEmb.xy; float h = -q.y;
-      float cx = sin(h * .045 - uTime * 1.1) * h * .10 + sin(h * .013 + uTime * .4) * h * .18;
+      float cx = sin(h * .06 - uTime * 1.1) * h * .08 + h * .35;   // curls, and the wind takes it out over the drop
       float wid = max(2.5 + h * .07, .5), dx = (q.x - cx) / wid;
-      float sm = exp(-dx * dx) * smoothstep(0., 14., h) * (1. - smoothstep(60., 240., h)) * (.6 + .4 * vn2(vec2(q.x * .05, h * .04 - uTime * .8)));
+      float sm = exp(-dx * dx) * smoothstep(0., 8., h) * (1. - smoothstep(30., 110., h)) * (.6 + .4 * vn2(vec2(q.x * .05, h * .04 - uTime * .8)));
       col = mix(col, vec3(.62, .64, .72), clamp(sm * uEmb.z * .45, 0., 1.) * live);
       // now -> then: the story wipes the old cliff in, left to right, bright strokes first
       float fld = p.x / uImg.x * .75 + (1. - texture2D(tStroke, uv).r) * .25;
@@ -276,7 +280,7 @@ const doors = [-1, 1].map(side => {
   g.userData = { side, open: 0 }; return g;
 });
 // on the side edge near the far corner, nose out over the drop and turned a little away from us
-const CAR = lip(.1), CAR_YAW = .25;
+const CAR = lip(.437), CAR_YAW = .25;
 jeep.position.set(CAR[0], -CAR[1], 150);
 jeep.scale.setScalar(50);
 jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), CAR_YAW));
@@ -342,8 +346,9 @@ const back = (fill, extra) => cutout(200, 240, c => {
 const walkers = [back('#191427', (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), back('#0b0f1e')].map((map, i) => {
   const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
   m.visible = false; m.frustumCulled = false; m.renderOrder = 3; scene.add(m);
-  const seat = lip(i ? .78 : .55);
-  return { m, from: [0, 0], to: [seat[0] - 16, seat[1]], t0: 0, k: 0 };
+  // on the lip, spaced so they read side by side: backs to us, bodies over the grass, legs over the drop
+  const seat = lip(i ? .615 : .53);
+  return { m, from: [0, 0], to: [seat[0] - figH(seat[1]) * .25, seat[1]], t0: 0, k: 0 };
 });
 // him: two ink-only frames (cigarette down, and the drag), pale, boiling slower than the taxi's line.
 // He's in neither painting, so the headlights can't touch him.
@@ -361,7 +366,7 @@ const ghostMat = new THREE.ShaderMaterial({
 });
 const ghost = new THREE.Mesh(footGeo, ghostMat); ghost.frustumCulled = false; ghost.renderOrder = 4; scene.add(ghost);
 // sitting on the edge: his seat (a third of the way across the drawing) on the lip, knees and feet out over the drop
-const G = lip(1.02), gh = figH(G[1]) * 1.25, gw = gh * SPR['ghost-1'].width / SPR['ghost-1'].height, GX = G[0] + (.5 - .33) * gw;
+const G = lip(.7), gh = figH(G[1]) * 1.1, gw = gh * SPR['ghost-1'].width / SPR['ghost-1'].height, GX = G[0] + (.5 - .33) * gw;
 ghost.position.set(GX, -G[1], 200 + G[1] * .1); ghost.scale.set(gw, gh, 1);
 const tipAt = f => [GX + (GHOST[f].tip[0] - .5) * gw, G[1] - GHOST[f].tip[1] * gh];
 const handAt = tipAt(0);
@@ -377,7 +382,7 @@ const emb = { pos: new THREE.Vector2(...handAt), vel: new THREE.Vector2() };
 /* ---------- then: their car went over and the two of them stood here looking down at it. Only in the old painting. ---------- */
 const fading = map => new THREE.MeshBasicMaterial({ map: tex(map), transparent: true, depthWrite: false, opacity: 0 });
 const thenCar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fading(SPR['then-car']));
-const TC = lip(.6), tcw = 240;
+const TC = lip(.56), tcw = 240;
 thenCar.position.set(TC[0] + 95, -(TC[1] + 70), 120); thenCar.scale.set(-tcw, tcw * SPR['then-car'].height / SPR['then-car'].width, 1);   // flipped to face the drop
 thenCar.rotation.z = -1.05;   // nose down the cliff face
 const thenPair = new THREE.Mesh(footGeo, fading(SPR['then-pair']));
@@ -474,7 +479,7 @@ const SCRIPT = [
 const T = { thenIn: [16, 22], thenOut: [33, 36], ember: 37, ghost: [39, 41.5], flick: 46 };
 let lineI = 0;
 // the drive in: along the road, into the cloud, straight on where the road bends, onto the lip
-const DRIVE = new THREE.CatmullRomCurve3([[-.08, .445], [.12, .43], [.28, .425], [.4, .432]].map(([x, y]) => new THREE.Vector3(x * IW, y * IH, 0)).concat(new THREE.Vector3(...lip(.2), 0)));
+const DRIVE = new THREE.CatmullRomCurve3([[-.08, .445], [.12, .43], [.28, .425], [.4, .432]].map(([x, y]) => new THREE.Vector3(x * IW, y * IH, 0)).concat(new THREE.Vector3(...CAR, 0)));
 const DRIVE_LEN = DRIVE.getLength(), BRAKE_FROM = .55;   // past the bend, the edge shows up: brake window from there to the lip
 const drv = { u: 0, v: 0, inWin: 0, heldWin: 0 };
 let braking = false, skidNode = null;
@@ -589,6 +594,10 @@ function frame() {
   }
   // then: the old car and the two of them, only while the story's in the old painting
   thenCar.material.opacity = thenPair.material.opacity = sstep(.55, .95, U.uThen.value);
+  const now = 1 - sstep(.05, .35, U.uThen.value);   // the present steps out of the way of the story
+  jeep.visible = now > .5;
+  for (const w of walkers) w.m.material.opacity = now;
+  U.uSpill.value = phase === 'drive' || truck.visible ? 1 : 0;
   // getting out and sitting down
   for (const w of walkers) {
     if (!w.m.visible) continue;
@@ -636,6 +645,7 @@ function frame() {
   for (const m of parts) m.material = jeepMat;
   renderer.setRenderTarget(rtColor); renderer.setClearColor(0x10142a, 1); renderer.clear(); renderer.render(scene, camera);
   renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  window.hairpin?.ready();   // first frame drawn: the paper can lift
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

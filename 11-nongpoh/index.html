@@ -19,8 +19,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 [hidden] { display: none !important; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
-.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: min(620px, calc(100% - 32px)); background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); transition: opacity .4s; pointer-events: none; }
-.sub.off { opacity: 0; }
+.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: max-content; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); pointer-events: none; }
+.sub.off { visibility: hidden; }   /* shown solid or not at all: never a see-through strip */
 .sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
 .sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
 .bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 28px); }
@@ -60,7 +60,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
 
 // the near lane the taxi drives along, and the stalls' lanterns, as fractions of the painting
-const LANE = .8;
+const LANE = .76;
 const LANTERNS = [[.127, .418], [.427, .475], [.684, .52], [.866, .542]];
 
 const canvas = $('#c');
@@ -105,10 +105,14 @@ const U = {
 const LIGHT = NOISE + /* glsl */`
 uniform vec2 uImg, uHead, uDir, uLamp[4]; uniform float uScale, uMode, uTime;
 uniform sampler2D tLit, tDark, tStroke;
-float lightAt(vec2 p){
+float coneAt(vec2 p){
   vec2 v = p - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
   float range = 560. * uScale;
-  float cone = step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
+  return step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
+}
+float lightAt(vec2 p){
+  vec2 v = p - uHead;
+  float cone = coneAt(p);
   float spill = 1. - smoothstep(26. * uScale, 120. * uScale, length(v * vec2(1., 2.2)));
   float lamps = 0.;
   for (int i = 0; i < 4; i++) {
@@ -141,7 +145,9 @@ const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMater
       if (p.y > .7 * uImg.y) p.x += (vn2(vec2(p.x * .05, p.y * .2 - uTime * 6.)) - .5) * 3.;
       vec2 uv = uvOf(p);
       vec3 lit = texture2D(tLit, uv).rgb, dark = texture2D(tDark, uv).rgb;
-      gl_FragColor = vec4(mix(dark, lit * vec3(1.05, .97, .86), reveal(p, lightAt(p))), 1.);
+      vec3 col = mix(dark, lit * vec3(1.05, .97, .86), reveal(p, lightAt(p)));
+      col += vec3(1., .9, .65) * coneAt(vPx) * .09 * step(uMode, .5);   // the beam itself, visible in the rain
+      gl_FragColor = vec4(col, 1.);
     }`,
 }));
 bg.position.set(IW / 2, -IH / 2, -400);
@@ -281,8 +287,23 @@ const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 
 postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
 
 scene.add(jeep);
-jeep.scale.setScalar(80);
+jeep.scale.setScalar(62);
 jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42);   // side on, a touch from above
+
+// its reflection in the wet road: the same taxi flipped under the tyres, dark and broken up by the rain; its lamps still glow
+const reflMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: U.uTime, uMode: U.uMode }, transparent: true, depthWrite: false,
+  vertexShader: 'attribute vec3 color; attribute float emit; varying vec3 vC; varying float vE; varying vec2 vW; void main(){ vC = color; vE = emit; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: NOISE + `uniform float uTime, uMode; varying vec3 vC; varying float vE; varying vec2 vW;
+    void main(){
+      float rip = .45 + .55 * smoothstep(.2, .6, vn2(vec2(vW.x * .04, vW.y * .35 - uTime * 5.)));
+      float lamp = step(.5, vE) * step(vE, 1.5);
+      vec3 c = mix(vC * .55 + vec3(.03, .04, .07), vC * 1.3, lamp);
+      gl_FragColor = vec4(c, (.5 + .45 * lamp) * rip * step(uMode, .5));
+    }`,
+});
+const refl = jeep.clone(true); refl.traverse(o => { if (o.isMesh) o.material = reflMat; }); scene.add(refl);
+const reflBody = refl.children[0].children[0];
 
 /* ---------- rain: streaks in painting space, dim in the dark, glittering where the light catches them ---------- */
 {
@@ -378,6 +399,10 @@ function frame() {
   const u = (x - FROM) / (TO - FROM);
   jeep.position.set(x, -LANE * IH, 150);
   body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
+  // the reflection mirrors about the tyres' contact line
+  const sc = jeep.scale.x;
+  refl.position.set(x, -LANE * IH - .05 * sc, 149); refl.quaternion.copy(jeep.quaternion); refl.scale.set(sc, -sc, sc);
+  reflBody.position.copy(body.position);
   jeep.updateMatrixWorld(true);
   const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
   U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
@@ -400,6 +425,7 @@ function frame() {
   for (const m of parts) m.material = jeepMat;
   renderer.setRenderTarget(rtColor); renderer.setClearColor(0x10142a, 1); renderer.clear(); renderer.render(scene, camera);
   renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  window.hairpin?.ready();   // first frame drawn: the paper can lift
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
