@@ -264,7 +264,8 @@ export class Stage {
     float stageDepth(vec2 px, vec2 img){ return texture2D(tDepth, vec2(px.x / img.x, 1. - px.y / img.y)).r; }
     vec3 stageAt(vec2 px, float d){ return uRest + (vec3(px.x, -px.y, 0.) - uRest) * (1. - uK * d); }`;
   // the painting mesh: drawn first, behind everything (its depth would only clip feet)
-  mesh(material, segs = [256, 128]) {
+  // 128 x 64 on phones, 192 x 96 elsewhere: the depth is smooth, so this is plenty, and it keeps the frame budget
+  mesh(material, segs = matchMedia('(pointer: coarse)').matches ? [128, 64] : [192, 96]) {
     Object.assign(material.uniforms, this.uniforms);
     material.vertexShader = Stage.VERT; material.depthTest = false; material.depthWrite = false;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, ...segs), material);

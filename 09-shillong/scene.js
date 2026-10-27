@@ -1,7 +1,7 @@
 // Shillong: the truck that gave you a lift parks at the viewpoint above the city. The engine goes off and ticks as it cools;
 // the passenger signs off; a shooting star crosses (hold while it's up to bank the wish); the quote sets itself on torn paper.
 import * as THREE from 'three';
-import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, disposeScene } from '../shared/kit.js';
+import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, disposeScene, Stage } from '../shared/kit.js';
 import { SHILLONG_PLACEHOLDER, FIGURE } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
@@ -68,6 +68,14 @@ const $ = s => layer.querySelector(s);
 ctx.bed({ crickets: 1, wind: .4 });
 const [iLit, iDark] = await Promise.all([loadImg(at('shillong-lit.jpg')), loadImg(at('shillong-dark.jpg'))]);
 const [srcLit, srcDark] = iLit && iDark ? [iLit, iDark] : placeholder();
+// depth: depth.png once the real pair exists (tools/make_depth.py); until then built from the placeholder's own layout
+function layoutDepth() {
+  const c = mkCanvas(IW, IH), x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 0, IH), f = v => `rgb(${v * 255 | 0},${v * 255 | 0},${v * 255 | 0})`;
+  g.addColorStop(0, f(0)); g.addColorStop(HORIZON - .02, f(0)); g.addColorStop(HORIZON + .03, f(.18));   // sky, then the far ridge
+  g.addColorStop(RAIL - .04, f(.62)); g.addColorStop(RAIL + .02, f(.8)); g.addColorStop(1, f(1));        // the town falling away below us, then the viewpoint
+  x.fillStyle = g; x.fillRect(0, 0, IW, IH); return c;
+}
+const stage = new Stage({ W: IW, H: IH, depth: (iLit && await loadImg(at('depth.png'))) || layoutDepth(), k: .3 });
 const tLit = tex(srcLit), tDark = tex(srcDark), tStroke = tex(strokeMap(srcLit, IW, IH));
 
 /* ---------- light model, in painting pixels ---------- */
@@ -97,11 +105,9 @@ float reveal(vec2 p, float L){
 
 /* ---------- the painting, the city twinkling ---------- */
 const scene = new THREE.Scene();
-const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
-camera.position.z = 500;
-const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+const camera = stage.cam;
+const bg = stage.mesh(new THREE.ShaderMaterial({
   uniforms: U,
-  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: LIGHT + /* glsl */`
     varying vec2 vPx;
     void main(){
@@ -114,7 +120,6 @@ const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMater
       gl_FragColor = vec4(col, 1.);
     }`,
 }));
-bg.position.set(IW / 2, -IH / 2, -400);
 scene.add(bg);
 
 /* ---------- the two of us at the railing, seen from behind ---------- */
@@ -131,7 +136,7 @@ const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
 [[back(FIGURE.backFill[0], (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), .55], [back(FIGURE.backFill[1]), .61]].forEach(([map, x]) => {
   const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
   const y = RAIL * IH + 30, h = 150;
-  m.position.set(x * IW, -y, 250); m.scale.set(h * 200 / 240, h, 1); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
+  stage.place(m, x * IW, y, [h * 200 / 240, h]); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
 });
 
 /* ---------- the truck that gave you a lift, parked nose to the railing ---------- */
@@ -143,11 +148,11 @@ const truckMat = new THREE.ShaderMaterial({
 });
 const TRUCK = { x: .2 * IW, y: .93 * IH, h: 230 }, truckW = TRUCK.h * tkL.width / tkL.height;
 const truck = new THREE.Mesh(footGeo, truckMat); truck.frustumCulled = false; truck.renderOrder = 2;
-truck.position.set(TRUCK.x, -TRUCK.y, 150); truck.scale.set(truckW, TRUCK.h, 1); scene.add(truck);
+stage.place(truck, TRUCK.x, TRUCK.y, [truckW, TRUCK.h]); scene.add(truck);
 U.uHead.value.set(TRUCK.x + truckW * .47, TRUCK.y - TRUCK.h * .2); U.uDir.value.set(1, -.12).normalize(); U.uScale.value = 1.2;
 
 /* ---------- the shooting star ---------- */
-const STAR = { from: [.16 * IW, .07 * IH], to: [.78 * IW, .3 * IH] };
+const STAR = { from: [.16 * IW, .2 * IH], to: [.78 * IW, .36 * IH] };   // low enough to cross the frame before the camera rises
 const starMat = new THREE.ShaderMaterial({
   uniforms: { uI: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
@@ -161,12 +166,11 @@ star.rotation.z = Math.atan2(-starDir.y, starDir.x);
 /* ---------- framing: locked, covering the screen ---------- */
 let viewW = IW, viewH = IH;
 function resize(w, h) {
-  const aspect = w / h, Z = 1;
+  const aspect = w / h, Z = 1.25;   // in a little, so there's room to rise
   if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
   viewW /= Z; viewH /= Z;
   const cx = clamp(.45 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.5 * IH, viewH / 2, IH - viewH / 2);
-  camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
-  camera.updateProjectionMatrix();
+  stage.view(cx, cy, viewH, aspect);
 }
 
 /* ---------- sound: the engine ticking as it cools ---------- */
@@ -244,8 +248,7 @@ function frame(dt) {
       if (held && !banked) { heldFor += dt; if (heldFor > HOLD_TO_BANK) bankWish(); }
       const e = 1 - Math.pow(1 - k, 1.6), len = 160 + (held || banked ? 120 : 0);
       const hx = STAR.from[0] + starDir.x * starLen * e, hy = STAR.from[1] + starDir.y * starLen * e;
-      star.position.set(hx - starDir.x * len / 2, -(hy - starDir.y * len / 2), 300);
-      star.scale.set(len, banked ? 9 : 6, 1);
+      stage.place(star, hx - starDir.x * len / 2, hy - starDir.y * len / 2, [len, banked ? 9 : 6], 0);
       starMat.uniforms.uI.value = sstep(0, .08, k) * (1 - sstep(.8, 1, k)) * (banked ? 1.6 : 1);
     }
     $('#wish').classList.toggle('on', up && !banked);
@@ -259,6 +262,10 @@ function frame(dt) {
   ctx.prompt(ready() ? LABEL[phase] : null);
   // engine off: the headlights die back to a faint parking light
   U.uHeadI.value = phase === 'arrive' ? 1 : .12 + .88 * (1 - Math.min(1, since / 1.4));
+  // the camera: low on the road at first, then a slow rise to the city while the quote sets
+  const rise = phase === 'arrive' ? 0 : sstep(T.quote[0] - 1, T.quote[T.quote.length - 1] + 2, since);
+  Object.assign(stage.target, { dy: lerp(.1, -.08, rise) * IH, pitch: lerp(-.01, .025, rise) });
+  stage.update(dt, phase === 'arrive' ? 4 : 1);
   ctx.ink.render(scene, camera, null);   // no taxi here: just the grain and vignette
 }
 return { frame, resize, onTap: advance, dispose() { disposeScene(scene); } };

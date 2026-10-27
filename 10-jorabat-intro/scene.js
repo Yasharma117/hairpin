@@ -1,11 +1,11 @@
 // Jorabat, inside the taxi: the passenger gets in and asks what I do; the dashboard answers.
 // Pointing lights the dash; each object is a project. Tap (or the chip) and we drive.
 import * as THREE from 'three';
-import { clamp, lerp, damp, sstep, loadImg, tex, strokeMap, line, disposeScene } from '../shared/kit.js';
+import { clamp, lerp, damp, sstep, loadImg, tex, strokeMap, line, disposeScene, Stage } from '../shared/kit.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const OBJ_FILES = ['teleprompter', 'pill-strip', 'test-sheet', 'billing-receipt', 'markon-card', 'star'];
-export const assets = ['dashboard-lit.jpg', 'dashboard-dark.jpg', ...OBJ_FILES.map(n => `objects/${n}.png`)];
+export const assets = ['dashboard-lit.jpg', 'dashboard-dark.jpg', 'depth.png', ...OBJ_FILES.map(n => `objects/${n}.png`)];
 
 const IW = 1672, IH = 941;   // dashboard-lit/dark.jpg in px (mirrored to right-hand drive)
 const DASH = .64, SHELF = .74;   // the dash top, as fractions of the height: windscreen base to front edge
@@ -26,8 +26,9 @@ export async function load(ctx) {
   layer.innerHTML = `<div class="tag">HAIRPIN · JORABAT</div>`;
   ctx.bed({ engine: .5, crickets: 1 });   // idling at the stand
 
-  const [iLit, iDark, ...objImgs] = await Promise.all(assets.map(a => loadImg(at(a))));
-  if (!iLit || !iDark || !objImgs.every(Boolean)) throw new Error('dashboard paintings did not load');
+  const [iLit, iDark, depthImg, ...objImgs] = await Promise.all(assets.map(a => loadImg(at(a))));
+  if (!iLit || !iDark || !depthImg || !objImgs.every(Boolean)) throw new Error('dashboard paintings did not load');
+  const stage = new Stage({ W: IW, H: IH, depth: depthImg, k: .35 });
   const OBJ_IMG = Object.fromEntries(OBJ_FILES.map((n, i) => [n, objImgs[i]]));
 
   /* ---------- light: the dome light while the door's open, then a warm pool where you point ---------- */
@@ -36,11 +37,9 @@ export async function load(ctx) {
     uImg: { value: new THREE.Vector2(IW, IH) }, uLight: { value: new THREE.Vector2(-999, -999) }, uR: { value: 260 }, uDome: { value: 1 }, uMode,
   };
   const scene = new THREE.Scene();
-  const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
-  camera.position.z = 500;
-  const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+  const camera = stage.cam;
+  const bg = stage.mesh(new THREE.ShaderMaterial({
     uniforms: U,
-    vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: /* glsl */`
       uniform sampler2D tLit, tDark, tStroke; uniform vec2 uImg, uLight; uniform float uR, uDome, uMode;
       varying vec2 vPx;
@@ -53,7 +52,6 @@ export async function load(ctx) {
         gl_FragColor = vec4(mix(texture2D(tDark, uv).rgb, texture2D(tLit, uv).rgb * vec3(1.05, .97, .86), on), 1.);
       }`,
   }));
-  bg.position.set(IW / 2, -IH / 2, -400);
   scene.add(bg);
 
   /* ---------- what's on the dashboard: one object per project; the wish from Shillong, if you banked one ---------- */
@@ -70,7 +68,7 @@ export async function load(ctx) {
     const img = OBJ_IMG[o.file];
     o.w = o.h * img.width / img.height; o.mat = objMat(tex(img)); o.m = new THREE.Mesh(objGeo, o.mat);
     o.px = o.x * IW; o.py = (DASH + SHELF) / 2 * IH - o.h * .15 + (i % 2) * 6;
-    o.m.position.set(o.px, -o.py, 10 + i); o.m.scale.set(o.w, o.h, 1); o.m.rotation.z = o.rot; o.m.renderOrder = 2;
+    o.d = stage.depthAt(o.px, o.py + o.h * .3); stage.place(o.m, o.px, o.py, [o.w, o.h], o.d); o.m.rotation.z = o.rot; o.m.renderOrder = 2;
     scene.add(o.m); o.lit = 0;
   }
 
@@ -80,8 +78,7 @@ export async function load(ctx) {
     const aspect = w / h;
     if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
     const cx = clamp(.5 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
-    camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
-    camera.updateProjectionMatrix();
+    stage.view(cx, cy, viewH * .95, aspect);
   }
   const step = d => { kbd = (Math.max(kbd, picked) + d + objects.length) % objects.length; };
   on(window, 'keydown', e => { if (e.code === 'ArrowRight') step(1); if (e.code === 'ArrowLeft') step(-1); });
@@ -107,7 +104,9 @@ export async function load(ctx) {
       if (lineI < SCRIPT.length && since > SCRIPT[lineI][0]) { const [, who, text, expr] = SCRIPT[lineI++]; ctx.say(who, text, 3.2, expr); }
       if (since > 8.5) ctx.prompt('Drive');
       // which object: the keyboard's choice, else the one under the pointer
-      const ptr = input.ptr && [camera.left + input.ptr[0] / innerWidth * viewW, -camera.top + input.ptr[1] / innerHeight * viewH];
+      const ptr = input.ptr && stage.screenToPaint(...input.ptr);
+      // the engine idling: the dash and the road outside shift against each other, just
+      Object.assign(stage.target, { dx: Math.sin(since * 1.7) * 3 + Math.sin(since * 23) * .6, dy: Math.sin(since * 2.3) * 1.5 }); stage.update(dt, 6);
       picked = kbd;
       if (picked < 0 && ptr) {
         let best = -1, bd = 1e9;
@@ -121,7 +120,7 @@ export async function load(ctx) {
         const near = Math.max(1 - sstep(40, 260, Math.hypot(o.px - U.uLight.value.x, (o.py - U.uLight.value.y) * 1.6)), U.uDome.value);
         o.lit = lerp(o.lit, Math.max(near * .7, i === picked ? 1 : 0), damp(8, dt));
         o.mat.uniforms.uL.value = o.lit;
-        o.m.position.y = -o.py + (i === picked ? 3 : 0);   // lifts a touch, like tape giving
+        stage.place(o.m, o.px, o.py - (i === picked ? 3 : 0), [o.w, o.h], o.d);   // lifts a touch, like tape giving
       }
       if (picked !== shownObj && picked >= 0 && since > 8) { const o = objects[picked]; ctx.say(o.name, o.line, 4); }
       shownObj = picked;

@@ -258,7 +258,11 @@ function frame() {
   if (current && !busy) current.frame?.(dt, now);
   if (typed < full.length) { typed = Math.min(full.length, typed + dt * 32); $('#line').textContent = full.slice(0, Math.max(0, Math.floor(typed))); }
   if (lineEnd && now > lineEnd) say(null);
-  if (fps) { fN++; fT += dt; fWorst = Math.max(fWorst, dt); if (fT > 1) { fps.textContent = `${Math.round(fN / fT)} fps · worst ${Math.round(fWorst * 1000)} ms · ${DPR}x`; fN = fT = fWorst = 0; } }
+  if (fps) {   // real time, not the capped step: a slow phone must read as slow
+    const t = performance.now(), real = (t - (fps.last || t)) / 1000; fps.last = t;
+    fN++; fT += real; fWorst = Math.max(fWorst, real);
+    if (fT > 1) { fps.textContent = `${Math.round(fN / fT)} fps · worst ${Math.round(fWorst * 1000)} ms · ${DPR}x`; fN = fT = fWorst = 0; }
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

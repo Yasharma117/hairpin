@@ -1,10 +1,10 @@
 // Nongpoh: the taxi crosses the rainy roadside of pineapple stalls; lanterns flicker and streak the wet road.
 // The grandfather line is said here, once, and dropped. Hold to drive faster.
 import * as THREE from 'three';
-import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene } from '../shared/kit.js';
+import { clamp, lerp, damp, loadImg, tex, strokeMap, NOISE, makeTaxi, disposeScene, Stage } from '../shared/kit.js';
 
 const at = f => new URL(f, import.meta.url).href;
-export const assets = ['nongpoh-lit.jpg', 'nongpoh-dark.jpg'];
+export const assets = ['nongpoh-lit.jpg', 'nongpoh-dark.jpg', 'depth.png'];
 
 const IW = 1672, IH = 941;              // nongpoh-lit/dark.jpg size in px; the whole scene lives in these units
 
@@ -16,7 +16,8 @@ export async function load(ctx) {
 const { input, layer } = ctx;
 layer.innerHTML = '<div class="tag">HAIRPIN · NONGPOH</div>';
 ctx.bed({ engine: 1, rain: 1 });
-const [iLit, iDark] = await Promise.all(assets.map(a => loadImg(at(a))));
+const [iLit, iDark, depthImg] = await Promise.all(assets.map(a => loadImg(at(a))));
+const stage = new Stage({ W: IW, H: IH, depth: depthImg, k: .26 });
 if (!iLit || !iDark) throw new Error('Nongpoh paintings did not load');
 const tLit = tex(iLit), tDark = tex(iDark), tStroke = tex(strokeMap(iLit, IW, IH));
 
@@ -58,11 +59,9 @@ float reveal(vec2 p, float L){
 }`;
 
 const scene = new THREE.Scene();
-const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
-camera.position.z = 500;
-const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+const camera = stage.cam;
+const bg = stage.mesh(new THREE.ShaderMaterial({
   uniforms: U,
-  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
   fragmentShader: LIGHT + /* glsl */`
     varying vec2 vPx;
     void main(){
@@ -76,12 +75,11 @@ const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMater
       gl_FragColor = vec4(col, 1.);
     }`,
 }));
-bg.position.set(IW / 2, -IH / 2, -400);
 scene.add(bg);
 
 const { jeep, body, parts, jeepMat, PIVOT } = makeTaxi(U.uMode);
 scene.add(jeep);
-jeep.scale.setScalar(62);
+const CAR_SIZE = 62;
 jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42);   // side on, a touch from above
 // its reflection in the wet road: the same taxi flipped under the tyres, dark and broken up by the rain; its lamps still glow
 const reflMat = new THREE.ShaderMaterial({
@@ -95,7 +93,7 @@ const reflMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(c, (.5 + .45 * lamp) * rip * step(uMode, .5));
     }`,
 });
-const refl = jeep.clone(true); refl.traverse(o => { if (o.isMesh) o.material = reflMat; }); scene.add(refl);
+const refl = jeep.clone(true); refl.traverse(o => { if (o.isMesh) o.material = reflMat; o.layers.disable(1); }); scene.add(refl);   // no ink on a reflection
 const reflBody = refl.children[0].children[0];
 
 /* ---------- rain: streaks in painting space, dim in the dark, glittering where the light catches them ---------- */
@@ -107,15 +105,15 @@ const reflBody = refl.children[0].children[0];
   g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
   g.instanceCount = N;
   const m = new THREE.ShaderMaterial({
-    uniforms: U, transparent: true, depthWrite: false,
-    vertexShader: LIGHT + /* glsl */`
+    uniforms: { ...U, ...stage.uniforms }, transparent: true, depthWrite: false, depthTest: false,
+    vertexShader: LIGHT + Stage.GLSL + /* glsl */`
       attribute vec4 aOff; varying float vL; varying float vV;
       void main(){
         float y = mod(aOff.y + uTime * aOff.z, ${IH + 120}.) - 60.;
         vec2 p = vec2(aOff.x - y * .12 + position.y * aOff.w * .12, y - position.y * aOff.w);   // slanted by the wind
         p.x += position.x * 1.3;
         vL = clamp(lightAt(p), 0., 1.6); vV = position.y;   // lit once per streak, not per pixel
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p.x, -p.y, 200., 1.);
+        gl_Position = projectionMatrix * viewMatrix * vec4(stageAt(p, 1.), 1.);   // the rain is the nearest thing in the shot
       }`,
     fragmentShader: /* glsl */`
       uniform float uMode; varying float vL; varying float vV;
@@ -129,10 +127,13 @@ const reflBody = refl.children[0].children[0];
 }
 /* ---------- framing: follows the taxi along the road ---------- */
 let viewW = IW, viewH = IH, camX = 0;
+let cyRest = IH / 2;
 function resize(w, h) {
   const aspect = w / h, Z = aspect < 1 ? 1 : 1.3;
   if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
   viewW /= Z; viewH /= Z;
+  cyRest = clamp(.6 * IH, viewH / 2 + viewH * .08, IH - viewH / 2 - viewH * .08);
+  stage.view(IW / 2, cyRest, viewH, aspect);   // the rest pose; following the taxi slides the camera from here
 }
 
 /* ---------- the lines, by how far along the road you are ---------- */
@@ -158,20 +159,19 @@ function frame(dt) {
   x += speed * dt * 95;
   if (x > TO) { x = FROM; lineIdx = 0; if (!done) { done = true; ctx.next(); } }   // across, then the cloud line
   const u = (x - FROM) / (TO - FROM);
-  jeep.position.set(x, -LANE * IH, 150);
+  const dLane = stage.depthAt(clamp(x, 0, IW), LANE * IH), s = stage.place(jeep, x, LANE * IH, CAR_SIZE, dLane);
   body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
   // the reflection mirrors about the tyres' contact line
-  const sc = jeep.scale.x;
-  refl.position.set(x, -LANE * IH - .05 * sc, 149); refl.quaternion.copy(jeep.quaternion); refl.scale.set(sc, -sc, sc);
+  stage.place(refl, x, LANE * IH + .05 * CAR_SIZE, CAR_SIZE, dLane); refl.quaternion.copy(jeep.quaternion); refl.scale.y *= -1;
   reflBody.position.copy(body.position);
   jeep.updateMatrixWorld(true);
-  const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
-  U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
+  const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
+  U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
   // the camera keeps the taxi a little left of centre, so you see what's coming
-  camX = clamp(lerp(camX || x, x + viewW * .15, damp(1.5, dt)), viewW / 2, IW - viewW / 2);
-  const cy = clamp(.6 * IH, viewH / 2, IH - viewH / 2);
-  camera.left = camX - viewW / 2; camera.right = camX + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
-  camera.updateProjectionMatrix();
+  // a translation from the rest pose: the stalls and the forest behind them slide at different speeds
+  const mW = viewW * .08;
+  camX = clamp(lerp(camX || x, x + viewW * .15, damp(1.5, dt)), viewW / 2 + mW, IW - viewW / 2 - mW);
+  Object.assign(stage.move, { dx: camX - IW / 2, dy: 0, dolly: 0 }); stage.apply();
   if (lineIdx < LINES.length && u >= LINES[lineIdx][0]) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); }
   ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .9;
   ctx.ink.render(scene, camera, jeep);
