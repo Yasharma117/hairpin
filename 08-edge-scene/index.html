@@ -1,0 +1,642 @@
+<meta charset="utf-8">
+<title>Hairpin · The Edge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one locked painted night shot of the cliff; torn-paper subtitle at the top; small control strip. Single night world by design. */
+:root {
+  --night: #10142a;
+  --paper: #efe6cf;
+  --ink: #141826;
+  --amber: #f6c744;
+  --red: #c8402f;
+  --body: "Archivo", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--paper); font-family: var(--body); }
+[hidden] { display: none !important; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
+.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: min(620px, calc(100% - 32px)); background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); transition: opacity .4s; pointer-events: none; }
+.sub.off { opacity: 0; }
+.sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
+.sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
+.bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 28px); }
+.bar button, .bar label { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: var(--paper); border: 0; padding: 10px 12px; min-height: 40px; box-sizing: border-box; box-shadow: 3px 3px 0 #000; cursor: pointer; }
+.bar label { display: flex; align-items: center; gap: 8px; }
+.bar input { width: 90px; accent-color: var(--red); }
+.bar button[aria-pressed="true"] { background: var(--amber); }
+.bar button:disabled { opacity: .55; cursor: default; }
+.bar #bNext { background: var(--amber); }
+.bar button:focus-visible, .bar input:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.brake { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-1deg); background: var(--red); color: var(--paper); font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: .1em; padding: 8px 14px; box-shadow: 4px 4px 0 #000; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.brake.on { opacity: 1; }
+.hint { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 16px); font-family: var(--mono); font-size: 11px; color: #aab0cc; text-align: right; line-height: 1.5; pointer-events: none; }
+#msg { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; font-family: var(--mono); font-size: 13px; color: #aab0cc; pointer-events: none; }
+@media (max-width: 560px) { .hint { display: none; } }
+</style>
+
+<canvas id="c" aria-label="A taxi hangs nose-first over a cliff at night, its headlights shining into the cloud; two people sit on the edge"></canvas>
+<div class="tag">HAIRPIN · SCENES 05–09 · THE EDGE</div>
+<div class="hint">Hold ↓, S, Space or the screen to brake<br>Space or the yellow button for the next step</div>
+<div class="brake" id="brake">BRAKE · HOLD ↓, S, SPACE OR THE SCREEN</div>
+<div class="sub off" id="sub" aria-live="polite"><div class="who" id="who"></div><div class="line" id="line"></div></div>
+<div class="bar" role="group" aria-label="Controls">
+  <button data-mode="0" aria-pressed="true">Headlights</button>
+  <button data-mode="1" aria-pressed="false">Dark painting</button>
+  <button data-mode="2" aria-pressed="false">Lit painting</button>
+  <button id="bBoil" aria-pressed="true">Line boil</button>
+  <label>Hang <input id="hang" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+  <button id="bNext">Open the passenger door</button>
+</div>
+<div id="msg">Loading the paintings…</div>
+
+<script src="../shared/hairpin.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+THREE.ColorManagement.enabled = false;
+const hairpin = window.hairpin || { play: false, tearTo: url => { location.href = url; }, bed() {} };   // shared/hairpin.js, or bare fallbacks when opened alone
+
+const IW = 1672, IH = 941;              // edge-lit/dark/then.jpg size in px; the whole scene lives in these units
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (k, dt) => 1 - Math.exp(-k * dt);
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// The cliff's side edge, as fractions of the painting: from the plateau's far corner down toward us.
+const EDGE = [[.52, .41], [.48, .66]];
+const lip = t => [lerp(EDGE[0][0], EDGE[1][0], t) * IW, lerp(EDGE[0][1], EDGE[1][1], t) * IH];
+const figH = y => lerp(70, 118, (y / IH - EDGE[0][1]) / (EDGE[1][1] - EDGE[0][1]));   // a seated figure's height by depth
+
+const canvas = $('#c');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); if (!renderer.capabilities.isWebGL2) throw 0; }
+catch (e) { $('#msg').textContent = 'This shot needs WebGL 2.'; throw e; }
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const DPR = Math.min(devicePixelRatio || 1, isTouch ? 1.5 : 2);
+renderer.setPixelRatio(DPR);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
+/* ---------- the paintings: tonight lit and dark, the same cliff decades ago, and the cut-outs ---------- */
+const mkCanvas = (w = IW, h = IH) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+// the stroke map: a high-pass of the lit painting's brightness, so bright strokes catch the light first
+function strokeMap(src) {
+  const a = mkCanvas(), ax = a.getContext('2d'); ax.drawImage(src, 0, 0, IW, IH);
+  const m = mkCanvas(IW >> 2, IH >> 2); m.getContext('2d').drawImage(a, 0, 0, m.width, m.height);
+  const s = mkCanvas(IW >> 4, IH >> 4); s.getContext('2d').drawImage(m, 0, 0, s.width, s.height);
+  const b = mkCanvas(); b.getContext('2d').drawImage(s, 0, 0, IW, IH);
+  const A = ax.getImageData(0, 0, IW, IH), B = b.getContext('2d').getImageData(0, 0, IW, IH).data, d = A.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = clamp(128 + ((d[i] + d[i + 1] + d[i + 2]) - (B[i] + B[i + 1] + B[i + 2])), 0, 255);
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ax.putImageData(A, 0, 0); return a;
+}
+const loadImg = url => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+const tex = src => { const t = new THREE.Texture(src); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+const SPRITES = ['ghost-1', 'ghost-2', 'then-car', 'then-pair', 'truck-lit', 'truck-dark'];
+const [imgs, spr] = await Promise.all([Promise.all(['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg'].map(loadImg)), Promise.all(SPRITES.map(n => loadImg(`sprites/${n}.png`)))]);
+const SPR = Object.fromEntries(SPRITES.map((n, i) => [n, spr[i]]));
+let tLit, tDark, tStroke, tThen;
+try { if (!imgs.every(Boolean) || !spr.every(Boolean)) throw 0; [tLit, tDark, tThen] = imgs.map(tex); tStroke = tex(strokeMap(imgs[0])); }
+catch (e) { $('#msg').textContent = 'The paintings did not load. Serve this folder instead of opening the file.'; throw e; }
+$('#msg').hidden = true;
+
+/* ---------- shared light model, in painting pixels ---------- */
+const NOISE = /* glsl */`
+float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(h12(i), h12(i+vec2(1,0)), f.x), mix(h12(i+vec2(0,1)), h12(i+vec2(1,1)), f.x), f.y); }`;
+const U = {
+  tLit: { value: tLit }, tDark: { value: tDark }, tStroke: { value: tStroke }, tThen: { value: tThen }, uThen: { value: 0 },
+  uImg: { value: new THREE.Vector2(IW, IH) },
+  uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1.1 },
+  uMode: { value: 0 }, uTime: { value: 0 },
+  uEdge: { value: new THREE.Vector4(...lip(0), ...lip(1)) }, uEmb: { value: new THREE.Vector3(-999, -999, 0) }, uFog: { value: 0 },
+};
+const LIGHT = NOISE + /* glsl */`
+uniform vec2 uImg, uHead, uDir; uniform float uScale, uMode, uTime;
+uniform sampler2D tLit, tDark, tStroke;
+float lightAt(vec2 p){
+  vec2 v = p - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
+  float range = 560. * uScale;
+  float cone = step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
+  float spill = 1. - smoothstep(26. * uScale, 120. * uScale, length(v * vec2(1., 2.2)));
+  return cone * 1.5 + spill * 1.1;
+}
+vec2 uvOf(vec2 p){ return vec2(p.x / uImg.x, 1. - p.y / uImg.y); }
+float reveal(vec2 p, float L){
+  float s = texture2D(tStroke, uvOf(p)).r;
+  float t = .22 + .6 * (1. - s);          // bright strokes catch the light first
+  float on = smoothstep(t - .05, t + .05, L);
+  return uMode > 1.5 ? 1. : (uMode > .5 ? 0. : on);
+}`;
+
+/* ---------- the painting, the cloud, the smoke ---------- */
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
+camera.position.z = 500;
+const bgMat = new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: LIGHT + /* glsl */`
+    uniform vec4 uEdge; uniform vec3 uEmb; uniform float uFog; uniform sampler2D tThen; uniform float uThen;
+    varying vec2 vPx;
+    void main(){
+      vec2 p = vPx, uv = uvOf(p);
+      vec3 lit = texture2D(tLit, uv).rgb, dark = texture2D(tDark, uv).rgb;
+      float L = lightAt(p);
+      vec3 col = mix(dark, lit * vec3(1.05, .97, .86), reveal(p, L));
+      // the cloud sea past the edge drifts, and the beams light it from inside
+      float lx = mix(uEdge.x, uEdge.z, (p.y - uEdge.y) / (uEdge.w - uEdge.y));
+      float cloudy = smoothstep(lx + 10., lx + 90., p.x) * smoothstep(.28 * uImg.y, .36 * uImg.y, p.y);
+      float m = smoothstep(.35, .85, vn2(vec2(p.x * .004 + uTime * .02, p.y * .009)) * .7 + vn2(vec2(p.x * .012 - uTime * .035, p.y * .025)) * .3);
+      vec3 mist = mix(vec3(.24, .28, .40), vec3(1., .93, .76), clamp(L * .6, 0., 1.));
+      float live = step(uMode, .5);
+      col = mix(col, mist, m * cloudy * (.25 + .3 * clamp(L, 0., 1.)) * live);
+      // the cloud line: on the drive in, the cloud swallows everything and the beams hit a wall of white
+      col = mix(col, mix(vec3(.3, .34, .45), vec3(1., .95, .82), clamp(L * .7, 0., 1.)), uFog * (.55 + .45 * m));
+      col += vec3(.9, .8, .55) * clamp(L - .2, 0., 1.) * cloudy * .12 * live;
+      // smoke off the ember: a thin curl that widens as it rises and goes back into the mist
+      vec2 q = p - uEmb.xy; float h = -q.y;
+      float cx = sin(h * .045 - uTime * 1.1) * h * .10 + sin(h * .013 + uTime * .4) * h * .18;
+      float wid = max(2.5 + h * .07, .5), dx = (q.x - cx) / wid;
+      float sm = exp(-dx * dx) * smoothstep(0., 14., h) * (1. - smoothstep(60., 240., h)) * (.6 + .4 * vn2(vec2(q.x * .05, h * .04 - uTime * .8)));
+      col = mix(col, vec3(.62, .64, .72), clamp(sm * uEmb.z * .45, 0., 1.) * live);
+      // now -> then: the story wipes the old cliff in, left to right, bright strokes first
+      float fld = p.x / uImg.x * .75 + (1. - texture2D(tStroke, uv).r) * .25;
+      float th = smoothstep(fld - .04, fld + .04, uThen * 1.1 - .05);
+      vec3 thenC = mix(texture2D(tThen, uv).rgb, vec3(.86, .74, .58), m * cloudy * .4);
+      col = mix(col, thenC, th);
+      gl_FragColor = vec4(col, 1.);
+    }`,
+});
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), bgMat);
+bg.position.set(IW / 2, -IH / 2, -400);
+scene.add(bg);
+
+/* ---------- the taxi: a modified 80s hatchback, painted two-tone, inked ---------- */
+// Livery is a guess: black body, yellow roof. Swap these two if Shillong's run the other way.
+const LIVERY = { body: '#1c1e23', roof: '#f2c230' };
+const jeepMat = new THREE.ShaderMaterial({
+  uniforms: { uL: { value: .3 }, uMode: U.uMode },
+  vertexShader: /* glsl */`
+    attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+    void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+  fragmentShader: /* glsl */`
+    uniform float uL, uMode; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+    void main(){
+      vec3 n = normalize(vN);
+      if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }
+      float k = dot(n, normalize(vec3(-.4, .7, .6)));
+      float lit = step(.15, k * (.45 + uL)) * clamp(uL, .25, 1.);
+      if (uMode > 1.5) lit = step(-.25, k);       // lit painting: the car in full daylight colour
+      else if (uMode > .5) lit = 0.;             // dark painting: the car fully in night tones
+      vec3 col = mix(vC * vec3(.30, .34, .52), vC * vec3(1.03, .96, .86), lit);
+      col += vec3(.05, .06, .1) * step(.72, n.y);
+      col += vec3(.035, .04, .06) + vec3(.09, .11, .18) * smoothstep(.45, .8, 1. - abs(n.z));
+      if (vE > 1.5) {
+        float streak = step(.8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2));
+        col = mix(vec3(.07, .09, .15), vec3(.36, .43, .56), streak * .55 + step(.55, n.y) * .18 + lit * .12);
+      }
+      gl_FragColor = vec4(col, 1.);
+    }`,
+});
+function colorize(g, hex, emit = 0) {
+  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), e = new Float32Array(n).fill(emit);
+  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
+}
+// jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
+const PIVOT = new THREE.Vector3(.55, .2, 0);
+const jeep = new THREE.Group(), hang = new THREE.Group(), body = new THREE.Group();
+jeep.add(hang); hang.add(body); hang.position.copy(PIVOT); body.position.copy(PIVOT).negate();
+const parts = [];
+const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}, parent = body) => {
+  geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
+  const m = new THREE.Mesh(colorize(geo, hex, emit), jeepMat); parent.add(m); parts.push(m); return m;
+};
+const extrude = (pts, depth, bevel) => {
+  const sh = new THREE.Shape(); sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
+  g.translate(0, 0, -depth / 2); return g;
+};
+// lower body: short sloping bonnet, flat sides, near-vertical hatch
+put(extrude([[-1.62, .24], [-1.66, .52], [-1.62, .84], [.95, .88], [1.56, .74], [1.64, .66], [1.64, .3], [1.58, .24]], 1.36, .06), LIVERY.body);
+// cabin: tall glasshouse, slight tumblehome
+put(extrude([[-1.55, .84], [-1.46, 1.34], [-1.38, 1.39], [.4, 1.39], [.5, 1.33], [.96, .88]], 1.18, .045), LIVERY.body);
+put(new THREE.BoxGeometry(1.66, .03, 1.1), LIVERY.roof, { x: -.49, y: 1.445 });
+// glass
+for (const sgn of [-1, 1]) {
+  put(extrude([[-1.38, .93], [-1.32, 1.3], [.37, 1.31], [.84, .93]], .01, .004), '#000000', { z: sgn * .64, emit: 2 });
+  put(new THREE.BoxGeometry(.07, .42, .025), LIVERY.body, { x: -.36, y: 1.12, z: sgn * .65 });
+  put(new THREE.BoxGeometry(.06, .4, .025), LIVERY.body, { x: -1.0, y: 1.12, z: sgn * .65 });
+}
+put(new THREE.BoxGeometry(.02, .6, 1.08), '#000000', { x: .73, y: 1.12, rz: .82, emit: 2 });
+put(new THREE.BoxGeometry(.02, .41, 1.08), '#000000', { x: -1.53, y: 1.12, rz: -.22, emit: 2 });
+// the sound system, visible through the hatch glass
+for (const zz of [-.3, .3]) {
+  put(new THREE.CylinderGeometry(.11, .11, .02, 18), '#2a2b30', { x: -1.56, y: 1.0, z: zz, rz: Math.PI / 2 });
+  put(new THREE.CylinderGeometry(.045, .045, .025, 12), '#6a6d75', { x: -1.565, y: 1.0, z: zz, rz: Math.PI / 2 });
+}
+// lamps, grille, bumpers, yellow commercial plates
+for (const sgn of [-1, 1]) {
+  put(new THREE.BoxGeometry(.03, .14, .3), '#fff6d6', { x: 1.69, y: .62, z: sgn * .46, emit: 1 });
+  put(new THREE.BoxGeometry(.03, .07, .1), '#ffb347', { x: 1.68, y: .49, z: sgn * .6 });
+  put(new THREE.BoxGeometry(.03, .26, .15), '#c8352a', { x: -1.69, y: .66, z: sgn * .58, emit: 1 });
+  put(new THREE.BoxGeometry(.06, .08, .13), LIVERY.body, { x: .86, y: .98, z: sgn * .76 });
+  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: -.36, y: .6, z: sgn * .755 });
+  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: .9, y: .6, z: sgn * .755 });
+  put(new THREE.BoxGeometry(.1, .025, .02), '#8b8f96', { x: -.46, y: .78, z: sgn * .76 });
+}
+put(new THREE.BoxGeometry(.02, .08, .6), '#0d0e10', { x: 1.7, y: .6 });
+put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: 1.69, y: .32 });
+put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: -1.69, y: .32 });
+put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: 1.76, y: .42 });
+put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: -1.76, y: .5 });
+put(new THREE.CylinderGeometry(.006, .006, .75, 4), '#111215', { x: .7, y: 1.25, z: .66, rz: .35 });
+// wider aftermarket tyres sticking out of the arches, dark alloys with a chrome lip
+for (const [x, sgn] of [[1.07, 1], [1.07, -1], [-1.07, 1], [-1.07, -1]]) {
+  put(new THREE.CylinderGeometry(.33, .33, .02, 20), '#0b0c0e', { x, y: .3, z: sgn * .752, rx: Math.PI / 2 });
+  put(new THREE.TorusGeometry(.34, .04, 6, 18, Math.PI), '#0d0e10', { x, y: .3, z: sgn * .76 });
+  put(new THREE.CylinderGeometry(.29, .29, .28, 20), '#121316', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+  put(new THREE.CylinderGeometry(.18, .18, .29, 16), '#4d5158', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+  put(new THREE.TorusGeometry(.18, .016, 6, 20), '#c9ccd1', { x, y: .29, z: sgn * .867 });
+  put(new THREE.CylinderGeometry(.05, .05, .3, 8), '#24262a', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+}
+// front doors, hinged at the A-pillar. Right-hand drive: the passenger's is the far side (-z), yours faces the camera (+z).
+const doors = [-1, 1].map(side => {
+  const g = new THREE.Group(); g.position.set(.9, 0, side * .7); body.add(g);
+  put(new THREE.BoxGeometry(1.24, .6, .03), LIVERY.body, { x: -.62, y: .56, z: side * .02 }, g);
+  g.userData = { side, open: 0 }; return g;
+});
+// on the side edge near the far corner, nose out over the drop and turned a little away from us
+const CAR = lip(.1), CAR_YAW = .25;
+jeep.position.set(CAR[0], -CAR[1], 150);
+jeep.scale.setScalar(50);
+jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), CAR_YAW));
+scene.add(jeep);
+
+/* ---------- ink + paper rim pass around the taxi ---------- */
+const infoJeep = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying vec3 vN; void main(){ gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
+const rtColor = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+const rtInfo = new THREE.WebGLRenderTarget(1, 1);
+const post = new THREE.ShaderMaterial({
+  uniforms: { tColor: { value: rtColor.texture }, tInfo: { value: rtInfo.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: U.uTime, uBoil: { value: 1 }, uJeepScale: { value: .7 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
+  fragmentShader: NOISE + /* glsl */`
+    uniform sampler2D tColor, tInfo; uniform vec2 uRes; uniform float uTime, uBoil, uJeepScale; varying vec2 vUv;
+    float maskAt(vec2 uv){ return texture2D(tInfo, uv).a; }
+    vec2 PX;
+    float edgeAt(vec2 uv, float r){
+      vec4 c = texture2D(tInfo, uv); float ring = 0., dn = 0.;
+      for (int i = 0; i < 8; i++) {
+        float a = float(i) * .785398; vec4 s = texture2D(tInfo, uv + vec2(cos(a), sin(a)) * r * PX);
+        ring = max(ring, s.a); if (s.a > .5 && c.a > .5) dn = max(dn, length(s.rgb - c.rgb));
+      }
+      return max(step(.5, ring) * (1. - step(.5, c.a)), step(.4, dn));
+    }
+    void main(){
+      PX = 1. / uRes;
+      float frame = floor(uTime * 8.) * uBoil;
+      float base = max(1.6, uRes.y / 520.) * mix(1., 1.8, uJeepScale);
+      // main stroke: wobbles a little each frame, pressure swells and thins along its length
+      vec2 w1 = (vec2(vn2(vUv * 45. + frame * 3.1), vn2(vUv * 45. + 17. + frame * 5.3)) - .5) * 2.2 * PX * (.4 + uBoil);
+      float e1 = edgeAt(vUv + w1, base * (.5 + 1.1 * vn2(vUv * 60. + 3.)));
+      // a second, looser pass drawn slightly off the first, the way a sketch gets gone over twice
+      vec2 w2 = (vec2(vn2(vUv * 11. + 40. + frame * 2.), vn2(vUv * 11. + 90. + frame * 1.7)) - .5) * 10. * PX;
+      float e2 = edgeAt(vUv + w2, base * .55) * step(.42, vn2(vUv * 26. + frame * 1.3));
+      float ink = max(e1 * step(.14, vn2(vUv * 130. + frame)), e2 * .85);
+      // flat colour printed a touch out of register with the line
+      vec2 sh = vec2(2.6, -2.1) * PX * mix(.8, 1.7, uJeepScale);
+      vec3 col = texture2D(tColor, vUv).rgb;
+      if (maskAt(vUv - sh) > .5) col = texture2D(tColor, vUv - sh).rgb;
+      col = mix(col, vec3(.07, .075, .1), ink);
+      col += (h12(gl_FragCoord.xy) - .5) * .03;
+      vec2 q = vUv - .5; col *= 1. - dot(q, q) * .4;
+      gl_FragColor = vec4(col, 1.);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
+
+/* ---------- the two of us, him, the ember ---------- */
+const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(c); };
+const QUAD = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
+const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);   // origin at the bottom edge, where they sit
+// placeholder silhouettes, seen from behind
+const back = (fill, extra) => cutout(200, 240, c => {
+  const shape = (dx, dy) => {
+    c.beginPath(); c.moveTo(18 + dx, 240); c.bezierCurveTo(14 + dx, 150 + dy, 30 + dx, 108 + dy, 100 + dx, 104 + dy); c.bezierCurveTo(170 + dx, 108 + dy, 186 + dx, 150 + dy, 182 + dx, 240); c.fill();
+    c.beginPath(); c.ellipse(100 + dx, 62 + dy, 30, 36, 0, 0, Math.PI * 2); c.fill(); if (extra) extra(c, dx, dy);
+  };
+  c.fillStyle = '#56608c'; shape(4, -3);   // rim: the cloud's glow catching the right shoulder
+  c.fillStyle = fill; shape(0, 0);
+});
+const walkers = [back('#191427', (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), back('#0b0f1e')].map((map, i) => {
+  const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
+  m.visible = false; m.frustumCulled = false; m.renderOrder = 3; scene.add(m);
+  const seat = lip(i ? .78 : .55);
+  return { m, from: [0, 0], to: [seat[0] - 16, seat[1]], t0: 0, k: 0 };
+});
+// him: two ink-only frames (cigarette down, and the drag), pale, boiling slower than the taxi's line.
+// He's in neither painting, so the headlights can't touch him.
+const GHOST = [{ tex: tex(SPR['ghost-1']), tip: [.983, .354] }, { tex: tex(SPR['ghost-2']), tip: [.524, .847] }];   // tip: the cigarette's end, uv
+const ghostMat = new THREE.ShaderMaterial({
+  uniforms: { tG: { value: GHOST[0].tex }, uOp: { value: 0 }, uTime: U.uTime }, transparent: true, depthWrite: false,
+  vertexShader: QUAD,
+  fragmentShader: NOISE + /* glsl */`
+    uniform sampler2D tG; uniform float uOp, uTime; varying vec2 vUv;
+    void main(){
+      float f = floor(uTime * 3.);
+      vec2 w = (vec2(vn2(vUv * 9. + f * 2.3), vn2(vUv * 9. + 31. + f * 1.7)) - .5) * .006;
+      gl_FragColor = vec4(.91, .88, .8, texture2D(tG, vUv + w).a * uOp * .85);
+    }`,
+});
+const ghost = new THREE.Mesh(footGeo, ghostMat); ghost.frustumCulled = false; ghost.renderOrder = 4; scene.add(ghost);
+// sitting on the edge: his seat (a third of the way across the drawing) on the lip, knees and feet out over the drop
+const G = lip(1.02), gh = figH(G[1]) * 1.25, gw = gh * SPR['ghost-1'].width / SPR['ghost-1'].height, GX = G[0] + (.5 - .33) * gw;
+ghost.position.set(GX, -G[1], 200 + G[1] * .1); ghost.scale.set(gw, gh, 1);
+const tipAt = f => [GX + (GHOST[f].tip[0] - .5) * gw, G[1] - GHOST[f].tip[1] * gh];
+const handAt = tipAt(0);
+// the ember: an additive point that swells on each drag
+const emberMat = new THREE.ShaderMaterial({
+  uniforms: { uI: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: QUAD,
+  fragmentShader: 'uniform float uI; varying vec2 vUv; void main(){ float d = length(vUv - .5) * 2.; vec3 c = vec3(1., .5, .16) * (exp(-d * d * 18.) + exp(-d * d * 3.) * .25) + vec3(1., .9, .6) * exp(-d * d * 90.); gl_FragColor = vec4(c * uI, 1.); }',
+});
+const ember = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), emberMat); ember.frustumCulled = false; ember.renderOrder = 5; ember.scale.setScalar(34); scene.add(ember);
+const emb = { pos: new THREE.Vector2(...handAt), vel: new THREE.Vector2() };
+
+/* ---------- then: their car went over and the two of them stood here looking down at it. Only in the old painting. ---------- */
+const fading = map => new THREE.MeshBasicMaterial({ map: tex(map), transparent: true, depthWrite: false, opacity: 0 });
+const thenCar = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fading(SPR['then-car']));
+const TC = lip(.6), tcw = 240;
+thenCar.position.set(TC[0] + 95, -(TC[1] + 70), 120); thenCar.scale.set(-tcw, tcw * SPR['then-car'].height / SPR['then-car'].width, 1);   // flipped to face the drop
+thenCar.rotation.z = -1.05;   // nose down the cliff face
+const thenPair = new THREE.Mesh(footGeo, fading(SPR['then-pair']));
+const tph = 170; thenPair.position.set(.41 * IW, -.5 * IH, 190); thenPair.scale.set(tph * SPR['then-pair'].width / SPR['then-pair'].height, tph, 1);
+for (const m of [thenCar, thenPair]) { m.frustumCulled = false; m.renderOrder = 2; scene.add(m); }
+
+/* ---------- the truck: comes round the bend after, and takes you on to Shillong ---------- */
+const truckMat = new THREE.ShaderMaterial({
+  uniforms: { tL: { value: tex(SPR['truck-lit']) }, tD: { value: tex(SPR['truck-dark']) }, uL: { value: .25 }, uMode: U.uMode }, transparent: true, depthWrite: false,
+  vertexShader: QUAD,
+  fragmentShader: 'uniform sampler2D tL, tD; uniform float uL, uMode; varying vec2 vUv; void main(){ vec4 l = texture2D(tL, vUv), d = texture2D(tD, vUv); float k = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : uL); gl_FragColor = vec4(mix(d.rgb, l.rgb, k), l.a); }',
+});
+const truck = new THREE.Mesh(footGeo, truckMat); truck.frustumCulled = false; truck.renderOrder = 3; truck.visible = false; scene.add(truck);
+const TRUCK = { h: 150, from: -.25 * IW, to: .3 * IW, y: .445 * IH };
+const truckW = TRUCK.h * SPR['truck-lit'].width / SPR['truck-lit'].height;
+truck.scale.set(truckW, TRUCK.h, 1);
+
+/* ---------- framing: locked, covering the screen ---------- */
+let viewW = IW, viewH = IH;
+const CAM = [.5 * IW, .5 * IH];
+function resize() {
+  const w = innerWidth, h = innerHeight, aspect = w / h, Z = aspect < 1 ? 1 : 1.35;
+  renderer.setSize(w, h, false);
+  if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
+  viewW /= Z; viewH /= Z;
+  const cx = clamp(CAM[0], viewW / 2, IW - viewW / 2), cy = clamp(CAM[1], viewH / 2, IH - viewH / 2);
+  camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
+  camera.updateProjectionMatrix();
+  const pw = Math.floor(w * DPR), ph = Math.floor(h * DPR);
+  rtColor.setSize(pw, ph); rtInfo.setSize(pw, ph); post.uniforms.uRes.value.set(pw, ph);
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- controls ---------- */
+const hangIn = $('#hang'), bNext = $('#bNext');
+const reset = () => lerp(.12, .3, +hangIn.value);   // the nose's resting angle for this hang
+for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => {
+  for (const o of document.querySelectorAll('[data-mode]')) o.setAttribute('aria-pressed', String(o === b));
+  U.uMode.value = +b.dataset.mode;
+});
+$('#bBoil').addEventListener('click', () => { const b = $('#bBoil'), on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); post.uniforms.uBoil.value = on ? 1 : 0; });
+let ptr = null;   // cursor in painting px, or null
+canvas.addEventListener('pointermove', e => { ptr = [camera.left + e.clientX / innerWidth * viewW, -camera.top + e.clientY / innerHeight * viewH]; });
+canvas.addEventListener('pointerleave', () => { ptr = null; });
+addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') ptr = null; });
+
+/* ---------- sound: the creak of the chassis on the rock ---------- */
+let ac = null, nextCreak = 0;
+function creak(k = 1) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = ac.currentTime, d = .5 + Math.random() * .5;
+    const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter(), lfo = ac.createOscillator(), lg = ac.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(60 + Math.random() * 30, t0); o.frequency.linearRampToValueAtTime(95 + Math.random() * 40, t0 + d);
+    f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 6;
+    lfo.frequency.value = 28 + Math.random() * 14; lg.gain.value = .06 * k; lfo.connect(lg).connect(g.gain);   // stick-slip judder, metal on rock
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.12 * k, t0 + .06); g.gain.linearRampToValueAtTime(0, t0 + d);
+    o.connect(f).connect(g).connect(ac.destination);
+    o.start(t0); lfo.start(t0); o.stop(t0 + d + .05); lfo.stop(t0 + d + .05);
+  } catch (e) {}
+}
+
+// the truck's air horn: two low tones, far off then near
+function horn(gain = .08, len = .7) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = ac.currentTime;
+    for (const f of [233, 311]) {
+      const o = ac.createOscillator(), g = ac.createGain(), fl = ac.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = gain > .05 ? 1400 : 600;
+      g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + .05); g.gain.setValueAtTime(gain, t0 + len - .1); g.gain.exponentialRampToValueAtTime(.0001, t0 + len);
+      o.connect(fl).connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + len + .05);
+    }
+  } catch (e) {}
+}
+addEventListener('keydown', e => { if (e.code === 'KeyH' && phase === 'truck' && ready()) bNext.click(); });
+
+/* ---------- the beat: doors, out, sit, the line, the ember, him, the flick ---------- */
+// ponytail: timeline in seconds; retime SCRIPT and T to the recorded dialogue
+// DRAFT lines, to be rewritten in your own voice. [seconds after you both sit, who, line]
+const SCRIPT = [
+  [4, 'YOU', 'This happened to my grandfather. Same road.'],
+  [9, 'PASSENGER', 'The court one?'],
+  [12, 'YOU', 'Every weekend, Guwahati to Shillong. Him and a friend.'],
+  [17, 'YOU', 'No barrier then. Just the old stones.'],
+  [21.5, 'YOU', 'Cloud like tonight. The bend came too late.'],
+  [26, 'YOU', 'The car went over. They both walked out of it.'],
+  [30.5, 'PASSENGER', 'How?'],
+  [32.5, 'YOU', "He never said. I don't think he knew."],
+  [37, 'YOU', 'He sat on the edge, just like this, and lit one.'],
+  [43, 'YOU', 'Then he went to court in the morning, like any weekend.'],
+];
+// when things happen, in the same seconds: the wipe to then and back, the ember, him, when you can flick
+const T = { thenIn: [16, 22], thenOut: [33, 36], ember: 37, ghost: [39, 41.5], flick: 46 };
+let lineI = 0;
+// the drive in: along the road, into the cloud, straight on where the road bends, onto the lip
+const DRIVE = new THREE.CatmullRomCurve3([[-.08, .445], [.12, .43], [.28, .425], [.4, .432]].map(([x, y]) => new THREE.Vector3(x * IW, y * IH, 0)).concat(new THREE.Vector3(...lip(.2), 0)));
+const DRIVE_LEN = DRIVE.getLength(), BRAKE_FROM = .55;   // past the bend, the edge shows up: brake window from there to the lip
+const drv = { u: 0, v: 0, inWin: 0, heldWin: 0 };
+let braking = false, skidNode = null;
+function skid(on) {   // tyres on gravel: filtered noise while you hold the brake
+  try {
+    if (on && !skidNode && ac) {
+      const b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const n = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      n.buffer = b; n.loop = true; f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 2.5; g.gain.value = .06;
+      n.connect(f).connect(g).connect(ac.destination); n.start(); skidNode = n;
+    } else if (!on && skidNode) { skidNode.stop(); skidNode = null; }
+  } catch (e) {}
+}
+let phase = 'drive', since = 0, tips = 0, ang = 0, angV = 0, fallT = -1;
+let typed = 0, full = '', lineEnd = 0;
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+function say(who, text, secs) { $('#who').textContent = who; full = text; typed = 0; $('#line').textContent = ''; $('#sub').classList.remove('off'); lineEnd = U.uTime.value + secs; }
+function go(next) {
+  phase = next; since = 0;
+  if (next === 'drive') { Object.assign(drv, { u: 0, v: 180, inWin: 0, heldWin: 0 }); ang = 0; angV = 0; }
+  if (next === 'car') { ang = 0; angV = 1.3; creak(1.3); skid(false); }   // over the lip: the nose drops and seesaws
+  if (next === 'drive') { tips = 0; fallT = -1; ang = reset(); angV = 0; jeep.position.set(CAR[0], -CAR[1], 150); lineI = 0; full = ''; $('#sub').classList.add('off'); doors.forEach(d => d.userData.open = 0); walkers.forEach(w => w.m.visible = false); emb.pos.set(...handAt); truck.visible = false; }
+  if (next === 'pout' || next === 'yout') {
+    const i = next === 'pout' ? 0 : 1, d = doors[i];
+    tips++; d.userData.open = 1; creak(1);
+    const p = body.localToWorld(v1.set(.3, .1, d.userData.side * 1.05));
+    Object.assign(walkers[i], { from: [p.x, -p.y], t0: U.uTime.value, k: 0 }); walkers[i].m.visible = true;
+  }
+  if (next === 'flick') emb.vel.set(120, -80);
+  if (next === 'truck') { if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); }   // far off, round the bend
+  if (next === 'lift') horn(.09, .45);                                                       // it stops for you
+}
+const LABEL = { drive: 'Driving…', car: 'Open the passenger door', pout: 'Open your door', yout: 'Getting out…', seated: 'Flick the ember', flick: '…', truck: 'Flag it down · H', lift: hairpin.play ? 'Ride to Shillong' : 'Again' };
+hairpin.bed({ wind: 1 });
+const NEXT = { car: 'pout', pout: 'yout', seated: 'flick', truck: 'lift', lift: 'drive' };
+const ready = () => phase === 'car' && since > 1.5 || phase === 'pout' && since > 1.2 || phase === 'seated' && since > T.flick || phase === 'truck' && since > 5 || phase === 'lift' && since > 2;
+bNext.addEventListener('click', () => { if (!ready()) return; if (phase === 'lift' && hairpin.play) hairpin.tearTo('../09-shillong/'); else go(NEXT[phase]); });
+// ?auto plays the beat through on its own; ?speed=4 runs it faster (for checking timing)
+const QS = new URLSearchParams(location.search), AUTO = QS.has('auto'), SPEED = +QS.get('speed') || 1;
+// ?at=seated&t=12 jumps straight to a moment (for checking frames)
+function jump(at, secs) {
+  const order = ['car', 'pout', 'yout', 'seated', 'flick', 'truck', 'lift'];
+  go('drive');
+  for (const p of order.slice(0, order.indexOf(at) + 1)) { jeep.updateMatrixWorld(true); go(p); for (const w of walkers) w.t0 -= 10; }
+  ang = reset(); angV = 0; since = secs; lineI = at === 'seated' ? SCRIPT.filter(l => l[0] < secs).length : 0;
+}
+addEventListener('keydown', e => {
+  if (e.target.closest('input')) return;
+  if (phase === 'drive' && ['Space', 'ArrowDown', 'KeyS'].includes(e.code)) { e.preventDefault(); braking = true; }
+  else if (e.code === 'Space' && !e.repeat) { e.preventDefault(); bNext.click(); }
+});
+addEventListener('keyup', e => { if (['Space', 'ArrowDown', 'KeyS'].includes(e.code)) braking = false; });
+canvas.addEventListener('pointerdown', () => { braking = true; });
+addEventListener('pointerup', () => { braking = false; try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) {} }); addEventListener('pointercancel', () => { braking = false; });
+// ?hang=0.7 sets the hang by hand (skips nothing); ?at=car skips the drive
+if (QS.has('hang')) hangIn.value = QS.get('hang');
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+if (QS.get('at')) jump(QS.get('at'), +QS.get('t') || 0);
+if (!QS.get('at')) go('drive');
+window.__edge = { phase: () => phase, go, ang: () => ang };
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05) * SPEED, t = (U.uTime.value += dt);
+  if (AUTO && ready() && since > 1.5) go(NEXT[phase]);
+  since += dt;
+  // the seesaw: a spring toward where the weight says the nose should rest, nudged by the wind
+  const H = +hangIn.value;
+  if (phase === 'drive') {
+    // into the cloud; holding the brake inside the window slows you, and decides how far the nose goes over
+    const win = drv.u > BRAKE_FROM;
+    if (win) { drv.inWin += dt; if (braking) drv.heldWin += dt; }
+    drv.v = braking && win ? Math.max(70, drv.v - 260 * dt) : Math.min(180, drv.v + 40 * dt);
+    skid(braking && win);
+    drv.u = Math.min(1, drv.u + drv.v * dt / DRIVE_LEN);
+    const p = DRIVE.getPointAt(drv.u), q = DRIVE.getTangentAt(drv.u);
+    const yaw = lerp(Math.atan2(-q.y * 2.4, q.x), CAR_YAW, sstep(.85, 1, drv.u));
+    jeep.position.set(p.x, -p.y, 150);
+    jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
+    body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * drv.v / 120 + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
+    ang = braking && win ? .035 : 0;   // the nose dips under braking
+    U.uFog.value = lerp(.6, .85, sstep(0, .6, drv.u));   // already in the cloud from the scene before
+    $('#brake').classList.toggle('on', win);
+    if (drv.u >= 1) {
+      if (!QS.has('hang')) hangIn.value = clamp(1 - drv.heldWin / Math.max(drv.inWin, .01) * 1.1, .05, 1).toFixed(2);
+      body.position.y = -PIVOT.y; $('#brake').classList.remove('on');
+      go('car');
+    }
+  } else U.uFog.value = phase === 'car' ? .85 * (1 - sstep(.5, 4, since)) : 0;
+  if (phase === 'flick' && since > 3.5 && fallT < 0) { fallT = 0; creak(1.4); }
+  if (phase === 'flick' && since > 8) go('truck');
+  if (fallT >= 0) {
+    // past the balance point: the nose goes, then the whole car slides off the lip into the cloud
+    fallT += dt; angV += (2 + Math.sin(ang) * 6) * dt; ang = Math.min(ang + angV * dt, 1.45);
+    const f = Math.max(0, fallT - .8);
+    jeep.position.set(CAR[0] + 260 * f, -CAR[1] - 450 * f * f, 150);   // out, clear of the lip, and down
+  } else if (phase !== 'drive') {
+    const target = reset() + tips * lerp(.04, .1, H) + Math.sin(t * .8) * .012 + Math.sin(t * 1.9 + 1) * .005;
+    angV += ((target - ang) * 26 - angV * 2.2) * dt; ang += angV * dt;
+  }
+  hang.rotation.z = -ang;
+  for (const d of doors) d.rotation.y = lerp(d.rotation.y, d.userData.side * 1.1 * d.userData.open, damp(4, dt));
+  if (ac && t > nextCreak) { creak(.35 + Math.random() * .35); nextCreak = t + 6 + Math.random() * 6; }
+  jeep.updateMatrixWorld(true);
+  // headlights: from the nose, wherever the nose now points
+  const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
+  U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
+  if (truck.visible) {   // the truck rolls in round the bend and stops; now its headlights are the light
+    const k = phase === 'truck' ? 1 - Math.pow(1 - clamp(since / 5, 0, 1), 2.2) : 1, x = lerp(TRUCK.from, TRUCK.to, k);
+    truck.position.set(x, -TRUCK.y + (k < 1 ? Math.sin(t * 9) * .8 : 0), 140);
+    U.uHead.value.set(x + truckW * .48, TRUCK.y - TRUCK.h * .2); U.uDir.value.set(1, .04).normalize();
+  }
+  // then: the old car and the two of them, only while the story's in the old painting
+  thenCar.material.opacity = thenPair.material.opacity = sstep(.55, .95, U.uThen.value);
+  // getting out and sitting down
+  for (const w of walkers) {
+    if (!w.m.visible) continue;
+    w.k = clamp((t - w.t0) / 2.4, 0, 1);
+    const e = w.k * w.k * (3 - 2 * w.k), x = lerp(w.from[0], w.to[0], e), y = lerp(w.from[1], w.to[1], e), h = figH(y);
+    w.m.position.set(x, -y + Math.abs(Math.sin(w.k * Math.PI * 5)) * 4 * (1 - w.k), 200 + y * .1);
+    w.m.scale.set(h * 200 / 240, h, 1);
+  }
+  if (phase === 'yout' && walkers[1].k >= 1) go('seated');
+  if (phase === 'seated' && lineI < SCRIPT.length && since > SCRIPT[lineI][0]) { const [, who, text] = SCRIPT[lineI++]; say(who, text, 4); }
+  U.uThen.value = phase === 'seated' ? sstep(...T.thenIn, since) * (1 - sstep(...T.thenOut, since)) : 0;
+  // him and the ember
+  const seated = phase === 'seated', flick = phase === 'flick';
+  const appear = seated ? sstep(...T.ghost, since) : flick ? 1 - sstep(0, 1.5, since) : 0;
+  const near = ptr ? sstep(gh * .5, gh * 2.2, Math.hypot(ptr[0] - GX, ptr[1] - (G[1] - gh * .5))) : 1;
+  ghostMat.uniforms.uOp.value = appear * near;
+  let glow = 0;
+  if (seated) {
+    const k = (Math.max(0, since - T.ember) / 7) % 1, drag = k < .12 ? sstep(0, .12, k) : Math.exp(-(k - .12) * 9);
+    const f = since > T.ghost[0] && k < .3 ? 1 : 0;   // the drag: cigarette at his lips
+    ghostMat.uniforms.tG.value = GHOST[f].tex; emb.pos.set(...tipAt(f));
+    glow = sstep(T.ember, T.ember + 1, since) * (.45 + .75 * drag + Math.sin(t * 23) * .05);
+  } else if (flick) {
+    emb.vel.y += 38 * dt; emb.vel.x *= 1 - .4 * dt; emb.pos.addScaledVector(emb.vel, dt);   // falls slowly into the cloud
+    glow = (1 - sstep(0, 5, since)) * (.8 + .2 * Math.sin(t * 30));
+  }
+  ember.visible = glow > 0;
+  emberMat.uniforms.uI.value = glow;
+  ember.position.set(emb.pos.x, -emb.pos.y, 300);
+  U.uEmb.value.set(emb.pos.x, emb.pos.y, (seated ? sstep(T.ember, T.ember + 2, since) : 0) + (flick ? 1 - sstep(0, 2, since) : 0));
+  // subtitle types itself on
+  if (full) {
+    if (typed < full.length) { typed = Math.min(full.length, typed + dt * 30); $('#line').textContent = full.slice(0, Math.floor(typed)); }
+    if (t > lineEnd) { $('#sub').classList.add('off'); full = ''; }
+  }
+  const lab = LABEL[phase], dis = !ready();
+  if (bNext.textContent !== lab) bNext.textContent = lab;
+  if (bNext.disabled !== dis) bNext.disabled = dis;
+  // render: info (taxi mask + normals), colour, then ink and paper rim
+  for (const m of parts) m.material = infoJeep;
+  const hidden = [];
+  scene.traverse(o => { if (o.isMesh && !parts.includes(o) && o.visible) { o.visible = false; hidden.push(o); } });
+  renderer.setRenderTarget(rtInfo); renderer.setClearColor(0x8080ff, 0); renderer.clear(); renderer.render(scene, camera);
+  for (const o of hidden) o.visible = true;
+  for (const m of parts) m.material = jeepMat;
+  renderer.setRenderTarget(rtColor); renderer.setClearColor(0x10142a, 1); renderer.clear(); renderer.render(scene, camera);
+  renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

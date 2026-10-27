@@ -1,0 +1,35 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hairpin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a title card on the night, one big way in, then each scene on its own as a torn label. Single night world by design. */
+:root { --night: #10142a; --paper: #efe6cf; --ink: #141826; --amber: #f6c744; --red: #c8402f; --muted: #aab0cc;
+  --body: "Archivo", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; color-scheme: dark; }
+body { margin: 0; min-height: 100vh; background: var(--night); color: var(--paper); font-family: var(--body); display: grid; place-items: center; padding: 48px 16px; box-sizing: border-box; }
+main { width: min(620px, 100%); display: flex; flex-direction: column; gap: 28px; }
+h1 { margin: 0; font-size: clamp(64px, 16vw, 128px); line-height: .85; font-weight: 900; font-variation-settings: 'wdth' 125; text-shadow: 6px 6px 0 var(--red); }
+p { margin: 0; font-size: 18px; line-height: 1.45; max-width: 52ch; }
+.play { align-self: flex-start; background: var(--amber); color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: 14px; letter-spacing: .06em; padding: 14px 18px; text-decoration: none; box-shadow: 4px 4px 0 #000; }
+.play:focus-visible, ol a:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+ol a { display: flex; gap: 14px; align-items: baseline; background: var(--paper); color: var(--ink); text-decoration: none; padding: 10px 16px 12px; box-shadow: 4px 4px 0 #000; }
+ol li:nth-child(odd) a { transform: rotate(-.6deg); } ol li:nth-child(even) a { transform: rotate(.5deg); }
+ol .n { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--red); letter-spacing: .1em; min-width: 3.5em; }
+ol .t { font-weight: 700; } ol .d { color: #5d5648; font-size: 14px; margin-left: auto; text-align: right; }
+small { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
+</style>
+<main>
+  <h1>HAIRPIN</h1>
+  <p>A night drive by taxi from Jorabat to Shillong. About six minutes. Built around one idea: a wish kept in the bank until you need it.</p>
+  <a class="play" href="10-jorabat-intro/?play">Play from the start →</a>
+  <ol>
+    <li><a href="10-jorabat-intro/"><span class="n">01</span><span class="t">Jorabat</span><span class="d">the dashboard</span></a></li>
+    <li><a href="01-cloud-line-scene/"><span class="n">02</span><span class="t">The climb</span><span class="d">wind, cows, the dog</span></a></li>
+    <li><a href="11-nongpoh/"><span class="n">03</span><span class="t">Nongpoh</span><span class="d">rain, the seed</span></a></li>
+    <li><a href="12-cloud-line/"><span class="n">04</span><span class="t">The cloud line</span><span class="d">into the white</span></a></li>
+    <li><a href="08-edge-scene/"><span class="n">05–09</span><span class="t">The edge</span><span class="d">brake, hang, him, the truck</span></a></li>
+    <li><a href="09-shillong/"><span class="n">10</span><span class="t">Shillong</span><span class="d">the star</span></a></li>
+  </ol>
+  <small>Shillong still uses a placeholder painting. Serve this folder (python3 -m http.server) rather than opening the files.</small>
+</main>

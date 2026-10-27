@@ -1,0 +1,231 @@
+<meta charset="utf-8">
+<title>Hairpin · Jorabat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: inside the taxi at night, looking at the dashboard and out through the windscreen; torn-paper subtitle at the top; small control strip. Single night world by design. */
+:root {
+  --night: #10142a;
+  --paper: #efe6cf;
+  --ink: #141826;
+  --amber: #f6c744;
+  --red: #c8402f;
+  --body: "Archivo", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--paper); font-family: var(--body); }
+[hidden] { display: none !important; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
+.sub { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 64px); transform: translateX(-50%) rotate(-1deg); width: min(620px, calc(100% - 32px)); background: var(--paper); color: var(--ink); padding: 12px 22px 14px; box-shadow: 5px 5px 0 #000; clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 34% 6%, 46% 0%, 58% 5%, 70% 1%, 82% 6%, 92% 1%, 100% 4%, 99% 50%, 100% 94%, 92% 100%, 80% 95%, 68% 100%, 55% 95%, 42% 100%, 30% 95%, 18% 100%, 6% 96%, 0% 100%, 1% 50%); transition: opacity .4s; pointer-events: none; }
+.sub.off { opacity: 0; }
+.sub .who { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--red); }
+.sub .line { font-size: clamp(16px, 2.4vw, 21px); font-weight: 600; line-height: 1.3; margin-top: 3px; min-height: 1.3em; }
+.bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 28px); }
+.bar button { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: var(--paper); border: 0; padding: 10px 12px; min-height: 40px; box-shadow: 3px 3px 0 #000; cursor: pointer; }
+.bar button[aria-pressed="true"], .bar #bNext { background: var(--amber); }
+.bar button:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.hint { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 16px); font-family: var(--mono); font-size: 11px; color: #aab0cc; text-align: right; line-height: 1.5; pointer-events: none; }
+#msg { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; font-family: var(--mono); font-size: 13px; color: #aab0cc; pointer-events: none; }
+@media (max-width: 560px) { .hint { display: none; } }
+</style>
+
+<canvas id="c" aria-label="Inside a taxi at night in Jorabat: things stuck to the dashboard light up as you move over them"></canvas>
+<div class="tag">HAIRPIN · SCENE 01 · JORABAT</div>
+<div class="hint">Move over the dashboard, or tap it<br>← → step through the objects</div>
+<div class="sub off" id="sub" aria-live="polite"><div class="who" id="who"></div><div class="line" id="line"></div></div>
+<div class="bar" role="group" aria-label="Controls">
+  <button data-mode="0" aria-pressed="true">Light</button>
+  <button data-mode="1" aria-pressed="false">Dark painting</button>
+  <button data-mode="2" aria-pressed="false">Lit painting</button>
+  <button id="bPrev" aria-label="Previous object">←</button>
+  <button id="bNextObj" aria-label="Next object">→</button>
+  <button id="bNext">Drive</button>
+</div>
+<div id="msg">Loading the paintings…</div>
+
+<script src="../shared/hairpin.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+THREE.ColorManagement.enabled = false;
+const hairpin = window.hairpin || { play: false, tearTo: url => { location.href = url; }, bed() {} };   // shared/hairpin.js, or bare fallbacks when opened alone
+
+const IW = 1672, IH = 941;              // dashboard-lit/dark.jpg size in px; the whole scene lives in these units
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (k, dt) => 1 - Math.exp(-k * dt);
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// The dash top, as fractions of the painting's height: from the base of the windscreen to its front edge.
+const DASH = .64, SHELF = .74;
+
+const canvas = $('#c');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); if (!renderer.capabilities.isWebGL2) throw 0; }
+catch (e) { $('#msg').textContent = 'This shot needs WebGL 2.'; throw e; }
+const DPR = Math.min(devicePixelRatio || 1, matchMedia('(pointer: coarse)').matches ? 1.5 : 2);
+renderer.setPixelRatio(DPR);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
+/* ---------- the paintings and the things on the dashboard ---------- */
+const mkCanvas = (w = IW, h = IH) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+function strokeMap(src) {
+  const a = mkCanvas(), ax = a.getContext('2d'); ax.drawImage(src, 0, 0, IW, IH);
+  const m = mkCanvas(IW >> 2, IH >> 2); m.getContext('2d').drawImage(a, 0, 0, m.width, m.height);
+  const s = mkCanvas(IW >> 4, IH >> 4); s.getContext('2d').drawImage(m, 0, 0, s.width, s.height);
+  const b = mkCanvas(); b.getContext('2d').drawImage(s, 0, 0, IW, IH);
+  const A = ax.getImageData(0, 0, IW, IH), B = b.getContext('2d').getImageData(0, 0, IW, IH).data, d = A.data;
+  for (let i = 0; i < d.length; i += 4) { const v = clamp(128 + ((d[i] + d[i + 1] + d[i + 2]) - (B[i] + B[i + 1] + B[i + 2])), 0, 255); d[i] = d[i + 1] = d[i + 2] = v; }
+  ax.putImageData(A, 0, 0); return a;
+}
+const loadImg = url => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+const tex = src => { const t = new THREE.Texture(src); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+const OBJ_FILES = ['teleprompter', 'pill-strip', 'test-sheet', 'billing-receipt', 'markon-card', 'star'];
+const [iLit, iDark, ...objImgs] = await Promise.all(['dashboard-lit.jpg', 'dashboard-dark.jpg', ...OBJ_FILES.map(n => `objects/${n}.png`)].map(loadImg));
+const OBJ_IMG = Object.fromEntries(OBJ_FILES.map((n, i) => [n, objImgs[i]]));
+let tLit, tDark, tStroke;
+try { if (!iLit || !iDark || !objImgs.every(Boolean)) throw 0; tLit = tex(iLit); tDark = tex(iDark); tStroke = tex(strokeMap(iLit)); }
+catch (e) { $('#msg').textContent = 'The paintings did not load. Serve this folder instead of opening the file.'; throw e; }
+$('#msg').hidden = true;
+
+/* ---------- light: a warm pool where you point, revealing the lit painting along its strokes ---------- */
+const U = {
+  tLit: { value: tLit }, tDark: { value: tDark }, tStroke: { value: tStroke },
+  uImg: { value: new THREE.Vector2(IW, IH) }, uLight: { value: new THREE.Vector2(-999, -999) }, uR: { value: 260 }, uDome: { value: 1 },
+  uMode: { value: 0 }, uTime: { value: 0 },
+};
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
+camera.position.z = 500;
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: /* glsl */`
+    uniform sampler2D tLit, tDark, tStroke; uniform vec2 uImg, uLight; uniform float uR, uDome, uMode, uTime;
+    varying vec2 vPx;
+    void main(){
+      vec2 uv = vec2(vPx.x / uImg.x, 1. - vPx.y / uImg.y);
+      vec3 lit = texture2D(tLit, uv).rgb, dark = texture2D(tDark, uv).rgb;
+      // the dome light while the door's open, then just the pool where you point
+      float L = max(1. - smoothstep(uR * .15, uR, length((vPx - uLight) * vec2(1., 1.6))), uDome);
+      float t = .22 + .6 * (1. - texture2D(tStroke, uv).r);       // bright strokes catch the light first
+      float on = smoothstep(t - .05, t + .05, L * 1.1);
+      on = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : on);
+      vec3 col = mix(dark, lit * vec3(1.05, .97, .86), on);
+      gl_FragColor = vec4(col, 1.);
+    }`,
+}));
+bg.position.set(IW / 2, -IH / 2, -400);
+scene.add(bg);
+
+/* ---------- what's on the dashboard: one object per project, lying on the dash top, lit when you reach it ---------- */
+// DRAFT captions: the names are your current guesses; the one-liners are placeholders for you to write.
+// x: across the painting; h: height in painting px; rot: a little askew, as if tossed there
+const OBJECTS = [
+  { file: 'teleprompter', name: 'TELEPROMPTER', line: 'The teleprompter strip. (One line about it, in your voice.)', x: .14, h: 130, rot: .06 },
+  { file: 'pill-strip', name: '1MG BANNER TOOL', line: 'The pill strip. (One line about the banner tool.)', x: .28, h: 112, rot: -.08 },
+  { file: 'test-sheet', name: 'WARDEN', line: 'A printed test sheet. (One line about Warden.)', x: .42, h: 146, rot: .1 },
+  { file: 'billing-receipt', name: 'DODO BILLINGSDK', line: 'A billing receipt. (One line about billingSDK.)', x: .55, h: 134, rot: -.05 },
+  { file: 'markon-card', name: 'MARKON', line: 'A Markon card. (One line about Markon.)', x: .68, h: 98, rot: .07 },
+];
+// the wish from Shillong, if you banked one last time
+let banked = null; try { banked = localStorage.getItem('hairpin.wish'); } catch (e) {}
+if (banked) OBJECTS.push({ file: 'star', name: 'A WISH', line: 'Still in the bank.', x: .8, h: 90, rot: -.15 });
+const objGeo = new THREE.PlaneGeometry(1, 1);
+const objMat = map => new THREE.ShaderMaterial({
+  uniforms: { map: { value: map }, uL: { value: 0 }, uMode: U.uMode }, transparent: true, depthWrite: false,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: 'uniform sampler2D map; uniform float uL, uMode; varying vec2 vUv; void main(){ vec4 c = texture2D(map, vUv); float l = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : uL); vec3 night = c.rgb * vec3(.16, .19, .3); gl_FragColor = vec4(mix(night, c.rgb * vec3(1.05, .97, .86), l), c.a); }',
+});
+for (const [i, o] of OBJECTS.entries()) {
+  const img = OBJ_IMG[o.file];
+  o.w = o.h * img.width / img.height;
+  o.mat = objMat(tex(img));
+  o.m = new THREE.Mesh(objGeo, o.mat);
+  o.px = o.x * IW; o.py = (DASH + SHELF) / 2 * IH - o.h * .15 + (i % 2) * 6;
+  o.m.position.set(o.px, -o.py, 10 + i); o.m.scale.set(o.w, o.h, 1); o.m.rotation.z = o.rot; o.m.renderOrder = 2;
+  scene.add(o.m);
+  o.lit = 0;
+}
+
+/* ---------- framing: locked, covering the screen ---------- */
+let viewW = IW, viewH = IH;
+function resize() {
+  const w = innerWidth, h = innerHeight, aspect = w / h;
+  renderer.setSize(w, h, false);
+  if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
+  const cx = clamp(.5 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
+  camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- controls: pointing lights the dashboard; keyboard steps through the objects ---------- */
+let ptr = null, picked = -1, kbd = -1;
+const toPx = e => [camera.left + e.clientX / innerWidth * viewW, -camera.top + e.clientY / innerHeight * viewH];
+canvas.addEventListener('pointermove', e => { ptr = toPx(e); kbd = -1; });
+canvas.addEventListener('pointerdown', e => { ptr = toPx(e); kbd = -1; });
+canvas.addEventListener('pointerleave', () => { ptr = null; });
+const step = d => { kbd = (Math.max(kbd, picked) + d + OBJECTS.length) % OBJECTS.length; };
+$('#bPrev').addEventListener('click', () => step(-1));
+$('#bNextObj').addEventListener('click', () => step(1));
+addEventListener('keydown', e => { if (e.code === 'ArrowRight') step(1); if (e.code === 'ArrowLeft') step(-1); });
+for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => {
+  for (const o of document.querySelectorAll('[data-mode]')) o.setAttribute('aria-pressed', String(o === b));
+  U.uMode.value = +b.dataset.mode;
+});
+$('#bNext').addEventListener('click', () => hairpin.tearTo('../01-cloud-line-scene/'));
+hairpin.bed({ engine: .5, crickets: 1 });   // idling at the stand
+
+/* ---------- the beat: the passenger gets in, asks, and the dashboard answers ---------- */
+// DRAFT lines. [seconds, who, line]
+const SCRIPT = [
+  [1.5, 'PASSENGER', 'Shillong? Great. Mind if I sit in front?'],
+  [5, 'PASSENGER', 'So what do you do?'],
+  [8.5, 'YOU', 'Easier to show you. It’s all on the dashboard.'],
+];
+const DRIVE_AT = 40;   // the drive starts on its own after this, as in the story
+let typed = 0, full = '', lineEnd = 0, lineI = 0, shownObj = -1, since = 0;
+function say(who, text, secs) { $('#who').textContent = who; full = text; typed = 0; $('#line').textContent = ''; $('#sub').classList.remove('off'); lineEnd = U.uTime.value + secs; }
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05), t = (U.uTime.value += dt);
+  since += dt;
+  U.uDome.value = 1 - sstep(3, 5.5, since);   // the passenger shuts the door; the dome light goes out
+  if (lineI < SCRIPT.length && since > SCRIPT[lineI][0]) { const [, who, text] = SCRIPT[lineI++]; say(who, text, 3.2); }
+  // which object: the keyboard's choice, else the one under the pointer
+  picked = kbd;
+  if (picked < 0 && ptr) {
+    let best = -1, bd = 1e9;
+    OBJECTS.forEach((o, i) => { const d = Math.hypot((ptr[0] - o.px) / (o.w / 2 + 20), (ptr[1] - o.py) / (o.h / 2 + 20)); if (d < 1 && d < bd) { bd = d; best = i; } });
+    picked = best;
+  }
+  // the light: follows the pointer, or sits on the chosen object
+  const L = picked >= 0 ? [OBJECTS[picked].px, OBJECTS[picked].py] : ptr || [-999, -999];
+  U.uLight.value.lerp(new THREE.Vector2(...L), damp(10, dt));
+  for (const [i, o] of OBJECTS.entries()) {
+    const near = Math.max(1 - sstep(40, 260, Math.hypot(o.px - U.uLight.value.x, (o.py - U.uLight.value.y) * 1.6)), U.uDome.value);
+    o.lit = lerp(o.lit, Math.max(near * .7, i === picked ? 1 : 0), damp(8, dt));
+    o.mat.uniforms.uL.value = o.lit;
+    o.m.position.y = -o.py + (i === picked ? 3 : 0);   // lifts a touch, like tape giving
+  }
+  if (picked !== shownObj && picked >= 0 && since > 8) { const o = OBJECTS[picked]; say(o.name, o.line, 4); }
+  shownObj = picked;
+  if (full) {
+    if (typed < full.length) { typed = Math.min(full.length, typed + dt * 40); $('#line').textContent = full.slice(0, Math.floor(typed)); }
+    if (t > lineEnd) { $('#sub').classList.add('off'); full = ''; }
+  }
+  if (since > DRIVE_AT && hairpin.play) hairpin.tearTo('../01-cloud-line-scene/');
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

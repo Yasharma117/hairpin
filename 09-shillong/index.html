@@ -1,0 +1,495 @@
+<meta charset="utf-8">
+<title>Hairpin · Shillong</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one locked painted night shot over the city; the quote stacks up as torn paper labels; small control strip. Single night world by design. */
+:root {
+  --night: #10142a;
+  --paper: #efe6cf;
+  --ink: #141826;
+  --amber: #f6c744;
+  --red: #c8402f;
+  --body: "Archivo", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--paper); font-family: var(--body); }
+[hidden] { display: none !important; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.tag { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: calc(env(safe-area-inset-left, 0px) + 14px); background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .08em; padding: 6px 10px; box-shadow: 4px 4px 0 #000; transform: rotate(-1.5deg); pointer-events: none; }
+.quote { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 60px); transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
+.quote p { margin: 0; background: var(--paper); color: var(--ink); padding: 8px 16px 10px; box-shadow: 4px 4px 0 #000; font-size: clamp(15px, 2.2vw, 19px); font-weight: 600; line-height: 1.3; clip-path: polygon(0% 10%, 6% 0%, 18% 6%, 30% 1%, 44% 7%, 58% 0%, 72% 6%, 86% 1%, 100% 5%, 99% 50%, 100% 92%, 88% 100%, 74% 94%, 60% 100%, 46% 95%, 32% 100%, 18% 94%, 4% 100%, 1% 50%); opacity: 0; transition: opacity .5s, transform .5s; }
+.quote p.on { opacity: 1; }
+.quote p:nth-child(odd) { transform: rotate(-1.2deg); }
+.quote p:nth-child(even) { transform: rotate(.9deg); margin-left: 18px; }
+.quote .star { display: inline-block; margin-left: 8px; color: var(--red); }
+.bar { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 28px); }
+.bar button { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); background: var(--paper); border: 0; padding: 10px 12px; min-height: 40px; box-shadow: 3px 3px 0 #000; cursor: pointer; }
+.bar button[aria-pressed="true"] { background: var(--amber); }
+.bar button:disabled { opacity: .55; cursor: default; }
+.bar #bNext { background: var(--amber); }
+.bar button:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.hint { position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 16px); font-family: var(--mono); font-size: 11px; color: #aab0cc; text-align: right; line-height: 1.5; pointer-events: none; }
+.wish { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: var(--mono); font-size: 13px; letter-spacing: .1em; color: var(--paper); opacity: 0; transition: opacity .6s; pointer-events: none; text-shadow: 0 1px 6px #000; }
+.wish.on { opacity: .9; }
+#msg { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; font-family: var(--mono); font-size: 13px; color: #aab0cc; pointer-events: none; }
+@media (max-width: 560px) { .hint { display: none; } }
+</style>
+
+<canvas id="c" aria-label="The taxi parked at a viewpoint above Shillong at night, the city lights spread out below; a shooting star crosses"></canvas>
+<div class="tag">HAIRPIN · SCENE 10 · SHILLONG</div>
+<div class="hint">When the star crosses, hold the mouse, the screen or Space to wish</div>
+<div class="quote" id="quote" aria-live="polite"></div>
+<div class="wish" id="wish">HOLD TO WISH</div>
+<div class="bar" role="group" aria-label="Controls">
+  <button data-mode="0" aria-pressed="true">Headlights</button>
+  <button data-mode="1" aria-pressed="false">Dark painting</button>
+  <button data-mode="2" aria-pressed="false">Lit painting</button>
+  <button id="bBoil" aria-pressed="true">Line boil</button>
+  <button id="bNext">Turn the engine off</button>
+</div>
+<div id="msg">Loading the paintings…</div>
+
+<script src="../shared/hairpin.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+THREE.ColorManagement.enabled = false;
+const hairpin = window.hairpin || { play: false, tearTo: url => { location.href = url; }, bed() {} };   // shared/hairpin.js, or bare fallbacks when opened alone
+
+const IW = 1774, IH = 887;              // painting size in px; the whole scene lives in these units
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// The layout the real shillong-lit/dark pair must keep: sky above HORIZON, city in the bowl, the viewpoint's railing along RAIL.
+const HORIZON = .4, RAIL = .74;
+
+const canvas = $('#c');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); if (!renderer.capabilities.isWebGL2) throw 0; }
+catch (e) { $('#msg').textContent = 'This shot needs WebGL 2.'; throw e; }
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const DPR = Math.min(devicePixelRatio || 1, isTouch ? 1.5 : 2);
+renderer.setPixelRatio(DPR);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
+/* ---------- the paintings: shillong-lit.jpg + shillong-dark.jpg if they exist, else a placeholder drawn here ---------- */
+const mkCanvas = (w = IW, h = IH) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
+function placeholder() {
+  const cl = mkCanvas(), cd = mkCanvas(), ctx = [cl.getContext('2d'), cd.getContext('2d')], r = rng(11);
+  const both = f => ctx.forEach(f);
+  const P = {   // [lit swatches, dark swatches], matched index for index so the two stay pixel-aligned
+    sky: [['#1a2150', '#222a5c', '#151b44'], ['#121735', '#171d40', '#0f132c']],
+    hill: [['#2c3a52', '#34445e', '#263248'], ['#161d30', '#1b2338', '#121828']],
+    town: [['#5a5068', '#6a5d72', '#4a4258'], ['#1d1c2c', '#232234', '#181726']],
+    ground: [['#8a7a5a', '#9c8a66', '#776a4e'], ['#1f2230', '#262938', '#1a1c28']],
+  };
+  const dab = (pal, x, y, w, h, a) => { const i = r() * pal[0].length | 0; both((c, k) => { c.fillStyle = pal[k][i]; c.beginPath(); c.ellipse(x, y, w, h, a, 0, Math.PI * 2); c.fill(); }); };
+  const hy = HORIZON * IH, ry = RAIL * IH;
+  both((c, k) => { c.fillStyle = P.sky[k][0]; c.fillRect(0, 0, IW, IH); });
+  for (let i = 0; i < 1400; i++) dab(P.sky, r() * IW, r() * hy, 40 + r() * 90, 8 + r() * 16, (r() - .5) * .2);
+  for (let i = 0; i < 260; i++) { const x = r() * IW, y = r() * hy * .9, s = .6 + r() * 1.4; both(c => { c.fillStyle = '#e8e4d0'; c.fillRect(x, y, s, s); }); }
+  // far ridges, then the bowl of the town
+  const ridge = (y0, amp, f, ph) => x => y0 + Math.sin(x * f + ph) * amp + Math.sin(x * f * 2.7 + ph * 3) * amp * .4;
+  for (const [y0, pal] of [[hy, P.hill], [hy + 40, P.town]]) {
+    const f = ridge(y0, 22, .004, y0);
+    both((c, k) => { c.fillStyle = pal[k][0]; c.beginPath(); c.moveTo(0, IH); for (let x = 0; x <= IW; x += 20) c.lineTo(x, f(x)); c.lineTo(IW, IH); c.fill(); });
+    for (let i = 0; i < 1800; i++) { const x = r() * IW, y = f(x) + 6 + r() * (IH - f(x)); dab(pal, x, y, 10 + r() * 22, 3 + r() * 6, (r() - .5) * .4); }
+  }
+  // the lights: thick along the bowl, thinning up the slopes; the same in both, because they are lit either way
+  const towns = Array.from({ length: 36 }, () => [r() * IW, hy + 60 + Math.pow(r(), .6) * (ry - hy - 80), 30 + r() * 110]);
+  for (let i = 0; i < 4200; i++) {
+    const c0 = towns[r() * towns.length | 0], a = r() * 6.283, d = Math.sqrt(-2 * Math.log(r() + 1e-6)) * c0[2] * .4;   // clustered: neighbourhoods
+    const x = i % 5 ? c0[0] + Math.cos(a) * d * 1.8 : r() * IW, y = i % 5 ? c0[1] + Math.sin(a) * d * .5 : hy + 50 + r() * (ry - hy - 60), s = 1 + r() * 2.2;
+    if (y < hy + 40 || y > ry - 30) continue;
+    const col = ['#ffd27a', '#ffe9b0', '#ffb860', '#f4f1e6'][r() * 4 | 0];
+    both(c => { c.fillStyle = col; c.fillRect(x, y, s, s); });
+  }
+  // the viewpoint: a paved lip and a low railing, the drop to the town beyond it
+  both((c, k) => { c.fillStyle = P.ground[k][2]; c.fillRect(0, ry, IW, IH - ry); });
+  for (let i = 0; i < 2500; i++) dab(P.ground, r() * IW, ry + r() * (IH - ry), 12 + r() * 20, 3 + r() * 5, (r() - .5) * .3);
+  both((c, k) => {
+    c.fillStyle = ['#c9c2ae', '#2b2e3c'][k]; c.fillRect(0, ry - 26, IW, 5); c.fillRect(0, ry - 8, IW, 4);
+    for (let x = 20; x < IW; x += 70) c.fillRect(x, ry - 30, 6, 30);
+  });
+  return [cl, cd];
+}
+function strokeMap(src) {
+  const a = mkCanvas(), ax = a.getContext('2d'); ax.drawImage(src, 0, 0, IW, IH);
+  const m = mkCanvas(IW >> 2, IH >> 2); m.getContext('2d').drawImage(a, 0, 0, m.width, m.height);
+  const s = mkCanvas(IW >> 4, IH >> 4); s.getContext('2d').drawImage(m, 0, 0, s.width, s.height);
+  const b = mkCanvas(); b.getContext('2d').drawImage(s, 0, 0, IW, IH);
+  const A = ax.getImageData(0, 0, IW, IH), B = b.getContext('2d').getImageData(0, 0, IW, IH).data, d = A.data;
+  for (let i = 0; i < d.length; i += 4) { const v = clamp(128 + ((d[i] + d[i + 1] + d[i + 2]) - (B[i] + B[i + 1] + B[i + 2])), 0, 255); d[i] = d[i + 1] = d[i + 2] = v; }
+  ax.putImageData(A, 0, 0); return a;
+}
+const loadImg = url => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+const tex = src => { const t = new THREE.Texture(src); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+const [iLit, iDark] = await Promise.all([loadImg('shillong-lit.jpg'), loadImg('shillong-dark.jpg')]);
+const [srcLit, srcDark] = iLit && iDark ? [iLit, iDark] : placeholder();
+let tLit, tDark, tStroke;
+try { tLit = tex(srcLit); tDark = tex(srcDark); tStroke = tex(strokeMap(srcLit)); }
+catch (e) { $('#msg').textContent = 'The paintings could not be read. Serve this folder instead of opening the file.'; throw e; }
+$('#msg').hidden = true;
+
+/* ---------- light model, in painting pixels ---------- */
+const NOISE = /* glsl */`
+float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(h12(i), h12(i+vec2(1,0)), f.x), mix(h12(i+vec2(0,1)), h12(i+vec2(1,1)), f.x), f.y); }`;
+const U = {
+  tLit: { value: tLit }, tDark: { value: tDark }, tStroke: { value: tStroke },
+  uImg: { value: new THREE.Vector2(IW, IH) },
+  uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1 },
+  uMode: { value: 0 }, uTime: { value: 0 },
+};
+const LIGHT = NOISE + /* glsl */`
+uniform vec2 uImg, uHead, uDir; uniform float uScale, uMode, uTime;
+uniform sampler2D tLit, tDark, tStroke;
+float lightAt(vec2 p){
+  vec2 v = p - uHead; float along = dot(v, uDir); float perp = length(v - uDir * along);
+  float range = 560. * uScale;
+  float cone = step(0., along) * (1. - smoothstep(along * .30, along * .42 + 6., perp)) * (1. - smoothstep(range * .45, range, along));
+  float spill = 1. - smoothstep(26. * uScale, 120. * uScale, length(v * vec2(1., 2.2)));
+  return cone * 1.5 + spill * 1.1;
+}
+vec2 uvOf(vec2 p){ return vec2(p.x / uImg.x, 1. - p.y / uImg.y); }
+float reveal(vec2 p, float L){
+  float s = texture2D(tStroke, uvOf(p)).r;
+  float t = .22 + .6 * (1. - s);          // bright strokes catch the light first
+  float on = smoothstep(t - .05, t + .05, L);
+  return uMode > 1.5 ? 1. : (uMode > .5 ? 0. : on);
+}`;
+
+/* ---------- the painting, the city twinkling ---------- */
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(0, IW, 0, -IH, -1000, 1000);
+camera.position.z = 500;
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(IW, IH), new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: 'varying vec2 vPx; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vPx = vec2(w.x, -w.y); gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: LIGHT + /* glsl */`
+    varying vec2 vPx;
+    void main(){
+      vec2 p = vPx, uv = uvOf(p);
+      vec3 lit = texture2D(tLit, uv).rgb, dark = texture2D(tDark, uv).rgb;
+      vec3 col = mix(dark, lit * vec3(1.05, .97, .86), reveal(p, lightAt(p)));
+      // the town's lights: anything bright in the night painting twinkles through the air
+      float glow = smoothstep(.5, .8, dot(dark, vec3(.333)));
+      col += dark * glow * (.25 * sin(uTime * (2. + h12(floor(p / 3.)) * 4.) + h12(floor(p / 3.) + 7.) * 6.28) + .15);
+      gl_FragColor = vec4(col, 1.);
+    }`,
+}));
+bg.position.set(IW / 2, -IH / 2, -400);
+scene.add(bg);
+
+/* ---------- the taxi: a modified 80s hatchback, painted two-tone, inked ---------- */
+// Not your taxi: that one went over at the cloud line. Same model, another cab, another colour.
+const LIVERY = { body: '#e4dfd2', roof: '#2f5d8a' };
+const jeepMat = new THREE.ShaderMaterial({
+  uniforms: { uL: { value: .3 }, uMode: U.uMode },
+  vertexShader: /* glsl */`
+    attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+    void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+  fragmentShader: /* glsl */`
+    uniform float uL, uMode; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+    void main(){
+      vec3 n = normalize(vN);
+      if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * 1.08, 1.); return; }
+      float k = dot(n, normalize(vec3(-.4, .7, .6)));
+      float lit = step(.15, k * (.45 + uL)) * clamp(uL, .25, 1.);
+      if (uMode > 1.5) lit = step(-.25, k);       // lit painting: the car in full daylight colour
+      else if (uMode > .5) lit = 0.;             // dark painting: the car fully in night tones
+      vec3 col = mix(vC * vec3(.30, .34, .52), vC * vec3(1.03, .96, .86), lit);
+      col += vec3(.05, .06, .1) * step(.72, n.y);
+      col += vec3(.035, .04, .06) + vec3(.09, .11, .18) * smoothstep(.45, .8, 1. - abs(n.z));
+      if (vE > 1.5) {
+        float streak = step(.8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2));
+        col = mix(vec3(.07, .09, .15), vec3(.36, .43, .56), streak * .55 + step(.55, n.y) * .18 + lit * .12);
+      }
+      gl_FragColor = vec4(col, 1.);
+    }`,
+});
+function colorize(g, hex, emit = 0) {
+  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3), e = new Float32Array(n).fill(emit);
+  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
+}
+// jeep -> hang (the seesaw pivot, on the lip just behind the front axle) -> body
+const PIVOT = new THREE.Vector3(.55, .2, 0);
+const jeep = new THREE.Group(), hang = new THREE.Group(), body = new THREE.Group();
+jeep.add(hang); hang.add(body); hang.position.copy(PIVOT); body.position.copy(PIVOT).negate();
+const parts = [];
+const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}, parent = body) => {
+  geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
+  const m = new THREE.Mesh(colorize(geo, hex, emit), jeepMat); parent.add(m); parts.push(m); return m;
+};
+const extrude = (pts, depth, bevel) => {
+  const sh = new THREE.Shape(); sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 6 });
+  g.translate(0, 0, -depth / 2); return g;
+};
+// lower body: short sloping bonnet, flat sides, near-vertical hatch
+put(extrude([[-1.62, .24], [-1.66, .52], [-1.62, .84], [.95, .88], [1.56, .74], [1.64, .66], [1.64, .3], [1.58, .24]], 1.36, .06), LIVERY.body);
+// cabin: tall glasshouse, slight tumblehome
+put(extrude([[-1.55, .84], [-1.46, 1.34], [-1.38, 1.39], [.4, 1.39], [.5, 1.33], [.96, .88]], 1.18, .045), LIVERY.body);
+put(new THREE.BoxGeometry(1.66, .03, 1.1), LIVERY.roof, { x: -.49, y: 1.445 });
+// glass
+for (const sgn of [-1, 1]) {
+  put(extrude([[-1.38, .93], [-1.32, 1.3], [.37, 1.31], [.84, .93]], .01, .004), '#000000', { z: sgn * .64, emit: 2 });
+  put(new THREE.BoxGeometry(.07, .42, .025), LIVERY.body, { x: -.36, y: 1.12, z: sgn * .65 });
+  put(new THREE.BoxGeometry(.06, .4, .025), LIVERY.body, { x: -1.0, y: 1.12, z: sgn * .65 });
+}
+put(new THREE.BoxGeometry(.02, .6, 1.08), '#000000', { x: .73, y: 1.12, rz: .82, emit: 2 });
+put(new THREE.BoxGeometry(.02, .41, 1.08), '#000000', { x: -1.53, y: 1.12, rz: -.22, emit: 2 });
+// the sound system, visible through the hatch glass
+for (const zz of [-.3, .3]) {
+  put(new THREE.CylinderGeometry(.11, .11, .02, 18), '#2a2b30', { x: -1.56, y: 1.0, z: zz, rz: Math.PI / 2 });
+  put(new THREE.CylinderGeometry(.045, .045, .025, 12), '#6a6d75', { x: -1.565, y: 1.0, z: zz, rz: Math.PI / 2 });
+}
+// lamps, grille, bumpers, yellow commercial plates
+for (const sgn of [-1, 1]) {
+  put(new THREE.BoxGeometry(.03, .14, .3), '#fff6d6', { x: 1.69, y: .62, z: sgn * .46, emit: 1 });
+  put(new THREE.BoxGeometry(.03, .07, .1), '#ffb347', { x: 1.68, y: .49, z: sgn * .6 });
+  put(new THREE.BoxGeometry(.03, .26, .15), '#c8352a', { x: -1.69, y: .66, z: sgn * .58, emit: 1 });
+  put(new THREE.BoxGeometry(.06, .08, .13), LIVERY.body, { x: .86, y: .98, z: sgn * .76 });
+  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: -.36, y: .6, z: sgn * .755 });
+  put(new THREE.BoxGeometry(.014, .48, .014), '#5a5e68', { x: .9, y: .6, z: sgn * .755 });
+  put(new THREE.BoxGeometry(.1, .025, .02), '#8b8f96', { x: -.46, y: .78, z: sgn * .76 });
+}
+put(new THREE.BoxGeometry(.02, .08, .6), '#0d0e10', { x: 1.7, y: .6 });
+put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: 1.69, y: .32 });
+put(new THREE.BoxGeometry(.12, .14, 1.46), '#141518', { x: -1.69, y: .32 });
+put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: 1.76, y: .42 });
+put(new THREE.BoxGeometry(.02, .12, .42), '#f4cf3a', { x: -1.76, y: .5 });
+put(new THREE.CylinderGeometry(.006, .006, .75, 4), '#111215', { x: .7, y: 1.25, z: .66, rz: .35 });
+// wider aftermarket tyres sticking out of the arches, dark alloys with a chrome lip
+for (const [x, sgn] of [[1.07, 1], [1.07, -1], [-1.07, 1], [-1.07, -1]]) {
+  put(new THREE.CylinderGeometry(.33, .33, .02, 20), '#0b0c0e', { x, y: .3, z: sgn * .752, rx: Math.PI / 2 });
+  put(new THREE.TorusGeometry(.34, .04, 6, 18, Math.PI), '#0d0e10', { x, y: .3, z: sgn * .76 });
+  put(new THREE.CylinderGeometry(.29, .29, .28, 20), '#121316', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+  put(new THREE.CylinderGeometry(.18, .18, .29, 16), '#4d5158', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+  put(new THREE.TorusGeometry(.18, .016, 6, 20), '#c9ccd1', { x, y: .29, z: sgn * .867 });
+  put(new THREE.CylinderGeometry(.05, .05, .3, 8), '#24262a', { x, y: .29, z: sgn * .72, rx: Math.PI / 2 });
+}
+/* ---------- ink + paper rim pass around the taxi ---------- */
+const infoJeep = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying vec3 vN; void main(){ gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
+const rtColor = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+const rtInfo = new THREE.WebGLRenderTarget(1, 1);
+const post = new THREE.ShaderMaterial({
+  uniforms: { tColor: { value: rtColor.texture }, tInfo: { value: rtInfo.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: U.uTime, uBoil: { value: 1 }, uJeepScale: { value: .7 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
+  fragmentShader: NOISE + /* glsl */`
+    uniform sampler2D tColor, tInfo; uniform vec2 uRes; uniform float uTime, uBoil, uJeepScale; varying vec2 vUv;
+    float maskAt(vec2 uv){ return texture2D(tInfo, uv).a; }
+    vec2 PX;
+    float edgeAt(vec2 uv, float r){
+      vec4 c = texture2D(tInfo, uv); float ring = 0., dn = 0.;
+      for (int i = 0; i < 8; i++) {
+        float a = float(i) * .785398; vec4 s = texture2D(tInfo, uv + vec2(cos(a), sin(a)) * r * PX);
+        ring = max(ring, s.a); if (s.a > .5 && c.a > .5) dn = max(dn, length(s.rgb - c.rgb));
+      }
+      return max(step(.5, ring) * (1. - step(.5, c.a)), step(.4, dn));
+    }
+    void main(){
+      PX = 1. / uRes;
+      float frame = floor(uTime * 8.) * uBoil;
+      float base = max(1.6, uRes.y / 520.) * mix(1., 1.8, uJeepScale);
+      // main stroke: wobbles a little each frame, pressure swells and thins along its length
+      vec2 w1 = (vec2(vn2(vUv * 45. + frame * 3.1), vn2(vUv * 45. + 17. + frame * 5.3)) - .5) * 2.2 * PX * (.4 + uBoil);
+      float e1 = edgeAt(vUv + w1, base * (.5 + 1.1 * vn2(vUv * 60. + 3.)));
+      // a second, looser pass drawn slightly off the first, the way a sketch gets gone over twice
+      vec2 w2 = (vec2(vn2(vUv * 11. + 40. + frame * 2.), vn2(vUv * 11. + 90. + frame * 1.7)) - .5) * 10. * PX;
+      float e2 = edgeAt(vUv + w2, base * .55) * step(.42, vn2(vUv * 26. + frame * 1.3));
+      float ink = max(e1 * step(.14, vn2(vUv * 130. + frame)), e2 * .85);
+      // flat colour printed a touch out of register with the line
+      vec2 sh = vec2(2.6, -2.1) * PX * mix(.8, 1.7, uJeepScale);
+      vec3 col = texture2D(tColor, vUv).rgb;
+      if (maskAt(vUv - sh) > .5) col = texture2D(tColor, vUv - sh).rgb;
+      col = mix(col, vec3(.07, .075, .1), ink);
+      col += (h12(gl_FragCoord.xy) - .5) * .03;
+      vec2 q = vUv - .5; col *= 1. - dot(q, q) * .4;
+      gl_FragColor = vec4(col, 1.);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
+
+// parked at the viewpoint, nose to the railing, the town ahead
+const CAR = [.27 * IW, .85 * IH];
+jeep.position.set(CAR[0], -CAR[1], 150);
+jeep.scale.setScalar(78);
+jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .3));
+scene.add(jeep);
+
+/* ---------- the two of us at the railing, seen from behind ---------- */
+const cutout = (w, h, draw) => { const c = mkCanvas(w, h); draw(c.getContext('2d')); return tex(c); };
+const back = (fill, extra) => cutout(200, 240, c => {
+  const shape = (dx, dy) => {
+    c.beginPath(); c.moveTo(18 + dx, 240); c.bezierCurveTo(14 + dx, 150 + dy, 30 + dx, 108 + dy, 100 + dx, 104 + dy); c.bezierCurveTo(170 + dx, 108 + dy, 186 + dx, 150 + dy, 182 + dx, 240); c.fill();
+    c.beginPath(); c.ellipse(100 + dx, 62 + dy, 30, 36, 0, 0, Math.PI * 2); c.fill(); if (extra) extra(c, dx, dy);
+  };
+  c.fillStyle = '#7a6a58'; shape(3, -3);   // rim: the town's glow catching the shoulders
+  c.fillStyle = fill; shape(0, 0);
+});
+const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);
+[[back('#191427', (c, dx, dy) => { c.beginPath(); c.ellipse(100 + dx, 28 + dy, 17, 13, 0, 0, Math.PI * 2); c.fill(); }), .55], [back('#0b0f1e'), .61]].forEach(([map, x]) => {
+  const m = new THREE.Mesh(footGeo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
+  const y = RAIL * IH + 30, h = 150;
+  m.position.set(x * IW, -y, 250); m.scale.set(h * 200 / 240, h, 1); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
+});
+
+/* ---------- the shooting star ---------- */
+const STAR = { from: [.16 * IW, .07 * IH], to: [.78 * IW, .3 * IH] };
+const starMat = new THREE.ShaderMaterial({
+  uniforms: { uI: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  // vUv.x: 0 at the tail, 1 at the head
+  fragmentShader: 'uniform float uI; varying vec2 vUv; void main(){ float w = 1. - abs(vUv.y - .5) * 2.; float a = pow(vUv.x, 2.5) * w * w + exp(-pow((1. - vUv.x) * 26., 2.)) * w * 1.5; gl_FragColor = vec4(vec3(1., .96, .85) * a * uI, 1.); }',
+});
+const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), starMat); star.frustumCulled = false; star.renderOrder = 5; star.visible = false; scene.add(star);
+const starDir = new THREE.Vector2(STAR.to[0] - STAR.from[0], STAR.to[1] - STAR.from[1]), starLen = starDir.length(); starDir.normalize();
+star.rotation.z = Math.atan2(-starDir.y, starDir.x);
+
+/* ---------- framing: locked, covering the screen ---------- */
+let viewW = IW, viewH = IH;
+function resize() {
+  const w = innerWidth, h = innerHeight, aspect = w / h, Z = 1;
+  renderer.setSize(w, h, false);
+  if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
+  viewW /= Z; viewH /= Z;
+  const cx = clamp(.45 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.5 * IH, viewH / 2, IH - viewH / 2);
+  camera.left = cx - viewW / 2; camera.right = cx + viewW / 2; camera.top = -(cy - viewH / 2); camera.bottom = -(cy + viewH / 2);
+  camera.updateProjectionMatrix();
+  const pw = Math.floor(w * DPR), ph = Math.floor(h * DPR);
+  rtColor.setSize(pw, ph); rtInfo.setSize(pw, ph); post.uniforms.uRes.value.set(pw, ph);
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- controls ---------- */
+const bNext = $('#bNext');
+hairpin.bed({ crickets: 1, wind: .4 });
+for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => {
+  for (const o of document.querySelectorAll('[data-mode]')) o.setAttribute('aria-pressed', String(o === b));
+  U.uMode.value = +b.dataset.mode;
+});
+$('#bBoil').addEventListener('click', () => { const b = $('#bBoil'), on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); post.uniforms.uBoil.value = on ? 1 : 0; });
+// holding: the mouse or a finger anywhere on the picture, or Space
+let held = false;
+canvas.addEventListener('pointerdown', () => { held = true; });
+addEventListener('pointerup', () => { held = false; }); addEventListener('pointercancel', () => { held = false; });
+addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); held = true; } });
+addEventListener('keyup', e => { if (e.code === 'Space') held = false; });
+
+/* ---------- sound: the engine ticking as it cools ---------- */
+let ac = null, nextTick = 0, tickGap = .25;
+function tick() {
+  try {
+    const t0 = ac.currentTime, n = ac.createBufferSource(), b = ac.createBuffer(1, 600, ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / 60);
+    const f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'bandpass'; f.frequency.value = 2400 + Math.random() * 1600; f.Q.value = 8; g.gain.value = .5;
+    n.buffer = b; n.connect(f).connect(g).connect(ac.destination); n.start(t0);
+  } catch (e) {}
+}
+function chime() {   // the wish taking: two soft bells
+  try {
+    const t0 = ac.currentTime;
+    for (const [f, at] of [[1320, 0], [1760, .12]]) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t0 + at); g.gain.exponentialRampToValueAtTime(.06, t0 + at + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + at + 1.6);
+      o.connect(g).connect(ac.destination); o.start(t0 + at); o.stop(t0 + at + 1.7);
+    }
+  } catch (e) {}
+}
+
+/* ---------- the beat: engine off, the star, the quote ---------- */
+// cut B, one torn label per line
+const QUOTE = [
+  'Years ago I saw one of these and didn’t wish.',
+  'I just smiled, and kept it in the bank for when I’d need it.',
+  'I think I spent it tonight, at the cloud line.',
+  'Maybe he spent his on this road too.',
+  'This one, I’m keeping.',
+];
+// ponytail: timeline in seconds after the engine goes off; retime to the recorded narration
+const T = { star: 6, starDur: 3.4, quote: [11, 15, 19.5, 24, 29], end: 33 };
+const HOLD_TO_BANK = .6;   // seconds of holding while the star is up
+const KEY = 'hairpin.wish';
+let phase = 'arrive', since = 0, heldFor = 0, banked = false, shown = 0;
+function bankWish() {
+  banked = true; chime();
+  try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}   // read by the dashboard: a paper star on your next visit
+}
+function go(next) {
+  phase = next; since = 0;
+  if (next === 'stop') {
+    heldFor = 0; banked = false; shown = 0; tickGap = .25; nextTick = .4;
+    $('#quote').innerHTML = QUOTE.map(l => `<p>${l}</p>`).join('');
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+}
+const LABEL = { arrive: 'Turn the engine off', stop: '…', done: 'Again' };
+const ready = () => phase === 'arrive' || phase === 'done';
+bNext.addEventListener('click', () => { if (ready()) go('stop'); });
+const QS = new URLSearchParams(location.search);
+// ?t=8 jumps straight to that moment after the engine goes off (for checking frames)
+if (QS.has('t')) { go('stop'); since = +QS.get('t'); }
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+jeep.updateMatrixWorld(true);
+{ // headlights: from the nose, along the car
+  const a = body.localToWorld(v1.set(1.72, .62, 0)), b = body.localToWorld(v2.set(2.72, .62, 0));
+  U.uHead.value.set(a.x, -a.y); U.uDir.value.set(b.x - a.x, a.y - b.y).normalize();
+}
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05), t = (U.uTime.value += dt);
+  since += dt;
+  if (phase === 'stop') {
+    // engine ticks, further and further apart
+    if (ac && since > nextTick) { tick(); tickGap *= 1.18; nextTick = since + tickGap * (.7 + Math.random() * .6); }
+    // the star: up for starDur seconds; holding while it's up banks the wish
+    const k = (since - T.star) / T.starDur, up = k > 0 && k < 1;
+    star.visible = up;
+    if (up) {
+      if (held && !banked) { heldFor += dt; if (heldFor > HOLD_TO_BANK) bankWish(); }
+      const e = 1 - Math.pow(1 - k, 1.6), len = 160 + (held || banked ? 120 : 0);
+      const hx = STAR.from[0] + starDir.x * starLen * e, hy = STAR.from[1] + starDir.y * starLen * e;
+      star.position.set(hx - starDir.x * len / 2, -(hy - starDir.y * len / 2), 300);
+      star.scale.set(len, banked ? 9 : 6, 1);
+      starMat.uniforms.uI.value = sstep(0, .08, k) * (1 - sstep(.8, 1, k)) * (banked ? 1.6 : 1);
+    }
+    $('#wish').classList.toggle('on', up && !banked);
+    // the quote sets itself, one torn label at a time; a paper star on the last if you wished
+    while (shown < QUOTE.length && since > T.quote[shown]) {
+      const p = $('#quote').children[shown++]; p.classList.add('on');
+      if (shown === QUOTE.length && banked) p.insertAdjacentHTML('beforeend', '<span class="star" aria-label="wish banked">★</span>');
+    }
+    if (since > T.end) phase = 'done';
+  }
+  const lab = LABEL[phase], dis = !ready();
+  if (bNext.textContent !== lab) bNext.textContent = lab;
+  if (bNext.disabled !== dis) bNext.disabled = dis;
+  // render: info (taxi mask + normals), colour, then ink and paper rim
+  for (const m of parts) m.material = infoJeep;
+  const hidden = [];
+  scene.traverse(o => { if (o.isMesh && !parts.includes(o) && o.visible) { o.visible = false; hidden.push(o); } });
+  renderer.setRenderTarget(rtInfo); renderer.setClearColor(0x8080ff, 0); renderer.clear(); renderer.render(scene, camera);
+  for (const o of hidden) o.visible = true;
+  for (const m of parts) m.material = jeepMat;
+  renderer.setRenderTarget(rtColor); renderer.setClearColor(0x10142a, 1); renderer.clear(); renderer.render(scene, camera);
+  renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

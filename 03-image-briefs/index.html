@@ -1,0 +1,346 @@
+<title>Hairpin Image Briefs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a production sheet. One column of scenes in story order; each image is a slip with its filename, frame count and a prompt to copy. */
+:root{
+  --paper:#e9e5db; --sheet:#f4efe3; --ink:#1d1a16; --muted:#6e6455; --rule:#cfc6b4;
+  --red:#a8331f; --night:#1a2042; --amber:#c98a12; --done:#3f6b4a;
+  --display:'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --body:'Archivo', system-ui, -apple-system, sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#121633; --sheet:#1b2045; --ink:#ece6d6; --muted:#9aa0bf; --rule:#2e3563;
+  --red:#ff8a6b; --night:#0b0e22; --amber:#f6c744; --done:#7fc28f; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --paper:#121633; --sheet:#1b2045; --ink:#ece6d6; --muted:#9aa0bf; --rule:#2e3563;
+  --red:#ff8a6b; --night:#0b0e22; --amber:#f6c744; --done:#7fc28f; color-scheme:dark }
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 80px}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+.eyebrow{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.14em;color:var(--red);text-transform:uppercase}
+header{display:flex;flex-direction:column;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:22px}
+header h1{font-size:clamp(36px,6vw,60px);line-height:1;font-weight:900;font-variation-settings:'wdth' 112}
+header p{margin:0;max-width:62ch;color:var(--muted)}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.how div{background:var(--sheet);border:1px solid var(--rule);padding:14px 16px;font-size:14px;line-height:1.5;min-width:0}
+.how b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--red);margin-bottom:6px}
+.progress{font-family:var(--mono);font-size:13px;color:var(--muted)}
+section.scene{display:flex;flex-direction:column;gap:16px}
+.scene-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;border-bottom:1px solid var(--rule);padding-bottom:10px}
+.scene-head h2{font-size:28px;font-weight:850;font-variation-settings:'wdth' 105}
+.scene-head .eyebrow{color:var(--muted)}
+.scene-head p{margin:0;flex-basis:100%;max-width:70ch;color:var(--muted);font-size:15px}
+.slip{background:var(--sheet);border:1px solid var(--rule);display:flex;flex-direction:column;gap:10px;padding:16px 18px 18px;min-width:0}
+.slip.is-done{opacity:.55}
+.slip-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.slip h3{font-size:18px;font-weight:750}
+.files{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);padding:2px 8px}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor}
+.tag.pair{color:var(--night)} .tag.sprite{color:var(--red)} .tag.edit{color:var(--amber)}
+:root:not([data-theme="light"]) .tag.pair{color:var(--muted)}
+.note{margin:0;font-size:14px;color:var(--muted);max-width:75ch}
+.step{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:4px}
+.prompt{position:relative;min-width:0}
+.prompt pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:13px;line-height:1.55;
+  background:var(--paper);border:1px solid var(--rule);padding:14px 16px 14px 16px;max-height:340px;overflow:auto}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.06em;cursor:pointer;
+  background:var(--ink);color:var(--paper);border:1px solid var(--ink);padding:7px 12px}
+button.ghost{background:transparent;color:var(--ink)}
+button:focus-visible,input:focus-visible+label{outline:2px solid var(--red);outline-offset:2px}
+button.ok{background:var(--done);border-color:var(--done);color:var(--paper)}
+.done{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:auto;cursor:pointer}
+.done input{width:16px;height:16px;accent-color:var(--done)}
+.style{border:2px solid var(--ink)}
+footer{font-size:14px;color:var(--muted);border-top:1px solid var(--rule);padding-top:16px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Hairpin · image production sheet · Story v2</div>
+  <h1>Every image the next scenes need</h1>
+  <p>In story order, from Jorabat to the shooting star at Shillong. Each slip has the file name I'll look for, how many frames, and a prompt to paste into ChatGPT. Send the results back in this chat in any order. Name them as listed, or just say which slip they're for.</p>
+  <div class="progress" id="progress">0 of 0 done</div>
+</header>
+
+<div class="how">
+  <div><b>BACKGROUNDS COME IN PAIRS</b>Make the lit version first. Then attach that exact image and run the "dark" prompt. That's how the two stay aligned, and alignment is what makes the headlight reveal work.</div>
+  <div><b>FIGURES: SEND ONE VERSION</b>Send only the lit version. I make the night version from your two hill paintings, like I did for the cows. Transparent background, facing left.</div>
+  <div><b>FRAME 2 IS AN EDIT</b>For animation frames, attach frame 1 and ask for one change. If you generate frame 2 from scratch you get a different person, which is what happened with the walker.</div>
+  <div><b>ATTACH REFERENCES</b>For backgrounds, attach your first hill painting (lit) as the style reference. For figures, attach the grazing cow. For you and your grandfather, attach photos.</div>
+</div>
+
+<!-- STYLE BLOCKS -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Paste these first</span><h2>The two house styles</h2>
+  <p>Every prompt below already contains its style block, so you can paste any slip on its own. These are here in case you start a fresh ChatGPT conversation and want to set the style once.</p></div>
+  <article class="slip style">
+    <div class="slip-top"><h3>Background style</h3><span class="tag pair">for every painting</span></div>
+    <div class="prompt"><pre>STYLE FOR THIS WHOLE SESSION (backgrounds): Hand-painted 2.5D matte painting for an animated night drive on the Guwahati–Shillong road in Meghalaya, Northeast India. Match the attached painting exactly in technique: thick gouache/oil look, visible directional brush strokes and bristle texture, simplified chunky shapes, strong readable silhouettes, grass painted as long sweeping strokes that follow the slope, earth banks as warm orange-brown blocks. No people, no animals, no vehicles, no text, no signs, no logos, no watermark, no frame, no vignette, no lens glow, no fog painted on top unless asked. Wide landscape. Keep important content inside the middle 2:1 band; the top and bottom edges may be cropped.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+  </article>
+  <article class="slip style">
+    <div class="slip-top"><h3>Figure style</h3><span class="tag sprite">for every cut-out</span></div>
+    <div class="prompt"><pre>STYLE FOR THIS WHOLE SESSION (figures): One single full-body figure or object on a fully transparent background (PNG with alpha). Nothing else in the image: no ground, no cast shadow, no glow, no halo, no rim light, no border, no text. Painted to match the attached reference: visible directional brush strokes, warm colours as if caught in yellow-white headlights, and a thin, slightly broken black ink outline around the silhouette. Side view, facing LEFT, unless the prompt says otherwise. Whole figure inside the frame with a small margin, nothing cropped. Realistic proportions, not cartoon, not chibi.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+  </article>
+</section>
+
+<!-- FIX -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Fix · already in the build</span><h2>Walker, frame 2</h2>
+  <p>Your two walker frames are two different men, so he flickers when they swap. Redo frame 2 as an edit of frame 1.</p></div>
+  <article class="slip" data-id="walker-2">
+    <div class="slip-top"><h3>Walker, other stride</h3><span class="files">walker-2.png</span><span class="tag edit">edit · attach walker-1</span></div>
+    <div class="prompt"><pre>Attached is frame 1 of a walk cycle. Make frame 2: the SAME man, same face, same age, same clothes, same umbrella (same number of ribs, same handle, held in the same hand at the same height), same size and same position in the frame, same painting style and ink outline, transparent background, facing left. Change only the legs and the free arm: the other leg forward, mid-stride, free arm swinging the opposite way. Nothing else changes.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<!-- 01 -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Scene 01 · 0:00 · Jorabat</span><h2>Who's driving</h2>
+  <p>The stop at the edge of Guwahati where the passenger gets in, then the view from the driver's seat. Each project from your last seven months is an object sitting on the dashboard.</p></div>
+
+  <article class="slip" data-id="jorabat">
+    <div class="slip-top"><h3>The stop at Jorabat</h3><span class="files">jorabat-lit.png · jorabat-dark.png</span><span class="tag pair">pair</span></div>
+    <p class="note">The taxi drives along the road in the lower third, so keep that band clear and level.</p>
+    <div class="step">Step 1 · lit (attach your first lit hill painting)</div>
+    <div class="prompt"><pre>Hand-painted 2.5D matte painting for an animated night drive on the Guwahati–Shillong road, Northeast India. Match the attached painting exactly in technique: thick gouache/oil look, visible directional brush strokes, simplified chunky shapes, strong silhouettes. No people, no animals, no vehicles, no text, no signs, no logos, no watermark, no vignette. Wide landscape; keep important content inside the middle 2:1 band.
+
+SCENE: Jorabat, the last roadside stop where the city ends and the hills begin. Side-on view. A straight two-lane highway runs left to right across the lower third of the image (from about 68% to 84% of the height), level and unobstructed along its whole length, wet tarmac with a dashed centre line. On the far side of the road, in the left third: a small tea stall with a rusty corrugated tin roof on wooden poles, a plank counter, a kettle and glass jars, a single bare bulb under the roof, a plastic stool. Next to it a tall streetlight on a thin pole. Behind, the first forested hill rises steeply into the dark, layered ridges fading into blue haze. The right half behind the road is open: roadside grass, a low drain, a few banana plants, then the hill. Night sky in the top quarter, deep navy with a few stars.
+
+LIGHTING (this is the LIT version): everything painted as if caught in warm yellow-white headlights and the stall bulb: golden grass, warm ochre road, orange earth, rich readable detail. The sky stays deep navy.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Step 2 · dark (attach the lit result from step 1)</div>
+    <div class="prompt"><pre>Repaint the attached painting as the same scene at night with every light off. Keep EVERYTHING identical: every shape, edge, brush stroke, object and the framing, same size, pixel-aligned with the original. Change only colour and value: grass becomes deep teal-green, shadows navy blue, earth and tin roof dull maroon-brown, the road a cool blue-grey, the bulb and streetlight unlit. The sky stays as it is. Do not add, remove or move anything.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="dash">
+    <div class="slip-top"><h3>The dashboard</h3><span class="files">dash-lit.png · dash-dark.png</span><span class="tag pair">pair</span></div>
+    <p class="note">The top of the dash must be empty. I place the project objects on it, and they light up when you hover over them.</p>
+    <div class="step">Step 1 · lit</div>
+    <div class="prompt"><pre>Hand-painted 2.5D matte painting, thick gouache/oil look, visible directional brush strokes, simplified chunky shapes; match the attached painting's technique. No people, no text, no logos, no brand names, no watermark. Wide landscape.
+
+SCENE: the view from the driver's seat inside an old, small Indian hatchback taxi (Maruti 800 era) at night, looking straight ahead through the windscreen. The dashboard runs across the bottom 34% of the image: worn black plastic with a strip of faded faux wood, a small round speedometer cluster on the left, a cheap aftermarket car stereo in the centre with a few tiny coloured buttons. The flat top of the dashboard is long, clear and EMPTY, a plain shelf along its whole length with nothing on it. The top of the steering wheel is just visible at the bottom-left corner. A rear-view mirror hangs at the top centre with nothing hanging from it. The windscreen fills the middle: a dark two-lane road ahead with a dashed centre line, roadside grass, the black shapes of hills, a deep navy sky. Thin black window pillars frame the left and right edges.
+
+LIGHTING (LIT version): the small dome light is on, so the cabin is warm and amber and the dashboard is clearly readable; the road outside is lit by headlights in warm yellow.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Step 2 · dark (attach step 1)</div>
+    <div class="prompt"><pre>Repaint the attached painting as the same moment with the dome light off and the headlights dipped. Keep EVERYTHING identical: every shape, edge, brush stroke and the framing, same size, pixel-aligned. Change only colour and value: the cabin goes dark navy and teal, the dashboard almost black with soft blue highlights, only the speedometer and stereo glow a faint green, and the road outside is mostly dark. Do not add, remove or move anything.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="objects">
+    <div class="slip-top"><h3>Things on the dashboard</h3><span class="files">obj-teleprompter · obj-pills · obj-tests · obj-receipt · obj-card · obj-star</span><span class="tag sprite">6 cut-outs</span></div>
+    <p class="note">One per project, plus a paper star that appears after the ending. I've guessed which project each object stands for: teleprompter app, 1mg banner tool, Warden, Dodo billingSDK, Markon. Swap any line to match your own list. Run the prompt six times, changing only the OBJECT line.</p>
+    <div class="prompt"><pre>One single object on a fully transparent background (PNG with alpha). Nothing else: no surface, no cast shadow, no glow, no border, no text, no logos, no brand names. Painted to match the attached reference: visible directional brush strokes, warm colours as if lit by a car's dome light, thin slightly broken black ink outline. Seen from a three-quarter view from above, as if lying on a car dashboard. Whole object in frame with a small margin.
+
+OBJECT (pick one per image):
+1. obj-teleprompter: a long strip of white paper tape curling at both ends, with rows of tiny unreadable printed lines, like a teleprompter script.
+2. obj-pills: a foil blister strip of ten tablets, two tablets already popped out, silver foil with a red edge.
+3. obj-tests: a folded printout with a long column of small green tick marks and one red cross, slightly crumpled.
+4. obj-receipt: a long thermal-paper receipt curling into a loose spiral, faint grey rows of numbers.
+5. obj-card: a matte black business card with a thin gold edge, lying at an angle, no text.
+6. obj-star: a small five-pointed star hand-cut from yellow paper, slightly creased, one point folded up.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<!-- CAST -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Cast · used in scenes 01, 05, 06, 08, 09</span><h2>You and the passenger</h2>
+  <p>Make the standing frame first, then attach it for the other poses so each of you stays the same person. The text in [brackets] is a placeholder; replace it before you paste.</p></div>
+
+  <article class="slip" data-id="yash">
+    <div class="slip-top"><h3>You</h3><span class="files">yash-stand · yash-out · yash-sit</span><span class="tag sprite">3 poses</span></div>
+    <div class="step">Pose 1 · standing (attach a clear photo of yourself, plus the cow reference)</div>
+    <div class="prompt"><pre>One single full-body figure on a fully transparent background (PNG with alpha). Nothing else: no ground, no shadow, no glow, no halo, no border, no text. Painted to match the attached animal reference: visible directional brush strokes, warm colours as if caught in yellow-white headlights, thin slightly broken black ink outline. Realistic proportions, not cartoon.
+
+CHARACTER: the young man in the attached photo (keep his face, hair and build recognisable), mid-twenties, from Assam. Clothes: [a black padded jacket open over a grey t-shirt, dark jeans, worn brown boots]. Standing relaxed, side view, facing LEFT, hands in jacket pockets, weight on one leg. Whole figure in frame with a small margin.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Pose 2 · just got out (attach pose 1)</div>
+    <div class="prompt"><pre>Same man as the attached image: same face, clothes, colours, painting style, ink outline, same scale. Transparent background, side view facing LEFT. New pose: he has just scrambled out of a car that is about to fall. Bent forward, one hand on his knee, the other arm half raised for balance, catching his breath, looking back over his shoulder to the right. Nothing else changes.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Pose 3 · sitting at the edge, from behind (attach pose 1)</div>
+    <div class="prompt"><pre>Same man as the attached image: same clothes, colours, painting style and ink outline. Transparent background. New view: seen from BEHIND and slightly to the left, sitting on the very edge of a drop with his legs hanging down over the edge, both hands planted on the ground beside him, shoulders a little hunched, head turned slightly to his right as if talking to someone sitting beside him. Draw only the figure; the edge he sits on is not drawn, so his legs hang into empty transparent space.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="comp">
+    <div class="slip-top"><h3>The passenger</h3><span class="files">comp-stand · comp-out · comp-sit</span><span class="tag sprite">3 poses</span></div>
+    <p class="note">Replace the bracket with whoever this is. If it's a real friend, attach their photo too.</p>
+    <div class="step">Pose 1 · standing</div>
+    <div class="prompt"><pre>One single full-body figure on a fully transparent background (PNG with alpha). Nothing else: no ground, no shadow, no glow, no halo, no border, no text. Painted to match the attached reference: visible directional brush strokes, warm colours as if caught in yellow-white headlights, thin slightly broken black ink outline. Realistic proportions, not cartoon.
+
+CHARACTER: [a friend in their mid-twenties from Shillong, short black hair, an oversized dark green hoodie, loose jeans, white sneakers, a canvas tote bag on one shoulder]. Standing, side view, facing LEFT, one hand holding the tote strap. Whole figure in frame with a small margin.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Pose 2 · just got out (attach pose 1)</div>
+    <div class="prompt"><pre>Same person as the attached image: same face, clothes, colours, painting style, ink outline, same scale. Transparent background, side view facing LEFT. New pose: they have just jumped out of a car that is tipping over a cliff. Stumbling backwards a step, arms half out for balance, staring back at the car to the right, mouth slightly open. The tote bag swings. Nothing else changes.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Pose 3 · sitting at the edge, from behind (attach pose 1)</div>
+    <div class="prompt"><pre>Same person as the attached image: same clothes, colours, painting style and ink outline. Transparent background. New view: seen from BEHIND and slightly to the right, sitting on the very edge of a drop with legs hanging down over it, knees together, hands holding the hoodie sleeves, head tilted slightly to their left, listening to someone beside them. Draw only the figure; the edge is not drawn, so the legs hang into empty transparent space.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<!-- 03 -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Scene 03 · 1:50 · Nongpoh</span><h2>The seed</h2>
+  <p>Rain at the roadside stalls. The line "My grandfather drove this every weekend" is said here. I add the rain in code, so don't paint any.</p></div>
+  <article class="slip" data-id="nongpoh">
+    <div class="slip-top"><h3>Pineapple stalls in the rain</h3><span class="files">nongpoh-lit.png · nongpoh-dark.png</span><span class="tag pair">pair</span></div>
+    <div class="step">Step 1 · lit</div>
+    <div class="prompt"><pre>Hand-painted 2.5D matte painting for an animated night drive on the Guwahati–Shillong road, Meghalaya. Match the attached painting exactly in technique: thick gouache/oil look, visible directional brush strokes, simplified chunky shapes. No people, no animals, no vehicles, no text, no signs, no logos, no watermark, no vignette, no rain streaks. Wide landscape; keep important content inside the middle 2:1 band.
+
+SCENE: Nongpoh, a row of roadside fruit stalls on a hill highway. Side-on view. A two-lane road runs left to right across the lower third (68% to 84% of the height), level and unobstructed, its surface wet and glossy with long reflections. On the far side: three or four small bamboo-and-tarpaulin stalls in a row with blue and orange plastic sheets for roofs, wooden shelves stacked with pyramids of pineapples and bunches of bananas, a hanging kerosene lantern in one stall. Puddles on the dirt shoulder. Behind, steep slopes thick with areca palms and broadleaf trees disappearing into low cloud. Dark navy sky in the top fifth.
+
+LIGHTING (LIT version): warm, as if lit by headlights and the lantern: golden-yellow pineapples, glowing tarps, wet road catching warm light. The sky stays dark.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Step 2 · dark (attach step 1)</div>
+    <div class="prompt"><pre>Repaint the attached painting as the same scene at night with every light off and rain falling (but paint no rain streaks). Keep EVERYTHING identical: every shape, edge, brush stroke and the framing, same size, pixel-aligned. Change only colour and value: foliage deep teal-green, shadows navy blue, tarps dull desaturated blue and brown, pineapples dark olive, the wet road cool blue-grey with faint cold reflections, the lantern unlit. Do not add, remove or move anything.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<!-- 04 -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Scene 04 · 2:30 · The cloud line</span><h2>The slide</h2>
+  <p>The road bends into a wall of cloud. I add moving mist in code on top; you paint the thick cloud bank that never moves.</p></div>
+  <article class="slip" data-id="cloud">
+    <div class="slip-top"><h3>Road into the cloud</h3><span class="files">cloud-lit.png · cloud-dark.png</span><span class="tag pair">pair</span></div>
+    <div class="step">Step 1 · lit</div>
+    <div class="prompt"><pre>Hand-painted 2.5D matte painting for an animated night drive in the Khasi hills, Meghalaya. Match the attached painting exactly in technique: thick gouache/oil look, visible directional brush strokes, simplified chunky shapes. No people, no animals, no vehicles, no text, no signs, no logos, no watermark, no vignette. Wide landscape; keep important content inside the middle 2:1 band.
+
+SCENE: a mountain road going into cloud. A two-lane road enters from the bottom-right corner, runs up and to the left across the lower half, then bends sharply to the right around a blind corner at about 40% from the left, and the bend disappears into a thick wall of white cloud. On the outside of the bend (left side) there is NO barrier: just a strip of short grass and a few white-painted stones, then the ground simply ends. Beyond and below that edge, nothing but dense cloud. On the inside of the bend (right side), a steep grassy bank with a few pines going up into the cloud. The cloud is painted as heavy, soft, layered masses with brush texture, covering the whole top half and swallowing the far end of the road. A small part of navy sky shows through in the top-left corner.
+
+LIGHTING (LIT version): warm headlight light on the near road and grass; the cloud wall lit from inside, bright creamy white-yellow where the light hits it.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Step 2 · dark (attach step 1)</div>
+    <div class="prompt"><pre>Repaint the attached painting as the same scene at night with no lights. Keep EVERYTHING identical: every shape, edge, brush stroke and the framing, same size, pixel-aligned. Change only colour and value: grass deep teal-green, road cool blue-grey, white stones dim grey-blue, the cloud a cold pale blue-grey glowing faintly against the navy sky. Do not add, remove or move anything.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<!-- 05-09 -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Scenes 05–09 · 2:45 to 4:35 · The edge</span><h2>The hang, the story, the figure, the rope</h2>
+  <p>One cliff painting carries five scenes, so it's the most important image here. The taxi hangs at the edge, you both sit on it, the figure appears beside you, and the truck comes round the bend. The "then" version is the same cliff decades earlier, and the story fades into it.</p></div>
+
+  <article class="slip" data-id="edge">
+    <div class="slip-top"><h3>The cliff edge</h3><span class="files">edge-lit.png · edge-dark.png</span><span class="tag pair">pair · most important</span></div>
+    <p class="note">The middle stretch of the edge has to stay clear. That's where the car hangs and where the three of you sit.</p>
+    <div class="step">Step 1 · lit</div>
+    <div class="prompt"><pre>Hand-painted 2.5D matte painting for an animated night drive in the Khasi hills, Meghalaya. Match the attached painting exactly in technique: thick gouache/oil look, visible directional brush strokes, simplified chunky shapes, strong silhouettes. No people, no animals, no vehicles, no text, no signs, no logos, no watermark, no vignette. Wide landscape; keep important content inside the middle 2:1 band.
+
+SCENE: a roadside cliff edge, seen from the side, with the drop on the right. Exact layout:
+- LEFT 55%: flat ground. A strip of road runs along the back (from the left edge to about 45% across, 52% to 60% of the height) and ends in a bend. Between the road and the edge, a band of short grass and gravel, flat and walkable.
+- THE EDGE: the flat ground ends in a clean, sharp rock lip running roughly vertically from about 50% across at the top of the ground to 58% across at the bottom of the image. The lip is level and smooth between 40% and 70% of the image height. Keep this stretch completely clear: no rocks, bushes, posts or railings on it.
+- Just left of the edge: a short concrete crash barrier, bent and broken outward, and a white kilometre stone knocked over.
+- RIGHT 42%: the drop. A sheer dark rock face falls away from the lip into a sea of thick cloud filling the valley below, with distant ridges rising out of the cloud as layered silhouettes.
+- TOP 35%: deep navy night sky with a few stars and a thin crescent moon in the upper right.
+
+LIGHTING (LIT version): warm yellow-white light, as if from headlights pointing out over the drop: grass and gravel golden, rock lip warm orange-grey, the cloud sea lit cream-yellow from above. The sky stays deep navy.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Step 2 · dark (attach step 1)</div>
+    <div class="prompt"><pre>Repaint the attached painting as the same place at night with no headlights, only faint moonlight. Keep EVERYTHING identical: every shape, edge, brush stroke and the framing, same size, pixel-aligned. Change only colour and value: grass deep teal-green, gravel and road cool blue-grey, the rock face near-black navy, the cloud sea pale cold blue-grey with soft moonlit tops, the barrier and stone dim grey. Do not add, remove or move anything.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="edge-then">
+    <div class="slip-top"><h3>The same cliff, decades earlier</h3><span class="files">edge-then.png</span><span class="tag edit">edit · attach edge-lit</span></div>
+    <p class="note">The story wipes from tonight's cliff into this one, so it has to line up exactly. I've set it in the 1970s. Change the decade if you know when it happened.</p>
+    <div class="prompt"><pre>Repaint the attached painting as the SAME place about fifty years earlier, in the [1970s]. Keep the cliff edge, the rock lip, the drop, the cloud sea, the horizon and the whole composition exactly where they are: same framing, same size, pixel-aligned. Changes: the road is narrower, older, patched tarmac with a gravel edge; there is NO crash barrier and no kilometre stone; instead an old whitewashed stone milestone stands upright, and a few wooden posts with a sagging wire run along the road. Paint the whole image in faded warm tones, like an old hand-tinted photograph: ochre, sepia, dusty rose, pale gold, with softer and drier brush strokes. The sky becomes a dusty violet-brown dusk. Keep the stretch of the edge between 40% and 70% of the height completely clear.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="then-figures">
+    <div class="slip-top"><h3>Your grandfather and his friend, then</h3><span class="files">then-car.png · then-pair.png</span><span class="tag sprite">2 cut-outs · faded</span></div>
+    <p class="note">These two appear inside the "then" painting while you tell the story. I've used an Ambassador as the car. Change it if you know which car he drove. If you have a photo of him from that time, attach it.</p>
+    <div class="step">Their car</div>
+    <div class="prompt"><pre>One single object on a fully transparent background (PNG with alpha). Nothing else: no ground, no shadow, no glow, no border, no text, no number plate text. A [1970s Hindustan Ambassador] car, cream-white, rounded body, chrome bumpers, seen in exact side view facing LEFT, headlights on. Painted like an old hand-tinted photograph: faded ochre, sepia and cream tones, soft dry brush strokes, with a thin slightly broken black ink outline matching the attached reference. Whole car in frame with a small margin.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">The two men (attach a photo of your grandfather if you have one)</div>
+    <div class="prompt"><pre>Two men together as one group on a fully transparent background (PNG with alpha). Nothing else: no ground, no shadow, no glow, no border, no text. Painted like an old hand-tinted photograph: faded ochre, sepia and dusty rose, soft dry brush strokes, thin slightly broken black ink outline matching the attached reference.
+
+[1970s], two Assamese men in their [forties], standing side by side, side view facing RIGHT, looking down over an edge in front of them, shaken. LEFT man (the grandfather, from the attached photo if provided): slim, neat side-parted hair, white half-sleeve shirt tucked into dark trousers, a sleeveless knitted sweater vest, leather sandals, a lit cigarette between two fingers of his lowered hand. RIGHT man (his friend): stockier, a dark jacket over a kurta, one hand on the back of his own neck. Whole group in frame with a small margin.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="ghost">
+    <div class="slip-top"><h3>The figure beside you</h3><span class="files">ghost-1.png · ghost-2.png</span><span class="tag sprite">2 frames · line only</span></div>
+    <p class="note">He's drawn in line only, with no paint. In code I turn the line pale and make it shimmer, and add the ember and the smoke. Frame 2 is the same drawing with the cigarette at his lips.</p>
+    <div class="step">Frame 1 · cigarette down</div>
+    <div class="prompt"><pre>A LINE DRAWING ONLY on a fully transparent background (PNG with alpha). Black brush-pen ink lines, loose and slightly broken, varying in thickness. Absolutely NO colour, NO fill, NO shading, NO grey tones, NO background, NO ground: only black lines on transparency, like a quick sketchbook drawing.
+
+SUBJECT: an elderly Assamese man in his [sixties] (use the attached photo for his face and build if provided), sitting on the ground at the edge of a drop, seen from behind and slightly to the RIGHT, so we see his back, the right side of his face in profile and his right arm. Knees drawn up, his legs hang down over the edge. His right forearm rests on his right knee, a lit cigarette held loosely between two fingers, pointing down. Clothes: a half-sleeve shirt, a sleeveless sweater vest, loose trousers. Calm, looking out into the distance. The edge he sits on is not drawn.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Frame 2 · the drag (attach frame 1)</div>
+    <div class="prompt"><pre>Same line drawing as the attached image: same man, same pose, same line style, same position and scale in the frame, transparent background, black lines only, no colour, no fill, no shading. Change ONLY his right arm: he raises the cigarette to his lips, elbow lifted, head tilted back very slightly. Nothing else changes.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+
+  <article class="slip" data-id="truck">
+    <div class="slip-top"><h3>The truck and the rope</h3><span class="files">truck.png · rope-1.png · rope-2.png</span><span class="tag sprite">3 cut-outs</span></div>
+    <p class="note">The truck comes round the bend, three men pull the taxi back with a rope, and one of them says a line in Khasi. One rope-puller is enough: I repeat him three times and vary each copy.</p>
+    <div class="step">The truck</div>
+    <div class="prompt"><pre>One single vehicle on a fully transparent background (PNG with alpha). Nothing else: no ground, no shadow, no glow, no border, no readable text, no brand logos. An old Indian highway goods truck in exact side view facing LEFT: rounded snub-nosed cab, a tall wooden cargo body painted with bright folk-art patterns (flowers, eyes, a pair of birds, coloured stripes) and tassels hanging from the bumper, mud on the wheels, headlights on. Painted to match the attached reference: visible directional brush strokes, warm colours as if caught in headlights, thin slightly broken black ink outline. Whole truck in frame with a small margin.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Rope-puller, frame 1</div>
+    <div class="prompt"><pre>One single full-body figure on a fully transparent background (PNG with alpha). Nothing else: no ground, no shadow, no glow, no border, no text. Painted to match the attached reference: visible directional brush strokes, warm colours as if caught in headlights, thin slightly broken black ink outline. Realistic proportions.
+
+CHARACTER: a Khasi truck helper in his thirties, wiry, a knitted woollen cap, a checked shirt with sleeves rolled up, a sleeveless padded vest, rubber slippers. Side view facing LEFT, leaning far back with knees bent, pulling hard on a thick rope with both hands. The rope runs out of the frame to the RIGHT and is cut off by the image edge. Whole figure in frame.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Rope-puller, frame 2 (attach frame 1)</div>
+    <div class="prompt"><pre>Same man as the attached image: same face, clothes, colours, painting style, ink outline, scale and position in the frame. Transparent background, facing LEFT. Change only the pose: he has stepped back one step and is re-gripping the rope hand over hand, body a little more upright, mid-breath. The rope still exits to the right. Nothing else changes.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<!-- 10 -->
+<section class="scene">
+  <div class="scene-head"><span class="eyebrow">Scene 10 · 5:00 · Shillong</span><h2>The star</h2>
+  <p>The viewpoint above the city. I draw the shooting star and set the quote in code, so leave the sky open and don't paint any shooting stars.</p></div>
+  <article class="slip" data-id="shillong">
+    <div class="slip-top"><h3>Above the city</h3><span class="files">shillong-lit.png · shillong-dark.png</span><span class="tag pair">pair</span></div>
+    <p class="note">Write the name of your spot into the bracket if you have one, so the details match the real place.</p>
+    <div class="step">Step 1 · lit</div>
+    <div class="prompt"><pre>Hand-painted 2.5D matte painting for an animated night drive ending in Shillong, Meghalaya. Match the attached painting exactly in technique: thick gouache/oil look, visible directional brush strokes, simplified chunky shapes. No people, no animals, no vehicles, no text, no signs, no logos, no watermark, no vignette, no shooting stars. Wide landscape; keep important content inside the middle 2:1 band.
+
+SCENE: a high roadside viewpoint on the edge of Shillong [your spot's name], seen from the side. BOTTOM 25%: a strip of road and a flat gravel pull-off running left to right, level and unobstructed, with a low old stone parapet wall along its far edge. Tall pine trees stand at the far left and far right edges, framing the view. BEYOND THE WALL: the land falls away to a wide valley where the city spreads out over rolling hills as thousands of tiny warm lights: yellow, orange and a few white, in clusters and winding strings along roads, thinning out towards ridges on the horizon. TOP 45%: a huge open night sky, deep navy fading to a slightly lighter blue at the horizon, scattered with small stars, mostly empty so a shooting star can cross it.
+
+LIGHTING (LIT version): warm headlight light on the road, gravel, wall and pine trunks; the city lights bright and glowing.</pre></div>
+    <div class="row"><button data-copy>Copy</button></div>
+    <div class="step">Step 2 · dark (attach step 1)</div>
+    <div class="prompt"><pre>Repaint the attached painting as the same scene with the car's headlights off. Keep EVERYTHING identical: every shape, edge, brush stroke, every city light and star, the framing, same size, pixel-aligned. Change only the foreground: road, gravel, wall and pines become deep navy and teal, lit only faintly by the glow of the city. The city lights and the sky stay exactly as they are. Do not add, remove or move anything.</pre></div>
+    <div class="row"><button data-copy>Copy</button><label class="done"><input type="checkbox">Done</label></div>
+  </article>
+</section>
+
+<footer>That's 6 painting pairs, one "then" repaint and 20 cut-outs. If ChatGPT gives you a background that isn't transparent, send it anyway and I'll cut it out. If a lit and dark pair come back misaligned, send both and I'll check before using them.</footer>
+</div>
+
+<script>
+(function(){
+  const slips=[...document.querySelectorAll('.slip[data-id]')];
+  const prog=document.getElementById('progress');
+  const key='hairpin-briefs-done';
+  let done={}; try{done=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
+  function update(){const n=slips.filter(s=>done[s.dataset.id]).length;prog.textContent=n+' of '+slips.length+' slips done';}
+  slips.forEach((s,i)=>{const cb=s.querySelector('.done input'); if(!cb) return; cb.id='done-'+s.dataset.id;
+    cb.checked=!!done[s.dataset.id]; s.classList.toggle('is-done',cb.checked);
+    cb.addEventListener('change',()=>{done[s.dataset.id]=cb.checked;s.classList.toggle('is-done',cb.checked);try{localStorage.setItem(key,JSON.stringify(done))}catch(e){};update();});});
+  update();
+  document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',()=>{
+    const pre=b.closest('.row').previousElementSibling.querySelector('pre'); const t=pre.textContent;
+    const ok=()=>{b.textContent='Copied';b.classList.add('ok');setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok')},1400)};
+    const fallback=()=>{const r=document.createRange();r.selectNodeContents(pre);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);b.textContent='Selected · press copy';};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,fallback)}else fallback();
+  }));
+})();
+</script>

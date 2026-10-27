@@ -1,0 +1,540 @@
+<title>WebGL Oddities</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jacquard+24&family=Hanken+Grotesk:wght@400;500;600;700&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a contour-map hero (live shader terrain) over a cabinet of six shelves; entries in a two-column grid. Cobalt borrowed from Napoleon's own loader. */
+:root {
+  --paper: #f4f5fb;
+  --ink: #12163f;
+  --cobalt: #1015b9;
+  --muted: #565b84;
+  --rule: #d8daeb;
+  --chip: #e6e8f6;
+  --take: #eceeff;
+  --gold: #8a5a00;
+  --gold-bg: #fbefd2;
+  --display: "Jacquard 24", "UnifrakturMaguntia", Georgia, serif;
+  --body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0b0d26; --ink: #e8e9f8; --cobalt: #9095ff; --muted: #9ba0c9;
+    --rule: #252a5c; --chip: #171b45; --take: #141844; --gold: #f2c46b; --gold-bg: #2c2410;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0b0d26; --ink: #e8e9f8; --cobalt: #9095ff; --muted: #9ba0c9;
+  --rule: #252a5c; --chip: #171b45; --take: #141844; --gold: #f2c46b; --gold-bg: #2c2410;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 3px; border-radius: 2px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* Hero */
+.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--rule); }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hero .wrap { position: relative; padding-block: clamp(48px, 9vw, 104px) clamp(36px, 6vw, 64px); }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(56px, 13vw, 132px); line-height: .9; margin: 0; color: var(--cobalt); text-wrap: balance; }
+.lede { font-size: clamp(17px, 2.2vw, 20px); max-width: 34em; margin: 20px 0 0; text-wrap: pretty; }
+.lede b { font-weight: 600; }
+
+/* Patterns */
+.patterns { padding-block: 40px 8px; }
+.patterns h2 { font-family: var(--mono); font-weight: 500; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 16px; }
+.patterns ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px 28px; }
+.patterns li { min-width: 0; font-size: 15px; color: var(--muted); }
+.patterns li strong { display: block; color: var(--ink); font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-block: 32px 8px; }
+.controls a, .toggle { font-family: var(--mono); font-size: 12px; text-decoration: none; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 999px; background: transparent; color: var(--ink); cursor: pointer; line-height: 1.2; }
+.controls a:hover, .toggle:hover { border-color: var(--cobalt); color: var(--cobalt); }
+.controls .n { color: var(--muted); margin-left: 4px; }
+.toggle { border-color: var(--gold); color: var(--gold); }
+.toggle[aria-pressed="true"] { background: var(--gold-bg); }
+.spacer { flex: 1 1 0; }
+
+/* Shelves */
+.shelf { padding-block: 40px 8px; scroll-margin-top: 16px; }
+.shelf-head { display: grid; gap: 4px; margin-bottom: 20px; }
+.shelf-head h2 { font-family: var(--display); font-weight: 400; font-size: clamp(36px, 6vw, 52px); line-height: 1; margin: 0; color: var(--cobalt); text-wrap: balance; }
+.shelf-head p { margin: 0; color: var(--muted); max-width: 40em; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 0 32px; }
+.entry { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding-block: 20px 22px; border-top: 1px solid var(--rule); }
+.entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.entry h3 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; }
+.entry h3 a { text-decoration: none; }
+.entry h3 a:hover { color: var(--cobalt); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.arrow { font-weight: 400; color: var(--cobalt); margin-left: 4px; font-size: .8em; }
+.maker { margin: 0; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.desc { margin: 0; max-width: 62ch; }
+.take { margin: 0; padding: 10px 12px; background: var(--take); border-radius: 6px; font-size: 15px; display: flex; gap: 10px; align-items: baseline; }
+.take-label { flex: none; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--cobalt); }
+.foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; }
+.chip { font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; background: var(--chip); border-radius: 4px; color: var(--ink); }
+.badge { font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; border-radius: 4px; background: var(--gold-bg); color: var(--gold); }
+.host { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-left: auto; overflow-wrap: anywhere; }
+
+body.only-st .entry:not(.st) { display: none; }
+body.only-st .shelf:not(:has(.st)) { display: none; }
+
+footer { padding-block: 48px 64px; color: var(--muted); font-size: 14px; }
+footer p { margin: 0; max-width: 46em; }
+
+@media (max-width: 560px) {
+  .host { margin-left: 0; width: 100%; }
+  .spacer { display: none; }
+}
+</style>
+
+<header class="hero">
+  <canvas id="terrain" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <p class="eyebrow">A field guide · 38 live links · checked 22 Oct 2026</p>
+    <h1>WebGL Oddities</h1>
+    <p class="lede">Small, strange worlds people built for the browser, and what to take from each for <b>Story Terrain</b>. Every link was opened and its code checked for WebGL or WebGPU.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="patterns" aria-labelledby="pat">
+    <h2 id="pat">What the best of these share</h2>
+    <ol><li><strong>A system beats a scene.</strong> Napoleon, Orb.farm and AI Town set rules and let you watch. Every visit is different, so people come back.</li><li><strong>Data becomes geography.</strong> Map of GitHub, Radio Garden and Shipmap give data a place, and people explore it like land. Story Terrain belongs here.</li><li><strong>Sound carries half the weight.</strong> Shipmap&#x27;s Bach, Bear 71&#x27;s narrator, FRONTIER&#x27;s rule that the soundtrack is the product.</li><li><strong>One constraint, owned completely.</strong> Susurrus is all watercolour, Sandspiel is all pixels, Napoleon is all sprites.</li><li><strong>Small and finished beats big.</strong> Most of this list was made by one or two people.</li></ol>
+  </section>
+
+  <nav class="controls" aria-label="Shelves">
+    <a href="#systems">Systems you watch <span class="n">9</span></a><a href="#ai">AI, made visible <span class="n">4</span></a><a href="#data">Data as a place <span class="n">6</span></a><a href="#stories">Stories you move through <span class="n">7</span></a><a href="#sound">Sound you can see <span class="n">3</span></a><a href="#toys">Toys and rabbit holes <span class="n">9</span></a>
+    <span class="spacer"></span>
+    <button class="toggle" id="st-toggle" type="button" aria-pressed="false">Story Terrain lineage only · 8</button>
+  </nav>
+
+  <section class="shelf" id="systems">
+  <header class="shelf-head"><h2>Systems you watch</h2><p>Napoleon&#x27;s cousins. Someone sets the rules, then you watch the world run.</p></header>
+  <div class="grid"><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://napole0n.ai/" target="_blank" rel="noopener">Project Napoleon<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Napole0n</p>
+  </div>
+  <p class="desc">Rival LLMs command sprite armies on a 3D tile map. The one that started this list.</p>
+  <p class="take"><span class="take-label">Take</span>Eight-direction 2D sprites on 3D terrain. Thousands of units, tiny asset budget, hand-made look.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">three.js</span><span class="chip">WebGPU → WebGL2</span><span class="host">napole0n.ai</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://www.convex.dev/ai-town" target="_blank" rel="noopener">AI Town<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">a16z × Convex</p>
+  </div>
+  <p class="desc">An open-source pixel town where AI characters live, wander and talk to each other.</p>
+  <p class="take"><span class="take-label">Take</span>LLM agents become readable once they have a body, a place and a path between places.</p>
+  <div class="foot"><span class="chip">pixi.js</span><span class="host">www.convex.dev/ai-town</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://simonw.github.io/battledrones/" target="_blank" rel="noopener">Battle Drones<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Simon Willison</p>
+  </div>
+  <p class="desc">A browser RTS built almost entirely by Claude Code over 321 commits. Two phones in the same room can play each other by exchanging data as sound.</p>
+  <p class="take"><span class="take-label">Take</span>Sound as a data channel. For an audio company, the most on-brand trick on this list.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">simonw.github.io/battledrones</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://orb.farm/" target="_blank" rel="noopener">Orb.farm<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Max Bittker</p>
+  </div>
+  <p class="desc">A small aquatic ecosystem in a glass orb. Add sand, water, plants and creatures, then keep it alive.</p>
+  <p class="take"><span class="take-label">Take</span>A fixed, tiny world makes emergent behaviour easy to read and hard to stop watching.</p>
+  <div class="foot"><span class="chip">Rust/wasm</span><span class="chip">regl</span><span class="host">orb.farm</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://sandspiel.club/" target="_blank" rel="noopener">Sandspiel<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Max Bittker</p>
+  </div>
+  <p class="desc">A falling-sand toy with a community gallery of shared creations.</p>
+  <p class="take"><span class="take-label">Take</span>Let people publish what they make inside your world and the world grows itself.</p>
+  <div class="foot"><span class="chip">Rust/wasm</span><span class="chip">regl</span><span class="host">sandspiel.club</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://chakazul.github.io/Lenia/JavaScript/Lenia.html" target="_blank" rel="noopener">Lenia<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Bert Chan</p>
+  </div>
+  <p class="desc">Continuous cellular automata that produce creatures which move, split and look alive.</p>
+  <p class="take"><span class="take-label">Take</span>A few numbers in, organisms out. The surprise is the content.</p>
+  <div class="foot"><span class="chip">regl</span><span class="host">chakazul.github.io/Lenia/JavaScript/Lenia.html</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://distill.pub/2020/growing-ca/" target="_blank" rel="noopener">Growing Neural CA<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Mordvintsev et al., Distill</p>
+  </div>
+  <p class="desc">A neural network that grows a lizard emoji cell by cell. Scratch part of it away and it regrows.</p>
+  <p class="take"><span class="take-label">Take</span>Let the reader break the thing. Damage is the most persuasive demo.</p>
+  <div class="foot"><span class="chip">raw WebGL</span><span class="host">distill.pub/2020/growing-ca</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://3d-life-sim.pages.dev/" target="_blank" rel="noopener">3D Life Sim<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Aaron Lemke</p>
+  </div>
+  <p class="desc">Artificial life in 3D, played like an instrument.</p>
+  <p class="take"><span class="take-label">Take</span>Turn a simulation&#x27;s parameters into something you perform rather than configure.</p>
+  <div class="foot"><span class="chip">WebGPU</span><span class="host">3d-life-sim.pages.dev</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://andrewdcampbell.github.io/galaxy-sim/" target="_blank" rel="noopener">Galaxy Sim<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Andrew Campbell</p>
+  </div>
+  <p class="desc">Galaxies forming under gravity, in real time.</p>
+  <p class="take"><span class="take-label">Take</span>Physics at cosmic scale makes a small screen feel enormous.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">andrewdcampbell.github.io/galaxy-sim</span></div>
+</article></div>
+</section><section class="shelf" id="ai">
+  <header class="shelf-head"><h2>AI, made visible</h2><p>Models and machine imagination turned into places you can look around.</p></header>
+  <div class="grid"><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://bbycroft.net/llm" target="_blank" rel="noopener">LLM Visualization<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Brendan Bycroft</p>
+  </div>
+  <p class="desc">A walk through a GPT model where every matrix is a 3D block and every step is animated.</p>
+  <p class="take"><span class="take-label">Take</span>Explain a system by flying the camera through it in the order it actually runs.</p>
+  <div class="foot"><span class="chip">raw WebGL2</span><span class="host">bbycroft.net/llm</span></div>
+</article><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://projector.tensorflow.org/" target="_blank" rel="noopener">Embedding Projector<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Google / TensorFlow</p>
+  </div>
+  <p class="desc">Fly through high-dimensional embeddings squashed into 3D. Similar words cluster together.</p>
+  <p class="take"><span class="take-label">Take</span>Meaning becomes distance. The same move turns episodes into terrain.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">three.js</span><span class="host">projector.tensorflow.org</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://marble.worldlabs.ai/" target="_blank" rel="noopener">Marble<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">World Labs</p>
+  </div>
+  <p class="desc">Generate a 3D world from text or an image. Worlds export as Gaussian splats that render in the browser with Spark, their three.js renderer.</p>
+  <p class="take"><span class="take-label">Take</span>AI-made environments are cheap now. Taste in choosing and framing them is the scarce part.</p>
+  <div class="foot"><span class="chip">Splats</span><span class="chip">three.js</span><span class="host">marble.worldlabs.ai</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://momentchan.github.io/drift/" target="_blank" rel="noopener">Drift<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Ming Jyun Hung</p>
+  </div>
+  <p class="desc">A million particles and a lost astronaut writing an AI-generated diary of loneliness.</p>
+  <p class="take"><span class="take-label">Take</span>Pair a GPU spectacle with a small, sad human voice. The contrast does the work.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">momentchan.github.io/drift</span></div>
+</article></div>
+</section><section class="shelf" id="data">
+  <header class="shelf-head"><h2>Data as a place</h2><p>Story Terrain&#x27;s direct lineage. Once data has a geography, people explore it like land.</p></header>
+  <div class="grid"><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://anvaka.github.io/map-of-github/" target="_blank" rel="noopener">Map of GitHub<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Andrei Kashcha</p>
+  </div>
+  <p class="desc">Every dot is a repository. Projects starred by the same people sit close together and cluster into landmasses.</p>
+  <p class="take"><span class="take-label">Take</span>Proximity from shared audience. Series heard by the same listeners could form your continents.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">WebGL</span><span class="host">anvaka.github.io/map-of-github</span></div>
+</article><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://anvaka.github.io/map-of-reddit/" target="_blank" rel="noopener">Map of Reddit<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Andrei Kashcha</p>
+  </div>
+  <p class="desc">Subreddits laid out as a map, clustered by overlapping communities.</p>
+  <p class="take"><span class="take-label">Take</span>Labels that appear as you zoom keep a dense map readable.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">WebGL</span><span class="host">anvaka.github.io/map-of-reddit</span></div>
+</article><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://radio.garden/" target="_blank" rel="noopener">Radio Garden<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Radio Garden</p>
+  </div>
+  <p class="desc">Spin a globe and tap a green dot to hear that city&#x27;s live radio.</p>
+  <p class="take"><span class="take-label">Take</span>The map is the player. No list, no search needed to start listening.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">maplibre</span><span class="chip">WebGL</span><span class="host">radio.garden</span></div>
+</article><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://www.shipmap.org/" target="_blank" rel="noopener">Shipmap<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Kiln × UCL Energy Institute</p>
+  </div>
+  <p class="desc">A year of global shipping, 2012, animated over the world. Scored with Bach&#x27;s Goldberg Variations.</p>
+  <p class="take"><span class="take-label">Take</span>One piece of music turns a data map into something people sit through.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">raw WebGL</span><span class="host">www.shipmap.org</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://earth.nullschool.net/" target="_blank" rel="noopener">earth<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Cameron Beccario</p>
+  </div>
+  <p class="desc">Live wind, ocean currents and air quality flowing over a globe.</p>
+  <p class="take"><span class="take-label">Take</span>Particles moving along a field read instantly as weather. Story arcs could flow the same way.</p>
+  <div class="foot"><span class="chip">raw WebGL</span><span class="host">earth.nullschool.net</span></div>
+</article><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://explore.ownprimland.com/" target="_blank" rel="noopener">Explore Primland<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Primland resort</p>
+  </div>
+  <p class="desc">A scroll-driven camera flight over mountain terrain through fog.</p>
+  <p class="take"><span class="take-label">Take</span>The closest finish reference for a terrain fly-over. Fog hides the edge of the world.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">three.js</span><span class="host">explore.ownprimland.com</span></div>
+</article></div>
+</section><section class="shelf" id="stories">
+  <header class="shelf-head"><h2>Stories you move through</h2><p>Narrative carried by space, camera and pacing rather than pages.</p></header>
+  <div class="grid"><article class="entry st">
+  <div class="entry-head">
+    <h3><a href="https://bear71vr.nfb.ca/" target="_blank" rel="noopener">Bear 71<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">National Film Board of Canada</p>
+  </div>
+  <p class="desc">A grizzly in Banff, tracked by trail cameras. You explore the park as a map while the bear tells her own story.</p>
+  <p class="take"><span class="take-label">Take</span>A voice over a map. The nearest ancestor to an audio drama you can walk around.</p>
+  <div class="foot"><span class="badge">Story Terrain lineage</span><span class="chip">three.js</span><span class="host">bear71vr.nfb.ca</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://messenger.abeto.co/" target="_blank" rel="noopener">Messenger<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Abeto</p>
+  </div>
+  <p class="desc">A courier on a tiny planet. Someone has to make the deliveries.</p>
+  <p class="take"><span class="take-label">Take</span>A small world you can walk around in a minute feels complete, not empty.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">messenger.abeto.co</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://ponpon-mania.com/" target="_blank" rel="noopener">Ponpon Mania<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Justine Soulié</p>
+  </div>
+  <p class="desc">An interactive WebGL comic about a sheep who dreams of becoming a DJ.</p>
+  <p class="take"><span class="take-label">Take</span>Comic grammar, panels and timing, carried into 3D.</p>
+  <div class="foot"><span class="chip">WebGL</span><span class="host">ponpon-mania.com</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://shining.302chanwoo.com/" target="_blank" rel="noopener">Shining<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Chanwoo Hwang</p>
+  </div>
+  <p class="desc">A short story told as a small 3D storybook.</p>
+  <p class="take"><span class="take-label">Take</span>Keep the scope to a few pages and finish every one.</p>
+  <div class="foot"><span class="chip">WebGPU</span><span class="host">shining.302chanwoo.com</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://susurrus.vercel.app/" target="_blank" rel="noopener">Susurrus<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Xianyao Wei</p>
+  </div>
+  <p class="desc">A forgotten windmill on still water, rendered like a watercolour. Click to drop bread into the scene.</p>
+  <p class="take"><span class="take-label">Take</span>One post-process pass sets the whole art direction.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="chip">R3F</span><span class="host">susurrus.vercel.app</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://false-earth.mingjyunhung.com/" target="_blank" rel="noopener">False Earth<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Ming Jyun Hung</p>
+  </div>
+  <p class="desc">An astronaut lands on a planet that looks like Earth. The grass never ends: over a million blades.</p>
+  <p class="take"><span class="take-label">Take</span>Compute shaders made infinite ground possible. Interaction ripples through it.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="chip">WebGPU</span><span class="host">false-earth.mingjyunhung.com</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://pendereckisgarden.pl/en" target="_blank" rel="noopener">Penderecki&#x27;s Garden<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Huncwot</p>
+  </div>
+  <p class="desc">A memorial to the composer, rebuilt as a photogrammetry point cloud of his garden.</p>
+  <p class="take"><span class="take-label">Take</span>Points instead of surfaces feel like memory: there, but not solid.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">pendereckisgarden.pl/en</span></div>
+</article></div>
+</section><section class="shelf" id="sound">
+  <header class="shelf-head"><h2>Sound you can see</h2><p>Audio first, visuals in service of it. The Pocket FM shelf.</p></header>
+  <div class="grid"><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://fffrontier.co/" target="_blank" rel="noopener">FRONTIER<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Filip Zrnzevic</p>
+  </div>
+  <p class="desc">3D Space Invaders built around his own record. Also see the wall of CRTs at lab.filipzrnzevic.com/fm.</p>
+  <p class="take"><span class="take-label">Take</span>Beat analysis is baked offline to JSON, so animation follows the track exactly.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">fffrontier.co</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://ciechanow.ski/sound/" target="_blank" rel="noopener">Sound<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Bartosz Ciechanowski</p>
+  </div>
+  <p class="desc">An interactive essay on how sound works, with a live demo every few paragraphs.</p>
+  <p class="take"><span class="take-label">Take</span>The craft bar for explaining with interactivity. Every figure earns its place.</p>
+  <div class="foot"><span class="chip">raw WebGL</span><span class="host">ciechanow.ski/sound</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://hydra.ojack.xyz/" target="_blank" rel="noopener">Hydra<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Olivia Jack</p>
+  </div>
+  <p class="desc">A live-coding video synthesizer. Type code, get visuals instantly.</p>
+  <p class="take"><span class="take-label">Take</span>Chainable visual functions are a fast way to sketch audio-reactive looks.</p>
+  <div class="foot"><span class="chip">regl</span><span class="host">hydra.ojack.xyz</span></div>
+</article></div>
+</section><section class="shelf" id="toys">
+  <header class="shelf-head"><h2>Toys and rabbit holes</h2><p>Craft references. Open one when you need to see how far finish can go.</p></header>
+  <div class="grid"><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://noclip.website/" target="_blank" rel="noopener">noclip.website<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Jasper St. Pierre and contributors</p>
+  </div>
+  <p class="desc">Walk around real levels from dozens of console games, in the browser.</p>
+  <p class="take"><span class="take-label">Take</span>Rebuilding other renderers is the fastest way to learn graphics.</p>
+  <div class="foot"><span class="chip">WebGL</span><span class="chip">WebGPU</span><span class="host">noclip.website</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://bruno-simon.com/" target="_blank" rel="noopener">Bruno Simon<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Bruno Simon</p>
+  </div>
+  <p class="desc">Drive a little car through his portfolio, knocking things over.</p>
+  <p class="take"><span class="take-label">Take</span>A portfolio that is a game is remembered and shared.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">bruno-simon.com</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://www.threejspunk.com/" target="_blank" rel="noopener">Threejs-Punk Drive<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Anderson Mancini and Sunag</p>
+  </div>
+  <p class="desc">A neon, rainy night drift racer with a synthwave radio.</p>
+  <p class="take"><span class="take-label">Take</span>Modern three.js: WebGPU with shaders written in TSL.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="chip">WebGPU</span><span class="host">www.threejspunk.com</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://holtsetio.com/lab/tetris/" target="_blank" rel="noopener">Softbody Tetris<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Holtsetio</p>
+  </div>
+  <p class="desc">Tetris with jelly pieces that squash and wobble.</p>
+  <p class="take"><span class="take-label">Take</span>Change one property of a familiar thing and it feels new.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="chip">WebGPU</span><span class="host">holtsetio.com/lab/tetris</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://milcktoast.com/medusae/" target="_blank" rel="noopener">Medusae<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Ash Weeks</p>
+  </div>
+  <p class="desc">A soft-body jellyfish drifting in the dark.</p>
+  <p class="take"><span class="take-label">Take</span>One creature, simulated properly, beats a crowd of fakes.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">milcktoast.com/medusae</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://david.li/paint/" target="_blank" rel="noopener">Paint<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">David Li</p>
+  </div>
+  <p class="desc">Oil painting with simulated brush bristles and wet paint.</p>
+  <p class="take"><span class="take-label">Take</span>Physical materials simulated well feel tactile through glass.</p>
+  <div class="foot"><span class="chip">raw WebGL</span><span class="host">david.li/paint</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://madebyevan.com/webgl-water/" target="_blank" rel="noopener">WebGL Water<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Evan Wallace</p>
+  </div>
+  <p class="desc">A pool with real-time caustics and a ball you can drag around.</p>
+  <p class="take"><span class="take-label">Take</span>A classic still worth studying for light on water.</p>
+  <div class="foot"><span class="chip">raw WebGL</span><span class="host">madebyevan.com/webgl-water</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://paveldogreat.github.io/WebGL-Fluid-Simulation/" target="_blank" rel="noopener">WebGL Fluid<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Pavel Dobryakov</p>
+  </div>
+  <p class="desc">Drag a finger, colour swirls as fluid.</p>
+  <p class="take"><span class="take-label">Take</span>A single satisfying touch response can carry a whole page.</p>
+  <div class="foot"><span class="chip">raw WebGL</span><span class="host">paveldogreat.github.io/WebGL-Fluid-Simulation</span></div>
+</article><article class="entry">
+  <div class="entry-head">
+    <h3><a href="https://oryzo.ai/" target="_blank" rel="noopener">Oryzo<span class="arrow" aria-hidden="true">↗</span></a></h3>
+    <p class="maker">Lusion</p>
+  </div>
+  <p class="desc">A full launch site for a fictional cork coaster.</p>
+  <p class="take"><span class="take-label">Take</span>Treat a mundane object with absurd seriousness. The joke is the craft.</p>
+  <div class="foot"><span class="chip">three.js</span><span class="host">oryzo.ai</span></div>
+</article></div>
+</section>
+
+  <footer>
+    <p>The hero is a live contour map: a noise field shaded as elevation lines, roughly how Story Terrain could draw a series. Tags name the renderer found in each site's own code, not a guess from screenshots.</p>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const btn = document.getElementById('st-toggle');
+  btn.addEventListener('click', () => {
+    const on = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(on));
+    document.body.classList.toggle('only-st', on);
+  });
+
+  const canvas = document.getElementById('terrain');
+  const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: true, alpha: true });
+  if (!gl) { canvas.remove(); return; }
+
+  const vs = `#version 300 es
+  in vec2 p; out vec2 uv;
+  void main(){ uv = p*0.5+0.5; gl_Position = vec4(p,0.,1.); }`;
+  const fs = `#version 300 es
+  precision highp float;
+  in vec2 uv; out vec4 o;
+  uniform vec2 res; uniform float t; uniform vec3 ink; uniform vec3 accent; uniform float strength;
+  float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+  float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+    return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+  float fbm(vec2 p){ float v=0., a=.5; for(int k=0;k<5;k++){ v+=a*n(p); p=p*2.03+vec2(1.7,9.2); a*=.5; } return v; }
+  void main(){
+    vec2 p = (uv*res)/min(res.x,res.y);
+    float e = fbm(p*2.2 + vec2(t*.018, t*.011));
+    e += .35*fbm(p*4.0 - vec2(t*.01, 0.));
+    float lv = e*14.;
+    float w = fwidth(lv);
+    float d = min(fract(lv), 1.-fract(lv));
+    float line = 1. - smoothstep(0., w*1.1, d);
+    float lm = lv/5.;
+    float dm = min(fract(lm), 1.-fract(lm));
+    float major = 1. - smoothstep(0., w*0.3, dm);
+    float fade = smoothstep(.0, .55, uv.x) * (.55 + .45*uv.y);
+    float a = (line*.22 + major*.45) * fade * strength;
+    vec3 c = mix(ink, accent, major);
+    o = vec4(c*a, a);
+  }`;
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  let prog;
+  try {
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link');
+  } catch (err) { canvas.remove(); return; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = n => gl.getUniformLocation(prog, n);
+  const uRes = U('res'), uT = U('t'), uInk = U('ink'), uAcc = U('accent'), uStr = U('strength');
+
+  const rgb = v => { const m = v.trim().match(/^#?([0-9a-f]{6})$/i); if (!m) return [0,0,0];
+    const x = parseInt(m[1], 16); return [(x>>16&255)/255, (x>>8&255)/255, (x&255)/255]; };
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    gl.uniform3fv(uInk, rgb(cs.getPropertyValue('--muted')));
+    gl.uniform3fv(uAcc, rgb(cs.getPropertyValue('--cobalt')));
+    const dark = cs.colorScheme && cs.colorScheme.includes('dark');
+    gl.uniform1f(uStr, dark ? 1.15 : 1.0);
+  }
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+    gl.uniform2f(uRes, w, h);
+  }
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  let visible = true, raf = 0, start = performance.now();
+  function frame(now) {
+    raf = 0;
+    resize();
+    gl.uniform1f(uT, reduce.matches ? 20 : (now - start) / 1000 + 20);
+    gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (visible && !reduce.matches) raf = requestAnimationFrame(frame);
+  }
+  const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
+  readColors(); kick();
+  new IntersectionObserver(([en]) => { visible = en.isIntersecting; if (visible) kick(); }).observe(canvas);
+  addEventListener('resize', kick);
+  reduce.addEventListener?.('change', kick);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { readColors(); kick(); });
+  new MutationObserver(() => { readColors(); kick(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>

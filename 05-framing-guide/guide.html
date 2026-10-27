@@ -1,0 +1,120 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}canvas{display:block}</style></head>
+<body>
+<canvas id="gl" width="2560" height="1440"></canvas>
+<canvas id="ov" width="2560" height="1440" style="position:absolute;left:0;top:0"></canvas>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+THREE.ColorManagement.enabled = false;
+const W = 2560, H = 1440;
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function hash2(x, y) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  return lerp(lerp(hash2(xi, yi), hash2(xi + 1, yi), u), lerp(hash2(xi, yi + 1), hash2(xi + 1, yi + 1), u), v); }
+const hillRaw = (x, z) => 10 * Math.exp(-(x * x + z * z) / (2 * 15 * 15)) + (vnoise(x * .08 + 3, z * .08 + 7) - .5) * 2.2 + (vnoise(x * .25, z * .25) - .5) * .5;
+const ROAD = [[-48, 27], [-12, 25], [22, 22], [30, 17.5], [23, 13], [0, 12.5], [-21, 11.5], [-27, 7], [-20, 3], [0, 2.5], [13, 2], [17, -2.5]];
+const curve = new THREE.CatmullRomCurve3(ROAD.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+const rp = curve.getSpacedPoints(Math.ceil(curve.getLength() / .35));
+let rh = rp.map(p => hillRaw(p.x, p.z));
+for (let k = 0; k < 10; k++) rh = rh.map((h, i) => (rh[Math.max(0, i - 1)] + 2 * h + rh[Math.min(rh.length - 1, i + 1)]) / 4);
+const ROAD_W = 2.6;
+function height(x, z) { let h = hillRaw(x, z), best = 1e9, bi = 0;
+  for (let i = 0; i < rp.length; i++) { const dx = x - rp[i].x, dz = z - rp[i].z, q = dx * dx + dz * dz; if (q < best) { best = q; bi = i; } }
+  const d = Math.sqrt(best); if (d < ROAD_W / 2 + 2) h = lerp(rh[bi] - .05, h, sstep(ROAD_W / 2, ROAD_W / 2 + 2, d)); return h; }
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#ffffff');
+// The hero camera. The game will use exactly this: position, target, field of view, 16:9.
+const camera = new THREE.PerspectiveCamera(34, W / H, .5, 300);
+camera.position.set(44, 15, 54); camera.lookAt(13, 4.5, 11);
+
+const hillMat = new THREE.ShaderMaterial({
+  uniforms: { uLines: { value: 1 } },
+  vertexShader: 'varying vec3 vW; varying vec3 vN; void main(){ vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz; vN = normalize(mat3(modelMatrix)*normal); gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: `uniform float uLines; varying vec3 vW; varying vec3 vN;
+    void main(){
+      float l = max(dot(normalize(vN), normalize(vec3(-.5,.8,.4))), 0.);
+      vec3 c = vec3(.30 + .62 * l);
+      float h = vW.y; float f = fract(h * 1.0); float w = fwidth(h * 1.0);
+      float contour = 1. - smoothstep(0., w * 1.4, min(f, 1. - f));
+      float major = 1. - smoothstep(0., w * 1.4, min(fract(h * .2), 1. - fract(h * .2)) * 5.);
+      c = mix(c, vec3(.42), contour * .55 * uLines); c = mix(c, vec3(.25), major * .7 * uLines);
+      gl_FragColor = vec4(c, 1.);
+    }`,
+});
+const g = new THREE.PlaneGeometry(130, 90, 260, 180); g.rotateX(-Math.PI / 2);
+const pos = g.attributes.position;
+for (let i = 0; i < pos.count; i++) pos.setY(i, height(pos.getX(i), pos.getZ(i)));
+g.computeVertexNormals();
+scene.add(new THREE.Mesh(g, hillMat));
+
+// Road as a magenta strip (built in 3D, not painted)
+{
+  const P = [], I = [];
+  const side = i => { const a = rp[Math.max(0, i - 1)], b = rp[Math.min(rp.length - 1, i + 1)]; return new THREE.Vector3(-(b.z - a.z), 0, b.x - a.x).normalize(); };
+  for (let i = 0; i < rp.length; i++) { const s = side(i), y = rh[i] + .08; P.push(rp[i].x + s.x * ROAD_W / 2, y, rp[i].z + s.z * ROAD_W / 2, rp[i].x - s.x * ROAD_W / 2, y, rp[i].z - s.z * ROAD_W / 2); if (i) { const a = (i - 1) * 2; I.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
+  const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); rg.setIndex(I);
+  scene.add(new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: '#e0479e', transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false })));
+}
+// 3D props that will stand on the painting (cyan blocks = footprint and height)
+const PROPS = [
+  { label: 'TEA STALL', x: 34.5, z: 17.5, w: 2.4, d: 2.0, h: 2.1 },
+  { label: 'PINE', x: 11, z: 18, w: 1.8, d: 1.8, h: 3.2, cone: true },
+  { label: 'PINE', x: 38.5, z: 24, w: 1.8, d: 1.8, h: 3.6, cone: true },
+  { label: 'LAMP', x: 27, z: 20.4, w: .3, d: .3, h: 3 },
+  { label: 'HOUSE', x: 5, z: 30, w: 2.4, d: 2, h: 2.6 },
+];
+const cyan = new THREE.MeshBasicMaterial({ color: '#16a6c9', transparent: true, opacity: .6 });
+for (const p of PROPS) {
+  const y = height(p.x, p.z);
+  const m = new THREE.Mesh(p.cone ? new THREE.ConeGeometry(p.w / 2, p.h, 8) : new THREE.BoxGeometry(p.w, p.h, p.d), cyan);
+  m.position.set(p.x, y + p.h / 2, p.z); scene.add(m); p.y = y + p.h;
+}
+renderer.render(scene, camera);
+const depthMat = new THREE.ShaderMaterial({
+  vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: 'varying vec3 vW; void main(){ float d = length(vW - cameraPosition); float v = 1. - smoothstep(18., 115., d); gl_FragColor = vec4(vec3(v), 1.); }',
+});
+window.renderMode = m => {
+  for (const o of scene.children) if (o.isMesh && o.material !== hillMat) o.visible = false;
+  if (m === 'base') { hillMat.uniforms.uLines.value = 0; scene.overrideMaterial = null; scene.background = new THREE.Color('#ffffff'); }
+  if (m === 'depth') { scene.overrideMaterial = depthMat; scene.background = new THREE.Color('#000000'); }
+  renderer.render(scene, camera);
+  document.getElementById('ov').getContext('2d').clearRect(0, 0, W, H);
+};
+
+// Annotations
+const ov = document.getElementById('ov').getContext('2d');
+const proj = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); return [(v.x * .5 + .5) * W, (-v.y * .5 + .5) * H, v.z]; };
+function label(text, x, y, color, size = 30) {
+  ov.font = `700 ${size}px Helvetica, Arial, sans-serif`;
+  const w = ov.measureText(text).width;
+  ov.fillStyle = 'rgba(255,255,255,.9)'; ov.fillRect(x - 10, y - size - 4, w + 20, size + 16);
+  ov.fillStyle = color; ov.fillText(text, x, y + 2);
+}
+window.annotate = () => {
+  // sky
+  const horizon = [];
+  for (let x = 0; x <= W; x += 8) {
+    let top = H;
+    // find first non-white pixel from top in this column via the hill geometry: sample the GL canvas
+    horizon.push(x);
+  }
+  for (const p of PROPS) { const [x, y] = proj(p.x, p.y + .3, p.z); label(p.label, Math.min(x - 50, W - 220), y - 6, '#0d7f9c', 28); }
+  const [rx, ry] = proj(rp[70].x, rh[70] + .6, rp[70].z);
+  label('ROAD = JEEP PATH · built in 3D, paint the hill under it anyway', Math.max(30, rx - 420), ry + 80, '#b0216f', 28);
+  const [hx, hy] = proj(0, 10.5, 0);
+  label('HILLTOP', hx - 60, hy - 20, '#333', 28);
+  label('SKY · not needed, leave empty', 40, 70, '#666', 30);
+  label('HAIRPIN · headlights sweep across this slope as the jeep turns', W / 2 - 520, H - 50, '#333', 30);
+  ov.strokeStyle = '#999'; ov.lineWidth = 2; ov.strokeRect(1, 1, W - 2, H - 2);
+};
+window.ready = true;
+</script>
+</body></html>
