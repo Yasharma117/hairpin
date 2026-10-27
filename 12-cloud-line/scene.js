@@ -66,7 +66,7 @@ scene.add(bg);
 
 const { jeep, body, PIVOT, jeepMat } = makeTaxi(U.uMode);
 scene.add(jeep);
-ctx.bed({ engine: 1, wind: .6 });
+ctx.bed({ engine: 1, wind: .6 }); ctx.rpm(1);
 
 /* ---------- framing: locked, covering the screen ---------- */
 let viewW = IW, viewH = IH;
@@ -83,7 +83,9 @@ const LINES = [
   [.12, 'PASSENGER', 'Can you even see the road?'],
   [.5, 'YOU', 'I know this road.'],
 ];
-let lineIdx = 0, done = false;
+// a line waits for the one before it to finish (as long as say() keeps it up), so holding to go faster never skips one
+const lineSecs = (text, secs) => Math.max(secs, text.length / 32 + Math.max(1.6, .28 * text.split(/\s+/).length)) + .4;
+let lineIdx = 0, lineFree = 0, done = false;
 
 /* ---------- loop: the taxi drives away up the road; the cloud closes in; then the edge ---------- */
 const PATH = new THREE.CatmullRomCurve3(LANE.map(([x, y]) => new THREE.Vector3(x * IW, y * IH, 0)));
@@ -94,8 +96,10 @@ const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), tilt = new THREE.Quate
 function frame(dt) {
   const t = (U.uTime.value += dt);
   speed = lerp(speed, input.hold ? 2.2 : 1, damp(2, dt));   // HOLD: drive faster
+  ctx.rpm(1 + (speed - 1) / 1.2 * 2);   // and the engine with it
   u += speed * dt / 10;   // about ten seconds up the road
-  if (u >= 1) { u = 1; if (!done) { done = true; ctx.next(); } }   // whited out: the edge
+  if (u >= 1) u = 1;
+  if (!done && u >= 1 && lineIdx >= LINES.length && t >= lineFree) { done = true; ctx.next(); }   // whited out (and the last line said): the edge
   const p = PATH.getPointAt(u), q = PATH.getTangentAt(u), sc = sizeAt(p.y);
   stage.place(jeep, p.x, p.y, sc, stage.depthAt(p.x, clamp(p.y, 0, IH - 1)));
   // the camera creeps up the road behind the taxi, so the cliff and the cloud slide apart
@@ -109,7 +113,7 @@ function frame(dt) {
   U.uScale.value = .3 + sc / 260;   // the beam's reach shrinks with distance too
   ctx.ink.uniforms.uJeepScale.value = clamp(sc / 190, .2, 1); ctx.ink.uniforms.uTime.value = t;
   U.uFog.value = Math.pow(clamp((u - .25) / .7, 0, 1), 1.3) * .95;
-  if (lineIdx < LINES.length && u >= LINES[lineIdx][0]) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 3.5); }
+  if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && t >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 3.5); lineFree = t + lineSecs(text, 3.5); }
   ctx.ink.render(scene, camera, jeep);
 }
 return { frame, resize, dispose() { disposeScene(scene); } };

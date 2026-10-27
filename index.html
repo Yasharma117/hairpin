@@ -89,6 +89,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 .chip::after { content: "▶"; color: var(--ui-signal); font-size: .8em; animation: nudge 1.2s steps(1) infinite; }
 .chip.btn:active:not(:disabled) { transform: translate(calc(-50% + 2px), 2px); }
 @keyframes nudge { 50% { transform: translateX(2px); } }
+/* the horn, bottom-right, on touch only (H on a keyboard), in scenes that answer it */
+.horn { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); z-index: 10; min-width: 44px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 
 /* mute, top-right, like their speaker button */
 .mute { position: fixed; top: var(--top); right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); z-index: 45; width: 44px; min-height: 44px; padding: 0; }
@@ -162,6 +164,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 <div class="box sub off" id="sub" aria-hidden="true"><div class="who" id="who"></div><p class="line" id="line"></p></div>
 <div class="visually-hidden" id="said" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
 <button class="btn chip" id="chip" type="button" hidden></button>
+<button class="btn sm horn" id="horn" type="button" hidden>Horn</button>
 <button class="btn mute" id="mute" type="button" aria-pressed="false" aria-label="Mute"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4h3v4H1zM4 3h1v6H4zM5 2h1v8H5zM6 1h1v10H6z"/><path class="waves" d="M8 4h1v4H8zM10 2h1v8h-1z"/><path class="x" d="M8 4h1v1H8zM11 4h1v1h-1zM9 5h2v2H9zM8 7h1v1H8zM11 7h1v1h-1z"/></svg></button>
 <div class="tear up" id="tear" aria-hidden="true"><span></span></div>
 <div id="card">
@@ -430,6 +433,10 @@ addEventListener('keydown', e => {
   else if (QS.has('debug') && e.code === 'KeyB') ink.uniforms.uBoil.value = 1 - ink.uniforms.uBoil.value;
 });
 let hornUp = null;
+{ const h = $('#horn'), up = () => { hornUp?.(); hornUp = null; };   // the H key's path: held, it lasts until release
+  h.addEventListener('pointerdown', e => { e.preventDefault(); unlock(); if (!hornUp && !current?.onHorn?.()) hornUp = honk(3); });
+  for (const t of ['pointerup', 'pointercancel', 'pointerleave']) h.addEventListener(t, up);
+  h.addEventListener('contextmenu', e => e.preventDefault()); }
 addEventListener('keyup', e => { if (e.code === 'Space') input.hold = false; if (e.code === 'KeyH') { hornUp?.(); hornUp = null; } });
 function tap() { if (current && !busy) current.onTap?.(); }
 
@@ -472,12 +479,13 @@ async function go(name) {
   const covering = sceneName ? sheetDown(name) : Promise.resolve();
   const [mod] = await Promise.all([load(name), covering]);
   if (current) { current.dispose?.(); scope.dispose(); current = null; }   // the outgoing scene ran under the sheet until here
-  say(null); prompt(null);
+  say(null); prompt(null); $('#horn').hidden = true;
   scope = makeCtx(name); sceneName = name;
   ink.setGrade(GRADES[name], name);   // every scene graded toward the edge painting, and quantized to its own palette
   try { current = await mod.load(scope); }
   catch (e) { console.error(e); current = null; }
   resize();
+  $('#horn').hidden = !(isTouch && current?.onHorn);
   current?.frame?.(0, now);   // its first frame, before the sheet lifts
   $('#card').hidden = true;
   sheetUp(); busy = false;

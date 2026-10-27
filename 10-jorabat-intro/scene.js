@@ -24,7 +24,7 @@ const DRIVE_AT = 40;   // the drive starts on its own after this, as in the stor
 export async function load(ctx) {
   const { layer, on, input, U: { uMode } } = ctx;
   layer.innerHTML = `<div class="tag">HAIRPIN · JORABAT</div>`;
-  ctx.bed({ engine: .5, crickets: 1 });   // idling at the stand
+  ctx.bed({ engine: 1, crickets: 1 }); ctx.rpm(0);   // idling at the stand
 
   const [iLit, iDark, depthImg, ...objImgs] = await Promise.all(assets.map(a => loadImg(at(a))));
   if (!iLit || !iDark || !depthImg || !objImgs.every(Boolean)) throw new Error('dashboard paintings did not load');
@@ -73,16 +73,28 @@ export async function load(ctx) {
   }
 
   /* ---------- framing, and the keyboard stepping through the objects ---------- */
-  let viewW = IW, viewH = IH, kbd = -1, picked = -1;
+  let viewW = IW, viewH = IH, kbd = -1, picked = -1, cx0 = IW / 2, pan = 0;
   function resize(w, h) {
     const aspect = w / h;
     if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
-    const cx = clamp(.5 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
+    const cx = cx0 = clamp(.5 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
     stage.view(cx, cy, viewH * .95, aspect);
   }
   const step = d => { kbd = (Math.max(kbd, picked) + d + objects.length) % objects.length; };
   on(window, 'keydown', e => { if (e.code === 'ArrowRight') step(1); if (e.code === 'ArrowLeft') step(-1); });
   on(ctx.canvas, 'pointermove', () => { kbd = -1; });
+  // a tap on the canvas picks the nearest object (and says what it is); only the advance button (or Enter) drives off
+  let canvasDown = -1e9, tapped = false;
+  on(ctx.canvas, 'pointerdown', () => { canvasDown = performance.now(); });
+  const pickAt = (sx, sy) => {
+    // on a phone the dash is wider than the screen: a tap near either side steps to the next object that way
+    if (innerWidth < innerHeight && (sx < innerWidth * .22 || sx > innerWidth * .78)) { step(sx < innerWidth / 2 ? -1 : 1); tapped = true; return; }
+    const p = stage.screenToPaint(sx, sy); if (!p) return;
+    let best = 0, bd = 1e9;
+    objects.forEach((o, i) => { const d = Math.hypot((p[0] - o.px) / (o.w / 2 + 20), (p[1] - o.py) / (o.h / 2 + 20)); if (d < bd) { bd = d; best = i; } });
+    kbd = best; tapped = true;
+  };
+  let lastUp = null; on(window, 'pointerup', e => { lastUp = [e.clientX, e.clientY]; }, { capture: true });
 
   /* ---------- the beat: the passenger gets in, asks, and the dashboard answers ---------- */
   const own = line('jorabat');   // the passenger picked at the stand: their own line first
@@ -97,7 +109,10 @@ export async function load(ctx) {
 
   return {
     resize,
-    onTap() { if (since > 8.5) leave(); },
+    onTap() {
+      if (performance.now() - canvasDown < 600) { if (lastUp) pickAt(...lastUp); return; }   // a tap on the dashboard
+      if (since > 8.5) leave();   // the button, or Enter
+    },
     frame(dt) {
       since += dt;
       U.uDome.value = 1 - sstep(3, 5.5, since);   // the passenger shuts the door; the dome light goes out
@@ -106,7 +121,8 @@ export async function load(ctx) {
       // which object: the keyboard's choice, else the one under the pointer
       const ptr = input.ptr && stage.screenToPaint(...input.ptr);
       // the engine idling: the dash and the road outside shift against each other, just
-      Object.assign(stage.target, { dx: Math.sin(since * 1.7) * 3 + Math.sin(since * 23) * .6, dy: Math.sin(since * 2.3) * 1.5 }); stage.update(dt, 6);
+      if (kbd >= 0) pan = clamp(objects[kbd].px - cx0, (viewW / 2 - cx0) * .72, (IW - viewW / 2 - cx0) * .72);   // a narrow screen turns to the chosen one (short of the painting's edge: the near dash moves more)
+      Object.assign(stage.target, { dx: pan + Math.sin(since * 1.7) * 3 + Math.sin(since * 23) * .6, dy: Math.sin(since * 2.3) * 1.5 }); stage.update(dt, 6);
       picked = kbd;
       if (picked < 0 && ptr) {
         let best = -1, bd = 1e9;
@@ -122,7 +138,7 @@ export async function load(ctx) {
         o.mat.uniforms.uL.value = o.lit;
         stage.place(o.m, o.px, o.py - (i === picked ? 3 : 0), [o.w, o.h], o.d);   // lifts a touch, like tape giving
       }
-      if (picked !== shownObj && picked >= 0 && since > 8) { const o = objects[picked]; ctx.say(o.name, o.line, 4); }
+      if (picked !== shownObj && picked >= 0 && (since > 8 || tapped)) { const o = objects[picked]; ctx.say(o.name, o.line, 4); }   // a tap answers at once
       shownObj = picked;
       if (since > DRIVE_AT) leave();
       ctx.ink.render(scene, camera, null);   // no taxi in this shot: just the grain and vignette

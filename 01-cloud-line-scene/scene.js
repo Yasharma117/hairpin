@@ -3,15 +3,16 @@
 import * as THREE from 'three';
 import { disposeScene, makeTaxi, colorize, Stage, loadImg as loadImage, keyLight } from '../shared/kit.js';
 import { CLIMB_STANDINS as C } from '../shared/style.js';
+import * as folk from '../shared/folk.js';
 
 const at = f => new URL(f, import.meta.url).href;
-const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-bark-1', 'dog-bark-2', 'dog-bark-3', 'walker-1', 'walker-2', 'basket'];
+const SPRITES = ['cow-graze', 'cow-look', 'dog-sit', 'dog-bark-1', 'dog-bark-2', 'dog-bark-3'];
 export const assets = ['lit.jpg', 'dark.jpg', 'strokes.jpg', 'depth.png', ...SPRITES.flatMap(n => [`sprites/${n}-lit.png`, `sprites/${n}-dark.png`])];
 
 export async function load(ctx) {
 const { renderer, canvas, layer, input } = ctx;
 layer.innerHTML = '<div class="tag">HAIRPIN · THE CLIMB</div>';
-ctx.bed({ engine: 1, crickets: .6 });
+ctx.bed({ engine: 1, crickets: .6 }); ctx.rpm(1);
 const IW = 1774, IH = 887;              // painting size in px; the whole scene lives in these units
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -242,7 +243,9 @@ const LINES = [
   [.4, 'YOU', 'No. Robotics, in Chennai. Design came after.'],
   [.7, 'YOU', 'Now I mostly build my own tools.'],
 ];
-let lineIdx = -1;
+// a line waits for the one before it to finish (as long as say() keeps it up), so holding to go faster never skips one
+const lineSecs = (text, secs) => Math.max(secs, text.length / 32 + Math.max(1.6, .28 * text.split(/\s+/).length)) + .4;
+let lineIdx = 0, lineFree = 0;
 
 
 /* ---------- life on the hill: cows, a dog, people, all reacting to the taxi ---------- */
@@ -293,30 +296,15 @@ function makeDog() {
   c.tail = new THREE.Group(); c.tail.position.set(-.33, .54, 0); c.B.add(c.tail); c.M(c.tail, new THREE.CylinderGeometry(.02, .025, .26, 4), hex, { y: .12, rz: .6 });
   c.kind = 'dog'; c.phase = 0; return c;
 }
-function makePerson(top, bottom, extra) {
-  const c = creature();
-  c.legs = [-.08, .08].map(z => { const L = new THREE.Group(); L.position.set(0, .6, z); c.B.add(L); c.M(L, Box(.12, .58, .12), bottom, { y: -.29 }); return L; });
-  c.M(c.B, Box(.3, .55, .26), top, { y: .9 });
-  c.M(c.B, new THREE.SphereGeometry(.12, 10, 8), C.skin, { y: 1.32 });
-  c.M(c.B, new THREE.SphereGeometry(.125, 10, 6, 0, Math.PI * 2, 0, 1.4), C.hair, { y: 1.35, x: -.02 });
-  extra(c); c.phase = Math.random() * 6; return c;
-}
 const cows = [makeCow(C.cowBrown, C.cowWhite), makeCow(C.cowPale, C.cowDark)];
 cows[0].home = new THREE.Vector2(985, 666); cows[0].face = new THREE.Vector2(1, .15);
 cows[1].home = new THREE.Vector2(1095, 642); cows[1].face = new THREE.Vector2(-1, .1);
 const dog = makeDog(); dog.home = new THREE.Vector2(1560, 818); dog.pos = dog.home.clone(); dog.face = new THREE.Vector2(-1, .2);
-const walker = makePerson(C.walkerShirt, C.walkerLegs, c => {
-  c.M(c.B, new THREE.CylinderGeometry(.012, .012, .85, 4), C.pole, { x: .14, y: 1.48 });
-  c.M(c.B, new THREE.ConeGeometry(.55, .26, 10), C.umbrella, { x: .14, y: 1.98 });
-});
-walker.u = .6; walker.kind = 'walker';
-const basket = makePerson(C.basketShirt, C.basketSkirt, c => {
-  c.M(c.B, new THREE.ConeGeometry(.3, .7, 10), C.basket, { x: -.26, y: 1.08, rz: Math.PI });
-  c.M(c.B, Box(.04, .04, .3), C.dogEar, { x: -.08, y: 1.42 });
-  c.M(c.B, new THREE.ConeGeometry(.26, .5, 10), C.basketShirt, { y: .38 });
-});
-basket.home = new THREE.Vector2(640, 578); basket.face = new THREE.Vector2(0, 1); basket.kind = 'basket';
-const beings = [...cows, dog, walker, basket];
+// the walker (umbrella) and the woman with the basket: pixel people on the road's shoulder, walking the real cycle
+const walker = { p: folk.person('walker', { size: 'far' }), u: .6, side: -1, inset: -10, dir: -1, stop: 0 };   // downhill, the far shoulder
+const basket = { p: folk.person('basket', { size: 'far' }), u: .555, side: 1, inset: -26, dir: 1, stop: 0 };   // clear of the taxi   // the other shoulder, up and back
+for (const w of [walker, basket]) { w.p.mesh.renderOrder = 3; w.p.shadow.renderOrder = 2; scene.add(w.p.obj); w.p.play('walk'); }
+const beings = [...cows, dog];
 for (const b of beings) b.R.visible = false;  // placeholders: replaced by painted cut-outs
 let honkT = 0, barkT = 0, dogBarked = false;
 const ZERO = new THREE.Vector2(), KEY_TO = new THREE.Vector3();
@@ -358,23 +346,29 @@ function updateLife(dt, car, dir, sCar, par) {
   walkLegs(dog, 0, 0); dog.tail.rotation.z = Math.sin(t * 3) * .2;
   dog.H.rotation.z = lerp(dog.H.rotation.z, .1 + Math.sin(t * .7) * .05, damp(4, dt));
   place(dog, dog.pos.x, dog.pos.y, dog.face, par);
-  // the walker: heads downhill on the far shoulder; stops and turns when you honk
-  const stop = honkT > 0;
-  if (!stop) walker.u -= dt * .0065;
-  if (walker.u < .28) walker.u = .62;
-  const ws = roadSide(walker.u, -1);
-  walkLegs(walker, t * 6, stop ? 0 : 1);
-  const wf = stop ? new THREE.Vector2(car.x - ws.x, car.y - ws.y).normalize() : ws.d.clone().negate();
-  place(walker, ws.x, ws.y, wf, par);
-  // the woman with the basket watches you go by
-  const bd = Math.hypot(basket.home.x - car.x, basket.home.y - car.y);
-  const bf = bd < 420 ? new THREE.Vector2(car.x - basket.home.x, car.y - basket.home.y).normalize() : basket.face;
-  place(basket, basket.home.x, basket.home.y, bf, par);
+  // the walker heads downhill, the woman uphill, each by exactly the stride their feet take (1 sprite px = 1 frame px);
+  // the horn stops the walker, who turns to the taxi and then walks on; the woman stops to watch the taxi go by
+  const pxPer = viewH / ctx.ink.size.y;   // painting px per frame px
+  for (const w of [walker, basket]) {
+    const here = roadSide(w.u, w.side, w.inset), near = Math.hypot(here.x - car.x, (here.y - car.y) * 1.8) < 300;
+    const halt = w === walker ? honkT > 0 : near;
+    w.stop = halt ? (w === walker ? 1.2 : .6) : Math.max(0, w.stop - dt);   // and a beat after, before walking on
+    if (w.stop > 0) { w.p.play('idle'); w.p.face(car.x < here.x ? 'left' : 'right'); }
+    else { w.p.play('walk'); w.p.face(here.d.x * w.dir < 0 ? 'left' : 'right'); }
+    w.u += w.p.update(dt) * pxPer / total * w.dir;
+    if (walker.u < .28) walker.u = .62;
+    if (basket.u > .6 || basket.u < .51) basket.dir = basket.u > .6 ? -1 : 1;   // her stretch of road, there and back
+    const at = roadSide(w.u, w.side, w.inset), snap = v => Math.round(v / pxPer) * pxPer;   // feet on the pixel grid
+    const fx = snap(at.x), fy = snap(at.y);
+    stage.place(w.p.obj, fx, fy, pxPer, stage.depthAt(fx, fy));
+    const l = lightCPU(fx, fy);
+    w.p.setLight(clamp(.15 + l.L * .85, .15, 1.2), U.uHead.value.x < fx ? -1 : 1);
+  }
 }
 
 /* ---------- painted cut-outs: people and animals as lit/dark sprite pairs ---------- */
 // Each frame lives at sprites/<name>-lit.png and sprites/<name>-dark.png (transparent PNG). Missing files are skipped.
-const SPRITE_H = { 'cow-graze': 1.75, 'cow-look': 1.9, 'dog-sit': 1.1, 'dog-bark-1': 1.4, 'dog-bark-2': 1.4, 'dog-bark-3': 1.4, 'walker-1': 2.4, 'walker-2': 2.4, 'basket': 2.05 };
+const SPRITE_H = { 'cow-graze': 1.75, 'cow-look': 1.9, 'dog-sit': 1.1, 'dog-bark-1': 1.4, 'dog-bark-2': 1.4, 'dog-bark-3': 1.4 };
 // where the eyes are in each frame (uv, figure facing right), so they can catch the headlights
 const EYES = { 'cow-graze': [[.889, .28]], 'cow-look': [[.898, .8], [.788, .791]], 'dog-sit': [[.837, .826]], 'dog-bark-1': [[.83, .866]], 'dog-bark-2': [[.837, .866]], 'dog-bark-3': [[.83, .862]] };
 function trimmed(img) {
@@ -471,7 +465,7 @@ function showFrame(a, name, x, y, faceX, par, bob = 0) {
   a.blMat.uniforms.uOp.value = U.uMode.value > 1.5 ? .35 : .5;
   return true;
 }
-const sCows = cows.map(() => spriteActor()), sDog = spriteActor(), sWalker = spriteActor(), sBasket = spriteActor();
+const sCows = cows.map(() => spriteActor()), sDog = spriteActor();
 function updateSprites(car, par) {
   const t = U.uTime.value; carY = car.y;
   cows.forEach((c, i) => {
@@ -480,9 +474,6 @@ function updateSprites(car, par) {
   });
   const dogFrame = barkT > 0 ? `dog-bark-${[1, 2, 3, 2][Math.floor(t * 9) % 4]}` : 'dog-sit';
   showFrame(sDog, FRAMES[dogFrame] ? dogFrame : 'dog-sit', dog.pos.x, dog.pos.y, dog.face.x, par);
-  const ws = roadSide(walker.u, -1), stopped = honkT > 0;
-  showFrame(sWalker, stopped ? 'walker-1' : (Math.floor(t * 3) % 2 ? 'walker-1' : 'walker-2'), ws.x, ws.y, stopped ? car.x - ws.x : -ws.d.x, par, stopped ? 0 : Math.abs(Math.sin(t * 3 * Math.PI)) * .02);
-  showFrame(sBasket, 'basket', basket.home.x, basket.home.y, car.x - basket.home.x, par, Math.sin(t * 1.4) * .006);
 }
 
 function bark() {
@@ -504,15 +495,17 @@ const total = curve.getLength();
 let s = 0, speed = 1, camX = IW / 2, camY = IH / 2;
 let done = false;
 const tmp = new THREE.Vector3(), q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
-window.__cl = { dog: () => ({ x: dog.pos.x|0, y: dog.pos.y|0, vis: sDog.m.visible, fr: sDog.frame, sc: sDog.m.scale.x|0, frames: Object.keys(FRAMES), car: curve.getPointAt(s / total) }), s: () => s / total, zoom: z => { ZOOM = z; resize(); } };
+window.__cl = { dog: () => ({ x: dog.pos.x|0, y: dog.pos.y|0, vis: sDog.m.visible, fr: sDog.frame, sc: sDog.m.scale.x|0, frames: Object.keys(FRAMES), car: curve.getPointAt(s / total) }), s: () => s / total, people: () => ({ walker, basket }), cam: camera, road: (u, side) => roadSide(u, side), zoom: z => { ZOOM = z; resize(); } };
 function frame(dt) {
   U.uTime.value += dt;
   const fast = input.hold;   // HOLD: drive faster
   speed = lerp(speed, fast ? 3 : 1, damp(2, dt));
   const p0 = curve.getPointAt(s / total);
   s += speed * dt * lerp(26, 120, depthN(p0.y));
-  if (s >= total) { s = 0; lineIdx = -1; if (!done) { done = true; ctx.next(); } }   // one lap, then Nongpoh
+  ctx.rpm(speed);   // the engine climbs with the hold
+  if (s >= total * .994) s = total * .994;   // the top: wait there for the last line, then Nongpoh
   const u = s / total;
+  if (!done && s >= total * .994 && lineIdx >= LINES.length && U.uTime.value >= lineFree) { done = true; ctx.next(); }
   const p = curve.getPointAt(u), pa = curve.getPointAt(Math.min(1, u + .006));
   const dir = new THREE.Vector2(pa.x - p.x, pa.y - p.y).normalize();
   const n = depthN(p.y), sc = lerp(.32, 1, n);
@@ -543,8 +536,7 @@ function frame(dt) {
   keyLight(jeepMat, camera, jeep.position, stage.toWorld(lamp.x, lamp.y - 150, stage.depthAt(lamp.x, lamp.y), KEY_TO), clamp(Lj, .25, 1.2));
   ctx.ink.uniforms.uJeepScale.value = sc; ctx.ink.uniforms.uTime.value = U.uTime.value;
   // subtitles
-  const next = LINES.findIndex(([at], i) => i > lineIdx && u >= at);
-  if (next >= 0 && next !== lineIdx) { lineIdx = next; ctx.say(LINES[next][1], LINES[next][2], 4); }
+  if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && U.uTime.value >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); lineFree = U.uTime.value + lineSecs(text, 4); }
   updateLife(dt, p, dir, s, par);
   updateSprites(p, par);
   // render: colour, then the ink and paper rim around the taxi
@@ -553,6 +545,6 @@ function frame(dt) {
 return {
   frame, resize,
   onHorn() { honkT = 2.2; barkT = 1.4; bark(); return false; },   // they look up; the page plays the horn itself
-  dispose() { disposeScene(scene); delete window.__cl; },
+  dispose() { walker.p.dispose(); basket.p.dispose(); disposeScene(scene); delete window.__cl; },
 };
 }

@@ -15,7 +15,7 @@ const LANTERNS = [[.127, .418], [.427, .475], [.684, .52], [.866, .542]];
 export async function load(ctx) {
 const { input, layer } = ctx;
 layer.innerHTML = '<div class="tag">HAIRPIN · NONGPOH</div>';
-ctx.bed({ engine: 1, rain: 1 });
+ctx.bed({ engine: 1, rain: 1 }); ctx.rpm(1);
 const [iLit, iDark, depthImg] = await Promise.all(assets.map(a => loadImg(at(a))));
 const stage = new Stage({ W: IW, H: IH, depth: depthImg, k: .26 });
 if (!iLit || !iDark) throw new Error('Nongpoh paintings did not load');
@@ -144,7 +144,9 @@ const LINES = [
   [.52, 'YOU', 'My grandfather drove this every weekend. Court in Shillong.'],
   [.74, 'PASSENGER', 'Can we stop for pineapple?'],
 ];
-let lineIdx = 0, done = false;
+// a line waits for the one before it to finish (as long as say() keeps it up), so holding to go faster never skips one
+const lineSecs = (text, secs) => Math.max(secs, text.length / 32 + Math.max(1.6, .28 * text.split(/\s+/).length)) + .4;
+let lineIdx = 0, lineFree = 0, done = false;
 
 /* ---------- loop: the taxi crosses from left to right, then on to the cloud line ---------- */
 const FROM = -.12 * IW, TO = 1.12 * IW;
@@ -155,9 +157,10 @@ const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 function frame(dt) {
   const t = (U.uTime.value += dt);
   speed = lerp(speed, input.hold ? 2.6 : 1, damp(2, dt));   // HOLD: drive faster
+  ctx.rpm(1 + (speed - 1) / 1.6 * 2);   // and the engine with it
   for (let i = 0; i < 4; i++) U.uFl.value[i] = .85 + .15 * (Math.sin(t * 7.3 + i * 13.1) * .5 + .5) * (Math.sin(t * 17.9 + i * 3.7) * .5 + .5);
-  x += speed * dt * 95;
-  if (x > TO) { x = FROM; lineIdx = 0; if (!done) { done = true; ctx.next(); } }   // across, then the cloud line
+  x = Math.min(TO, x + speed * dt * 95);   // across (then out of frame, until the last line is said), then the cloud line
+  if (!done && x >= TO && lineIdx >= LINES.length && t >= lineFree) { done = true; ctx.next(); }
   const u = (x - FROM) / (TO - FROM);
   const dLane = stage.depthAt(clamp(x, 0, IW), LANE * IH), s = stage.place(jeep, x, LANE * IH, CAR_SIZE, dLane);
   body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
@@ -175,7 +178,7 @@ function frame(dt) {
   const mW = viewW * .08;
   camX = clamp(lerp(camX || x, x + viewW * .15, damp(1.5, dt)), viewW / 2 + mW, IW - viewW / 2 - mW);
   Object.assign(stage.move, { dx: camX - IW / 2, dy: 0, dolly: 0 }); stage.apply();
-  if (lineIdx < LINES.length && u >= LINES[lineIdx][0]) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); }
+  if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && t >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); lineFree = t + lineSecs(text, 4); }
   ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .9;
   ctx.ink.render(scene, camera, jeep);
 }

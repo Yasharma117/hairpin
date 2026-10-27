@@ -31,7 +31,7 @@ function cluster(P, r, x, y, R, back = 0) {   // back: 1 for a cluster sitting d
   for (let i = 0; i < R * .5; i++) P.dab(x + g() * R * .8, y + R * .55 + g() * R * .25, 2 + r() * 3, 1.2 + r() * 1.6, r() * 3, [B.lit[2], B.dark[3]], .35);
 }
 // a branch: a tapered, slightly painterly stroke along a cubic bezier
-function limb(P, r, pts, w0, w1, steps = 40) {
+function limb(P, r, pts, w0, w1, steps = 40, streaks = true) {
   const at = t => { const u = 1 - t; return pts[0].map((_, k) => u * u * u * pts[0][k] + 3 * u * u * t * pts[1][k] + 3 * u * t * t * pts[2][k] + t * t * t * pts[3][k]); };
   const path = Array.from({ length: steps + 1 }, (_, i) => at(i / steps));
   P.both((c, k) => {
@@ -40,7 +40,7 @@ function limb(P, r, pts, w0, w1, steps = 40) {
     const a = side(1), b = side(-1).reverse();
     c.moveTo(...a[0]); for (const p of a.concat(b)) c.lineTo(...p); c.closePath(); c.fill();
   });
-  for (let i = 0; i < w0 * .6; i++) {   // bark: a few streaks along the grain
+  if (streaks) for (let i = 0; i < w0 * .6; i++) {   // bark: a few streaks along the grain
     const t0 = r() * .8, t1 = t0 + .05 + r() * .15, off = (r() - .5) * .6;
     P.both((c, k) => {
       c.strokeStyle = B.barkStreak[k ? 0 : 1]; c.lineWidth = 1 + r() * 1.5; c.beginPath();
@@ -51,10 +51,19 @@ function limb(P, r, pts, w0, w1, steps = 40) {
   return { at, path };
 }
 
-/* ---------- the hero tree ---------- */
-export const TREE = { w: 1200, h: 1000, anchorU: 1020 / 1200 };   // canvas px; the trunk's foot is at (anchorU, bottom)
-export function paintTree(seed = 5) {
-  const P = pair(TREE.w, TREE.h), r = rng(seed), tips = [];
+/* ---------- the hero tree, painted on the pixel grid ---------- */
+// The tree is designed in a 1200 x 1000 space (TREE) and painted straight onto the frame's pixel grid: gw x gh texels, one
+// texel per frame pixel, so its blossom reads as hand-placed pixel clusters, not a downscaled painting. The scene repaints it
+// when the grid changes (resize). Branches are filled shapes thresholded to hard pixels with a moonlit rim; blossom is
+// clumps of 4-tone pixels lit from the upper left; the festival bulbs are single bright pixels with a stepped glow, and the
+// blossom near each bulb takes its warm light.
+export const TREE = { w: 1200, h: 1000, anchorU: 1020 / 1200 };   // design px; the trunk's foot is at (anchorU, bottom)
+const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const mixRGB = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+export function paintTree(gw, gh, seed = 5) {
+  const P = pair(gw, gh), r = rng(seed), tips = [], f = gw / TREE.w;
+  // the structure, in design px
+  P.cx.forEach(c => c.setTransform(f, 0, 0, f, 0, 0));
   const limbs = [
     [[[1020, 1000], [1000, 820], [1060, 700], [985, 570]], 74, 46],                 // the trunk
     [[[992, 610], [820, 470], [520, 330], [130, 240]], 42, 7],                       // the long limb, reaching over
@@ -62,11 +71,10 @@ export function paintTree(seed = 5) {
     [[[990, 590], [1060, 420], [1120, 250], [1170, 110]], 30, 6],
     [[[998, 690], [940, 640], [880, 600], [810, 585]], 22, 6],                       // the low bough, stopping short of the two of us
     [[[1000, 650], [1080, 560], [1150, 520], [1200, 470]], 18, 5],
-  ].map(([pts, w0, w1]) => ({ ...limb(P, r, pts, w0, w1), w0, w1 }));
-  // twigs off every limb, and blossom where they end and along the limbs' upper sides
+  ].map(([pts, w0, w1]) => ({ ...limb(P, r, pts, w0, w1, 40, false), w0, w1 }));
   const twig = (x, y, a, len, w, depth) => {
     const x1 = x + Math.cos(a) * len, y1 = y + Math.sin(a) * len;
-    limb(P, r, [[x, y], [lerp(x, x1, .35) + (r() - .5) * 10, lerp(y, y1, .35) + (r() - .5) * 10], [lerp(x, x1, .7), lerp(y, y1, .7)], [x1, y1]], w, Math.max(1, w * .4), 10);
+    limb(P, r, [[x, y], [lerp(x, x1, .35) + (r() - .5) * 10, lerp(y, y1, .35) + (r() - .5) * 10], [lerp(x, x1, .7), lerp(y, y1, .7)], [x1, y1]], Math.max(w, 4.5), 4.5, 10, false);
     if (depth > 0) for (let i = 0; i < 2; i++) twig(x1, y1, a + (i ? .5 : -.5) + (r() - .5) * .4, len * .62, w * .55, depth - 1);
     else tips.push([x1, y1, 20 + r() * 26]);
   };
@@ -78,20 +86,56 @@ export function paintTree(seed = 5) {
     }
     tips.push([...L.at(1), 34]);
   });
-  // paint the blossom from the back of the crown to the front, so nearer clusters sit over farther ones
-  tips.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
-  for (const [x, y, R] of tips) cluster(P, r, x, y, R, r() < .38 ? 1 : 0);
-  // a few loose petals at the edges, so the crown isn't a hard shape
-  for (let i = 0; i < 900; i++) { const [x, y] = tips[r() * tips.length | 0]; P.dab(x + (r() - .5) * 120, y + (r() - .5) * 90, 1.5 + r() * 1.5, 1 + r(), r() * 3, [B.lit[3], B.dark[3]], .8); }
-  // festival bulbs, strung in a sag along the long limb
-  const L = limbs[1];
-  for (let i = 0; i < 24; i++) {
-    const t = .12 + i / 23 * .76, [x, y] = L.at(t), sag = Math.sin((i % 6) / 6 * Math.PI) * 16;
-    P.both((c, k) => {
-      c.fillStyle = B.bulbGlow; for (let j = 9; j > 0; j--) { c.globalAlpha = .035; c.beginPath(); c.arc(x, y + 14 + sag, j * 2.2, 0, Math.PI * 2); c.fill(); }
-      c.globalAlpha = 1; c.fillStyle = B.bulb; c.beginPath(); c.arc(x, y + 14 + sag, 2.6, 0, Math.PI * 2); c.fill();
-    });
+  P.cx.forEach(c => c.setTransform(1, 0, 0, 1, 0, 0));
+  // to hard pixels: the branches' soft edges thresholded; a 1 px moonlit rim on their upper sides in the dark version
+  const img = P.cx.map(c => c.getImageData(0, 0, gw, gh)), D = img.map(i => i.data), rim = [hexRGB(B.barkStreak[1]), hexRGB(B.barkStreak[0])];
+  for (let i = 0; i < gw * gh; i++) for (const d of D) d[i * 4 + 3] = d[i * 4 + 3] > 90 ? 255 : 0;
+  for (let y = gh - 1; y > 0; y--) for (let x = 0; x < gw; x++) {
+    const i = (y * gw + x) * 4;
+    if (D[1][i + 3] && !D[1][i - gw * 4 + 3]) D.forEach((d, k) => d.set(rim[k], i));
   }
+  // the bulbs' positions first: the blossom near them is lit warm
+  const L = limbs[1], bulbs = [];
+  for (let i = 0; i < 14; i++) { const t = .14 + i / 13 * .74, [x, y] = L.at(t), sag = Math.sin((i % 4) / 4 * Math.PI) * 22; bulbs.push([Math.round(x * f), Math.round((y + 14 + sag) * f)]); }
+  const warmth = (x, y) => { let m = 1e9; for (const [bx, by] of bulbs) m = Math.min(m, (bx - x) ** 2 + (by - y) ** 2); return m; };
+  const LIT = B.lit.map(hexRGB), DARK = B.dark.map(hexRGB), WARM = hexRGB(B.bulbGlow);
+  const put = (x, y, i, glow) => {   // a blossom pixel of ramp step i (0 deep .. 4 palest), in both versions
+    if (x < 0 || y < 0 || x >= gw || y >= gh) return;
+    const o = (y * gw + x) * 4, w = warmth(x, y), dk = w < 3 ? mixRGB(DARK[Math.min(4, i + 1)], WARM, .3) : w < 9 ? mixRGB(DARK[i], LIT[i], .45) : DARK[i];
+    D[0].set([...LIT[i], 255], o); D[1].set([...(glow ? mixRGB(dk, WARM, .2) : dk), 255], o);
+  };
+  // the blossom: from the back of the crown to the front, each clump a ragged pixel blob, shaded from the upper left
+  tips.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  for (const [tx, ty, R] of tips) {
+    const X = tx * f, Y = ty * f, rr = Math.max(1.6, R * f * 1.05), back = r() < .38 ? 1 : 0, glow = r() < .1;
+    for (let y = Math.floor(Y - rr); y <= Y + rr; y++) for (let x = Math.floor(X - rr * 1.25); x <= X + rr * 1.25; x++) {
+      const dx = (x + .5 - X) / (rr * 1.2), dy = (y + .5 - Y) / rr, d = dx * dx + dy * dy;
+      if (d > .75 + r() * .5) continue;
+      const light = -(dx * .6 + dy) + (r() - .5) * .5;   // toward the moon, upper left
+      let i = light > .45 ? 3 : light > -.05 ? 2 : light > -.55 ? 1 : 0;
+      if (i === 3 && d < .45 && r() < .35) i = 4;
+      put(x, y, Math.max(0, i - back), glow);
+    }
+  }
+  // loose single petals at the crown's edge, so it isn't a hard shape
+  for (let i = 0; i < tips.length * 3; i++) { const [x, y] = tips[r() * tips.length | 0]; put(Math.round(x * f + (r() - .5) * 120 * f), Math.round(y * f + (r() - .5) * 90 * f), 2 + (r() < .5), false); }
+  // the festival bulbs: the wire, a single bright pixel each, and a stepped glow (4-neighbours, then the diamond beyond)
+  const wire = hexRGB(B.bark), bulb = hexRGB(B.bulb);
+  const blend = (x, y, c, a) => {   // softer on blossom than on sky
+    if (x < 0 || y < 0 || x >= gw || y >= gh) return;
+    const o = (y * gw + x) * 4;
+    D.forEach((d, k) => { if (d[o + 3] === 255) d.set(mixRGB([d[o], d[o + 1], d[o + 2]], c, (k ? a : a * .5) * .6), o); else if (k) d.set([...c, Math.round(a * 255)], o); });
+  };
+  for (let i = 1; i < bulbs.length; i++) {
+    const [x0, y0] = bulbs[i - 1], [x1, y1] = bulbs[i], n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    for (let k = 1; k < n; k++) { const x = Math.round(lerp(x0, x1, k / n)), y = Math.round(lerp(y0, y1, k / n) - 1); D.forEach((d, j) => { const o = (y * gw + x) * 4; if (x >= 0 && y >= 0 && x < gw && y < gh && d[o + 3] < 255) d.set([...wire, 255], o); }); }
+  }
+  for (const [x, y] of bulbs) {
+    for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) { const m = Math.abs(i) + Math.abs(j); if (m === 2) blend(x + i, y + j, WARM, .4); }
+    for (const [i, j] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) blend(x + i, y + j, WARM, .8);
+    D.forEach(d => { const o = (y * gw + x) * 4; if (x >= 0 && y >= 0 && x < gw && y < gh) d.set([...bulb, 255], o); });
+  }
+  P.cx.forEach((c, k) => c.putImageData(img[k], 0, 0));
   return P.cv;
 }
 
@@ -120,7 +164,7 @@ export function paintOverlay(IW, IH, HORIZON, RAIL, trees = true, seed = 9) {
 // One Points object per depth band: far petals sit behind the people and the truck, near ones in front of everything.
 // light: the scene's GLSL light model (lightAt in painting px, sharing the scene's uniforms U).
 export class Petals {
-  constructor({ stage, U, light, n, d0, d1, size, IW, IH, HORIZON, RAIL, near }) {
+  constructor({ stage, U, light, grid, n, d0, d1, size, IW, IH, HORIZON, RAIL, near }) {
     Object.assign(this, { stage, n, d0, d1, size, IW, IH, near, ry: RAIL * IH });
     const r = this.r = Math.random;
     this.p = Array.from({ length: n }, () => this.spawn({}, true));
@@ -128,32 +172,44 @@ export class Petals {
     const attr = (name, k) => { const a = new THREE.BufferAttribute(new Float32Array(n * k), k); a.setUsage(THREE.DynamicDrawUsage); this.geo.setAttribute(name, a); return a; };
     this.aPos = attr('position', 3); this.aPx = attr('aPx', 2); this.aSize = attr('aSize', 1); this.aAng = attr('aAng', 1); this.aFl = attr('aFl', 1); this.aA = attr('aA', 1);
     const col = h => new THREE.Color(h);
+    // Each petal is 1 to 3 frame pixels, centred on the pixel grid (grid: the frame's pixel grid, ctx.ink.size; the scene
+    // renders at 2x it), drawn as whole pixels: a single dot far off, a 2 px chip or a little plus shape near, its base a
+    // shade deeper. It fades in and out by an ordered dither, never by blending.
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { ...U, uScreen: { value: 600 }, cDark: { value: col(B.petalDark) }, cLit: { value: col(B.petalLit) }, cCore: { value: col(B.petalCore) }, cGlow: { value: col(B.petalGlow) } },
+      uniforms: { ...U, uScreen: { value: 600 }, uGrid: { value: grid }, cDark: { value: col(B.petalDark) }, cLit: { value: col(B.petalLit) }, cCore: { value: col(B.petalCore) }, cGlow: { value: col(B.petalGlow) } },
       transparent: true, depthWrite: false, depthTest: !near,
       vertexShader: light + /* glsl */`
-        uniform float uScreen; attribute vec2 aPx; attribute float aSize, aAng, aFl, aA;
-        varying float vL, vAng, vFl, vA, vTown;
+        uniform float uScreen; uniform vec2 uGrid; attribute vec2 aPx; attribute float aSize, aAng, aFl, aA;
+        varying float vL, vAng, vFl, vA, vTown, vSz;
         void main(){
-          vec4 mv = modelViewMatrix * vec4(position, 1.);
-          gl_Position = projectionMatrix * mv;
-          gl_PointSize = aSize * uScreen / -mv.z;
+          vec4 mv = modelViewMatrix * vec4(position, 1.), cp = projectionMatrix * mv;
+          float sz = clamp(floor(aSize * uScreen / -mv.z + .5), 1., 3.);   // in frame pixels
+          vec2 g = (cp.xy / cp.w * .5 + .5) * uGrid;
+          g = mod(sz, 2.) > .5 ? floor(g) + .5 : floor(g + .5);            // odd sizes on a pixel's centre, even on its corner
+          cp.xy = (g / uGrid * 2. - 1.) * cp.w;
+          gl_Position = cp; gl_PointSize = sz * 2.; vSz = sz;
           vL = clamp(lightAt(aPx), 0., 1.3); vAng = aAng; vFl = aFl; vA = aA;
           vTown = smoothstep(${(HORIZON * IH).toFixed(1)}, ${(RAIL * IH).toFixed(1)}, aPx.y) * (1. - smoothstep(${(RAIL * IH).toFixed(1)}, ${(RAIL * IH + 70).toFixed(1)}, aPx.y));
         }`,
       fragmentShader: /* glsl */`
-        uniform vec3 cDark, cLit, cCore, cGlow; varying float vL, vAng, vFl, vA, vTown;
+        uniform vec3 cDark, cLit, cCore, cGlow; varying float vL, vAng, vFl, vA, vTown, vSz;
+        float aAngQ(float a){ return floor(a / 1.5708); }
         void main(){
-          vec2 q = gl_PointCoord - .5; float c = cos(vAng), s = sin(vAng); q = mat2(c, -s, s, c) * q;
-          q.x /= max(vFl, .16);                                         // turning edge-on as it tumbles
-          float a = 1. - smoothstep(.34, .44, length(vec2(q.x * 1.75, q.y)));
-          if (q.y < -.24) a *= smoothstep(0., .05, abs(q.x) * 1.75 - (-.24 - q.y) * .85);   // the notch at its tip
-          if (a < .02) discard;
-          vec3 col = mix(cDark, cLit, clamp(vL, 0., 1.));
-          col += cGlow * vTown * .18;                                   // the town's glow from below
-          col = mix(col, col * .78 + cCore * .14, smoothstep(-.1, .4, q.y)); // deeper at the base
-          col *= .78 + .5 * vFl * smoothstep(.15, 1., vL);              // flashing as it turns in the beam
-          gl_FragColor = vec4(col, a * vA);
+          vec2 q = (floor(gl_PointCoord * vSz) + .5) / vSz - .5;           // this frame pixel's centre in the petal
+          float c = cos(vAng), s = sin(vAng); q = mat2(c, -s, s, c) * q;
+          q.x /= max(vFl, .35);                                             // turning edge-on as it tumbles
+          if (vSz > 2.5 && length(vec2(q.x * 1.3, q.y)) > .45) discard;    // 3 px: a little plus
+          if (vSz > 1.5 && vSz < 2.5) {                                      // 2 px: a chip of three, or two when edge-on
+            ivec2 cl = ivec2(gl_PointCoord * 2.); int drop = int(mod(aAngQ(vAng), 4.));
+            if (cl.x + cl.y * 2 == drop || (vFl < .5 && cl.y == (drop & 1))) discard;
+          }
+          ivec2 b = ivec2(gl_FragCoord.xy * .5) & 1;
+          if (vA < (float(b.x * 2 + (b.x ^ b.y)) + .5) / 4.) discard;      // fading: a 2x2 ordered dither
+          vec3 col = mix(cDark, cLit, step(.5, vL) * .6 + step(.9, vL) * .4);  // stepped, like the people
+          col += cGlow * step(.5, vTown) * .14;                              // the town's glow from below
+          if (vSz > 1.5 && q.y > .15) col = col * .78 + cCore * .16;          // a deeper pixel at its base
+          col *= .85 + .35 * step(.7, vFl) * step(.5, vL);                    // flashing as it turns in the beam
+          gl_FragColor = vec4(col, 1.);
         }`,
     });
     this.points = new THREE.Points(this.geo, this.mat); this.points.frustumCulled = false; this.points.renderOrder = near ? 9 : 1;
@@ -199,36 +255,45 @@ export class Petals {
   }
 }
 
-/* ---------- the hero tree as a mesh: sways with the wind, lit like the painting ---------- */
-export function treeMesh(U, light, [tL, tD]) {
+/* ---------- the hero tree as a mesh: one texel per frame pixel, swaying by whole pixels, lit like the painting ---------- */
+// The sway shifts the texture lookup by whole texels (more toward the crown's tips, less at the trunk), the way pixel art
+// sways: rows slip a pixel at a time instead of the picture smearing. setTex(lit, dark) swaps in a repainted tree.
+export function treeMesh(U, light) {
+  const nearest = c => { const t = tex(c); t.magFilter = t.minFilter = THREE.NearestFilter; return t; };
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...U, tL: { value: tex(tL) }, tD: { value: tex(tD) }, uAnchor: { value: new THREE.Vector2() }, uSize: { value: new THREE.Vector2(1, 1) }, uSway: { value: 1 } },
+    uniforms: { ...U, tL: { value: null }, tD: { value: null }, uTex: { value: new THREE.Vector2(1, 1) }, uAnchor: { value: new THREE.Vector2() }, uSize: { value: new THREE.Vector2(1, 1) }, uSway: { value: 1 } },
     transparent: true, depthTest: false, depthWrite: false,
     vertexShader: /* glsl */`
-      uniform float uTime, uSway; uniform vec2 uAnchor, uSize; varying vec2 vUv, vPx;
+      uniform vec2 uAnchor, uSize; varying vec2 vUv, vPx;
       void main(){
-        vUv = uv; vec3 p = position;
-        float bend = pow(uv.y, 1.5) * (.25 + (1. - uv.x) * 1.2);   // the trunk holds; the long limb, out and up, moves most
-        float w = sin(uTime * .8 + uv.x * 2.3) + .5 * sin(uTime * 1.9 + uv.y * 4.1) + .25 * sin(uTime * 3.7 + uv.x * 9.);
-        p.x += bend * w * .005 * uSway; p.y += bend * w * .0025 * uSway;
+        vUv = uv;
         vPx = uAnchor + vec2((uv.x - ${TREE.anchorU.toFixed(3)}) * uSize.x, -uv.y * uSize.y);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
       }`,
     fragmentShader: light + /* glsl */`
-      uniform sampler2D tL, tD; varying vec2 vUv, vPx;
+      uniform sampler2D tL, tD; uniform vec2 uTex; uniform float uSway; varying vec2 vUv, vPx;
       void main(){
-        vec4 l = texture2D(tL, vUv), d = texture2D(tD, vUv);
+        vec2 tc = floor(vUv * uTex);
+        float bend = pow(vUv.y, 1.5) * (.25 + (1. - vUv.x) * 1.2);   // the trunk holds; the long limb, out and up, moves most
+        float w = sin(uTime * .8 + vUv.x * 2.3) + .5 * sin(uTime * 1.9 + vUv.y * 4.1) + .25 * sin(uTime * 3.7 + vUv.x * 9.);
+        vec2 off = floor(vec2(.005, .0025) * uTex.x * bend * w * uSway + .5);
+        ivec2 q = ivec2(tc - off);
+        if (q.x < 0 || q.y < 0 || q.x >= int(uTex.x) || q.y >= int(uTex.y)) discard;
+        vec4 l = texelFetch(tL, q, 0), d = texelFetch(tD, q, 0);
         if (d.a < .01) discard;
         float lum = dot(l.rgb, vec3(.333)), th = .25 + .55 * (1. - lum);   // the palest petals catch the light first
-        float on = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : smoothstep(th - .06, th + .06, lightAt(vPx)));
-        vec3 col = mix(d.rgb, l.rgb, on);
-        vec2 cell = floor(vUv * 260.);
-        float bulb = smoothstep(.78, .92, dot(d.rgb, vec3(.333)));           // the festival bulbs twinkle
-        col += d.rgb * bulb * (.3 * sin(uTime * (1.4 + h12(cell) * 3.) + h12(cell + 3.) * 6.28) + .15);
+        float on = uMode > 1.5 ? 1. : (uMode > .5 ? 0. : step(th, lightAt(vPx)));
+        vec3 col = mix(d.rgb, l.rgb, on * .7);                                // caught by the beam, never blown out
+        float bulb = step(.86, dot(d.rgb, vec3(.333)));                    // the festival bulbs twinkle, in steps
+        col += d.rgb * bulb * .3 * step(.3, sin(uTime * (1.4 + h12(vec2(q)) * 3.) + h12(vec2(q) + 3.) * 6.28));
         gl_FragColor = vec4(col, d.a);
       }`,
   });
-  const geo = new THREE.PlaneGeometry(1, 1, 32, 32).translate(.5 - TREE.anchorU, .5, 0);
+  const geo = new THREE.PlaneGeometry(1, 1).translate(.5 - TREE.anchorU, .5, 0);
   const m = new THREE.Mesh(geo, mat); m.frustumCulled = false; m.renderOrder = 6;
+  m.setTex = ([cl, cd]) => {
+    for (const k of ['tL', 'tD']) mat.uniforms[k].value?.dispose();
+    mat.uniforms.tL.value = nearest(cl); mat.uniforms.tD.value = nearest(cd); mat.uniforms.uTex.value.set(cl.width, cl.height);
+  };
   return m;
 }
