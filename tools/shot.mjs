@@ -34,7 +34,8 @@ try {
       await sleep(200);
     }
     await sleep(s.wait || 3000);
-    const r = await send('Page.captureScreenshot', { format: 'png' });
+    // .jpg outputs are JPEG (q 85, about a tenth of the PNG): the disk is tight, use them for anything but pixel-exact crops
+    const jpg = /\.jpe?g$/i.test(s.out), r = await send('Page.captureScreenshot', jpg ? { format: 'jpeg', quality: 85 } : { format: 'png' });
     writeFileSync(s.out, Buffer.from(r.result.data, 'base64'));
     console.log('shot', s.out);
   }

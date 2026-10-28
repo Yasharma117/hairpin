@@ -74,6 +74,8 @@ anything this file doesn't change.
 - Edit only the files your brief gives you. If you need a change in someone else's file, say so in your report.
 - Check your work by rendering it: `tools/shot.mjs` (headless Chrome) against `python3 -m http.server`. Look at the
   frames you make. Leave no page errors.
+- **Keep captures tiny; delete nothing.** The disk is nearly full and Yash wants nothing deleted: write screenshots as
+  `.jpg` (`tools/shot.mjs` saves JPEG for .jpg outputs, ~20 KB each), PNG only for pixel-exact crops, ~10 per task.
 - **Headless Chrome must quit cleanly.** Use `tools/shot.mjs`, or end your own CDP scripts with
   `Browser.close` and wait for the process to exit; never just kill it. On macOS every killed Chrome leaves a 1.4 GB
   copy of itself in `/var/folders/…/X/com.google.Chrome.code_sign_clone` (300+ piled up on 2026-10-27/28). Delete your

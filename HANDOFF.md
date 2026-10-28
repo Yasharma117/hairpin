@@ -166,3 +166,7 @@ pair at the edge become hard to read (already a critic complaint).
 **Also to re-check if the grid changes:** palettes/dither are per pixel (fine); the UI's `--px` follows the scale
 automatically; Shillong's tree is repainted onto the grid on resize (fine); performance cost ~2.2x more pixels in the
 post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) need updating.
+- 2026-10-28: Yash chose option 1 ("make it highpoly"): grid ~360 rows landscape / ~400 portrait + folk sprites redrawn
+  bigger (near ~64 px, far ~38 px) with more detail; API unchanged. Agent H1 (folk.js, pixelGrid, sheet, PIXEL.md
+  numbers) running. Next: agent H2 re-fits each scene's placement/framing for the new sprite sizes (stand, edge incl.
+  the ghost's shader slots 39/40, Shillong, climb), shot pass, commit. Disk ~500 MB free: keep captures tiny.
