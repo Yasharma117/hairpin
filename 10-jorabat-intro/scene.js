@@ -23,7 +23,8 @@ const DRIVE_AT = 40;   // the drive starts on its own after this, as in the stor
 
 export async function load(ctx) {
   const { layer, on, input, U: { uMode } } = ctx;
-  layer.innerHTML = `<div class="tag">HAIRPIN · JORABAT</div>`;
+  layer.innerHTML = `<div class="tag">HAIRPIN · JORABAT</div><div class="hint" aria-hidden="true"></div>`;
+  const chip = layer.querySelector('.hint');   // an object with no line yet (they're Yash's to write) shows its name here, by it
   ctx.bed({ engine: 1, crickets: 1 }); ctx.rpm(0);   // idling at the stand
 
   const [iLit, iDark, depthImg, ...objImgs] = await Promise.all(assets.map(a => loadImg(at(a))));
@@ -84,15 +85,15 @@ export async function load(ctx) {
   on(window, 'keydown', e => { if (e.code === 'ArrowRight') step(1); if (e.code === 'ArrowLeft') step(-1); });
   on(ctx.canvas, 'pointermove', () => { kbd = -1; });
   // a tap on the canvas picks the nearest object (and says what it is); only the advance button (or Enter) drives off
-  let canvasDown = -1e9, tapped = false;
+  let canvasDown = -1e9;
   on(ctx.canvas, 'pointerdown', () => { canvasDown = performance.now(); });
   const pickAt = (sx, sy) => {
     // on a phone the dash is wider than the screen: a tap near either side steps to the next object that way
-    if (innerWidth < innerHeight && (sx < innerWidth * .22 || sx > innerWidth * .78)) { step(sx < innerWidth / 2 ? -1 : 1); tapped = true; return; }
+    if (innerWidth < innerHeight && (sx < innerWidth * .22 || sx > innerWidth * .78)) { step(sx < innerWidth / 2 ? -1 : 1); return; }
     const p = stage.screenToPaint(sx, sy); if (!p) return;
     let best = 0, bd = 1e9;
     objects.forEach((o, i) => { const d = Math.hypot((p[0] - o.px) / (o.w / 2 + 20), (p[1] - o.py) / (o.h / 2 + 20)); if (d < bd) { bd = d; best = i; } });
-    kbd = best; tapped = true;
+    kbd = best;
   };
   let lastUp = null; on(window, 'pointerup', e => { lastUp = [e.clientX, e.clientY]; }, { capture: true });
 
@@ -104,6 +105,10 @@ export async function load(ctx) {
     [8.5, 'YOU', 'Easier to show you. It’s all on the dashboard.'],
   ];
   let since = 0, lineI = 0, shownObj = -1, gone = false;
+  // the dashboard answers only once "Easier to show you…" has been said (as long as say() keeps it up)
+  const lineSecs = (text, secs) => Math.max(secs, text.length / 32 + Math.max(1.6, .28 * text.split(/\s+/).length)) + .4;
+  const READY = SCRIPT[2][0] + lineSecs(SCRIPT[2][2], 3.2);
+  const v = new THREE.Vector3();
   const leave = () => { if (!gone) { gone = true; ctx.prompt(null); ctx.next(); } };
   const light = new THREE.Vector2();
 
@@ -138,8 +143,15 @@ export async function load(ctx) {
         o.mat.uniforms.uL.value = o.lit;
         stage.place(o.m, o.px, o.py - (i === picked ? 3 : 0), [o.w, o.h], o.d);   // lifts a touch, like tape giving
       }
-      if (picked !== shownObj && picked >= 0 && (since > 8 || tapped)) { const o = objects[picked]; ctx.say(o.name, o.line, 4); }   // a tap answers at once
-      shownObj = picked;
+      const ready = since > READY, o = objects[picked];
+      if (ready && picked !== shownObj) { shownObj = picked; if (o?.line) ctx.say(o.name, o.line, 4); }
+      const named = ready && o && !o.line;   // no line yet: its name, as a chip just above it, not an empty box
+      chip.classList.toggle('on', named);
+      if (named) {
+        v.setFromMatrixPosition(o.m.matrixWorld).project(camera);
+        if (chip.textContent !== o.name) chip.textContent = o.name;
+        Object.assign(chip.style, { left: `${clamp((v.x * .5 + .5) * innerWidth, 130, innerWidth - 130)}px`, top: `${(-v.y * .5 + .5) * innerHeight - (o.h / 2 / viewH) * innerHeight - 44}px` });
+      }
       if (since > DRIVE_AT) leave();
       ctx.ink.render(scene, camera, null);   // no taxi in this shot: just the grain and vignette
     },

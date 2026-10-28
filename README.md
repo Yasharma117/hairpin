@@ -1,24 +1,26 @@
 # Hairpin
 
-A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160). About four minutes.
+A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160), drawn as pixel art. About five minutes.
 
-**How it looks is set in [STYLE.md](STYLE.md)**: the house style (the edge painting), the palette in `shared/style.js`, light, line, grain, the per-scene grade, framing, asset rules, and the checks to run before every push (`tools/check_style.py`, `tools/contact_sheet.py`).
+**How it looks is set in [PIXEL.md](PIXEL.md)** (the pixel grid, the people, the UI) **and [STYLE.md](STYLE.md)**: the house style (the edge painting), the palette in `shared/style.js`, light, line, the pixel pass, the per-scene grade, framing, asset rules, and the checks to run before every push (`tools/check_style.py`, `tools/contact_sheet.py`).
 
 ## How it fits together
 
-Hairpin is one page: `index.html` holds the title card, one canvas, one renderer, one AudioContext (unlocked by the Play tap) and the torn sheet between scenes. Each scene is a module, `<folder>/scene.js`, exporting `assets` (its paintings, prefetched while the scene before it plays) and `load(ctx)`, which returns `{ frame, resize, onTap, onHorn, dispose }`. The page swaps scenes in place, so the engine/wind/crickets/rain bed runs unbroken.
+Hairpin is one page: `index.html` holds the title card, one canvas, one renderer, one AudioContext (unlocked by the Play tap) and the cream sheet with a stepped pixel edge that covers every change of scene, the first one from the title too. Each scene is a module, `<folder>/scene.js`, exporting `assets` (its paintings, prefetched while the scene before it plays) and `load(ctx)`, which returns `{ frame, resize, onTap, onHorn, dispose }`. The page swaps scenes in place, so the engine/wind/crickets/rain bed runs unbroken.
 
 Every painting is 2.5D: `<scene>/depth.png` (from `tools/make_depth.py`) displaces it as a mesh, seen through a perspective camera; the `Stage` in `shared/kit.js` places everything by the depth at its feet. Camera moves and light steering are listed in STYLE.md.
 
-`shared/kit.js` has what scenes share: the taxi, its ink outline (the full line work only runs inside the taxi's box on screen), the stroke map, small helpers, and the passenger. Each folder's old `index.html` now forwards to `/?scene=<name>`.
+`shared/kit.js` has what scenes share: the taxi, the pixel pass (`Ink`), the `Stage`, the stroke map, small helpers, and the passenger. `shared/folk.js` draws every person as a pixel sprite (`folk.person(look | 'you' | 'grandpa' | ...)`); `tools/folk-sheet.html` shows every pose and option.
 
-Controls, the same everywhere and shown once on the title card: **hold** (mouse, screen or Space) is whatever the taxi does in that scene, drive faster or brake; **tap** or Enter is the next thing; **H** is the horn. With `?debug`, keys 1/2/3 show the lights / the dark painting / the lit painting, and B toggles the line boil. `?fps` shows the frame rate.
+What a scene gets in `ctx`, besides the renderer and `input`: `say(label, text, secs, expr)` for the dialogue box, `subAt('top' | 'bottom')` to move it (top by default, reset on every scene), `prompt(label)` for the advance button, `hornable(on)` to show the HORN button on touch while a honk would be answered (hidden by default, reset on every scene), and the sound API (`bed`, `rpm`, `engineOff`, `duck`, `duckFor`, `sfx`, `honk`). The shared UI classes (`.panel`, `.btn`, `.pick`, `.label`, `.box`, `.hint`, `.cue`) are listed at the top of `index.html`'s `<style>`. Each folder's old `index.html` now forwards to `/?scene=<name>`.
+
+Controls, the same everywhere and shown once on the title card: **hold** (mouse, screen or Space) is whatever the taxi does in that scene, drive faster or brake; **tap** or Enter is the next thing; **H** is the horn. On touch, the horn is a HORN button. With `?debug`, keys 1/2/3 show the lights / the dark painting / the lit painting. `?fps` shows the frame rate.
 
 ## What's here
 
 | Folder | What it is | Live version |
 |---|---|---|
-| 01-cloud-line-scene | The climb (`?scene=climb`): painted hills, headlight reveal, wind, grass, the taxi, cows, a dog that barks at it, walker, basket woman | The older standalone version: https://claude.ai/artifact/4i7QCJoCBFiWA9HFmh4XDF |
+| 01-cloud-line-scene | The climb (`?scene=climb`): painted hills, headlight reveal, wind, grass, the taxi, cows, a dog that barks at it, the walker and the basket woman (folk sprites) | The older standalone version: https://claude.ai/artifact/4i7QCJoCBFiWA9HFmh4XDF |
 | 02-story-board | The Design canvas boards: three looks, world bible, cast (v1), storyboard (v1), route, Story v2 | https://claude.ai/artifact/L3Z7uhAancbjy9MemYkD55 |
 | 03-image-briefs | ChatGPT prompts for every image the next scenes need | https://claude.ai/artifact/XcPptBtprHzD5D6Hr2sfqD |
 | 04-headlight-test | The first two-painting headlight reveal test, on a generated hill | https://claude.ai/artifact/W653Fq6n8VKSErjYMVY6C6 |
@@ -26,15 +28,15 @@ Controls, the same everywhere and shown once on the title card: **hold** (mouse,
 | 06-dak-prototype | The first tiny-planet proof of concept (before Hairpin) | |
 | 07-webgl-oddities | The research gallery of niche WebGL projects | |
 | 08-edge-scene | Beats 05–09 on the real edge paintings: the last stretch of road and hold-to-brake (sets HANG), the hang, the doors, sitting on the edge, the wipe to *then* (the Ambassador on the cliff face, the two men), him in ink with the ember, the flick, the taxi falling, the truck that gives you a lift | |
-| 09-shillong | Beat 10, in November with the cherry in bloom (`blossom.js`: a painted tree over the railing with festival bulbs, blossom down the slopes, falling petals that catch the beam and drift from the pointer, a gust with the star and a shower when you wish): engine ticking, the shooting star, hold to bank a wish, the quote on torn labels. Still a placeholder painting | |
+| 09-shillong | Beat 10, in November with the cherry in bloom (`blossom.js`: a painted tree over the railing with festival bulbs, blossom down the slopes, falling petals that catch the beam and drift from the pointer, a gust with the star and a shower when you wish): engine ticking, the shooting star, hold to bank a wish, the quote in dialogue boxes. Still a placeholder painting | |
 | 10-jorabat-intro | Beat 01 on the dashboard paintings (mirrored to right-hand drive): dome light as the passenger gets in, the five objects light up as you point; the paper star if a wish was banked | |
 | 11-nongpoh | Beat 03: the taxi crosses the rainy pineapple stalls; lanterns flicker and streak the wet road; the grandfather line | |
 | 12-cloud-line | Beat 04: seen from behind, the taxi drives up into the wall of cloud until it whites out | |
-| 13-the-stand | Beat 00, the customiser: the last taxi at the Jorabat stall, you leaning on its roof, the passenger in its lights. The viewer names them and picks woman or man, skin tone, hair, top and an extra on a paper sheet (right on desktop, top on phones); "Get in, {name}" and they walk to the taxi. Options appear as their images exist (`shared/look.js`). Uses jorabat-dark with a warm lift standing in for jorabat-lit |
+| 13-the-stand | Beat 00, the pixel customiser: the last taxi at the Jorabat stall, you by it, the passenger in its lights. The viewer names them and picks build, skin, hair, top and an extra (`folk.OPTIONS`) on a cream panel (right on desktop, top on phones), each option shown as a pixel avatar; "Get in, {name}" and they walk to the taxi. Uses jorabat-dark with a warm lift standing in for jorabat-lit |
 | shared/roster.js | The passenger's DRAFT line at Jorabat, the hang and Shillong, and the brief for each beat: goal, tone, allowed expressions. The name on the label is whatever the viewer typed |
-| people | You and the passenger, 512 x 768, from `source-art/` via `tools/prepare_people.py`: `you-stand`, `you-sit`, `p-<f|m>-base-<stand|sit>`, and each option as an edit of its base, `p-<f|m>-<hair|top|acc>-<option>-<stand|sit>` (prompts in `03-image-briefs/customiser-prompts.md`). Sitting ones are used at the edge and in Shillong |
-| source-art | Every painting and cut-out as you sent it | |
-| shared/kit.js | The taxi, the ink pass, helpers, and the passenger, shared by every scene | |
+| shared/folk.js | Every person as a chibi pixel sprite (near 44 px, far 26 px; idle, walk, sit, wave; lit by the scene), and the customiser's options. `tools/folk-sheet.html` shows them all |
+| source-art | Every painting and cut-out as you sent it (the old painted people, `p-*.png`, are kept here) | |
+| shared/kit.js | The taxi, the pixel pass, the Stage, helpers, and the passenger, shared by every scene | |
 | index.html | The whole piece: title card, scene swapping, sound, controls | |
 | tools | prepare_sprites.py: trims, flips and makes the night version of a figure | |
 
@@ -72,7 +74,7 @@ Every passenger line carries a `'DRAFT'` status in `shared/roster.js` until appr
 - `lit.jpg`, `dark.jpg`: the two hill paintings, 1774×887, pixel-aligned.
 - `strokes.jpg`: a high-pass of the lit painting's brightness; it decides which strokes the headlights reveal first.
 - `sprites/<name>-lit.png` and `<name>-dark.png`: figures facing right, trimmed. Names the scene looks for:
-  cow-graze, cow-look, dog-sit, dog-bark-1, dog-bark-2, dog-bark-3, walker-1, walker-2, basket.
+  cow-graze, cow-look, dog-sit, dog-bark-1, dog-bark-2, dog-bark-3. People are folk.js sprites, not files.
 - `source-paintings/`: the paintings as you sent them.
 
 ## Adding a new figure

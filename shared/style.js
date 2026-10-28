@@ -46,8 +46,7 @@ export const BLOSSOM = {
   petalDark: '#9c82ad', petalLit: '#ffd6e4', petalCore: '#d8628f', petalGlow: '#ff9a6b',
 };
 
-// the customiser's skin tones, light to deep (shared/look.js recolours the base figure's skin, keeping its shading);
-// the base images are painted at BASE_SKIN
+// skin tones, light to deep: tools/fit_palette.py reads them into the palettes (the people's own ramps are FOLK.skin)
 export const SKIN_TONES = ['#efcdb2', '#d8a983', '#b98059', '#8c593a', '#5a3824'];
 export const BASE_SKIN = 2;
 
@@ -110,12 +109,12 @@ export function applyUICSS(root = document.documentElement) {
 // Per scene, dark to light, fitted in Oklab to its graded paintings (PIXEL.md 1). The final pass in shared/kit.js
 // quantizes every frame to its scene's set, with a light 4x4 ordered dither in gradients.
 export const PIXEL_PALETTES = {
-  stand: ['#070810', '#021634', '#1e1711', '#141826', '#232a18', '#173132', '#0b2a60', '#193047', '#462f22', '#333758', '#2e4125', '#613941', '#37505a', '#40543d', '#3f5d2e', '#3b6464', '#695a43', '#5f7256', '#55783b', '#627398', '#668363', '#8b8550', '#6e984b', '#bd8658', '#9ea15d', '#ff7f29', '#91be58', '#f2c230', '#f7c46b', '#bbed63', '#efe6cf', '#ecf388'],
+  stand: ['#0b070c', '#030d18', '#141826', '#1f1a12', '#031a39', '#0e2429', '#25301b', '#0b2b60', '#1e383b', '#462f22', '#303756', '#344a2a', '#613941', '#354f55', '#3d5767', '#704d2f', '#3d625a', '#466634', '#616151', '#6b6234', '#60795a', '#8d6a4d', '#64759a', '#658c45', '#8c8951', '#be8759', '#a0a55f', '#8bba56', '#f2c230', '#f7c46b', '#ccef6f', '#efe6cf'],
   jorabat: ['#000000', '#00000a', '#090206', '#020c22', '#0f0c13', '#141826', '#371408', '#052043', '#2b201d', '#152634', '#0b325b', '#27374c', '#2f3939', '#443327', '#5b331d', '#163f73', '#264d80', '#5a4a42', '#465343', '#46546b', '#7b4a27', '#766344', '#ad692e', '#748493', '#9b8357', '#cb9c4f', '#ff7f29', '#f2c230', '#f7c46b', '#efe6cf', '#ffea5a', '#faedaa'],
-  climb: ['#0b0a12', '#0d122c', '#141826', '#0f1e3a', '#2c1d15', '#152a48', '#3a272b', '#2a3934', '#1c3659', '#513728', '#444d37', '#6e3a4c', '#3a5556', '#325275', '#734b31', '#4b5d37', '#626142', '#426e7c', '#647032', '#6b698e', '#a26031', '#8c7962', '#84802c', '#a88d2c', '#c3916b', '#cd9c36', '#ff7f29', '#f2c230', '#f7c46b', '#b7d5f9', '#efe6cf', '#f4e5e4'],
+  climb: ['#0b0a12', '#0d122c', '#141826', '#0f1f3c', '#2c1d16', '#232a36', '#142b4b', '#3c272a', '#2a3934', '#1b365c', '#473322', '#3a4a38', '#5c3d31', '#374964', '#6e3a4c', '#4e5539', '#305c80', '#7b5336', '#566835', '#656345', '#4e747f', '#6b698e', '#75782d', '#b16c3a', '#968a2d', '#9f856b', '#b58e2c', '#d3a144', '#f2c230', '#f7c46b', '#efe6cf', '#f2e4e5'],
   nongpoh: ['#000003', '#060b13', '#23100b', '#03172e', '#141826', '#15231e', '#14273b', '#0c254c', '#41281b', '#32313c', '#1f3654', '#383b1c', '#22413d', '#0a3282', '#384661', '#663d24', '#584442', '#415a7f', '#645d2a', '#89502a', '#1e5ebf', '#637899', '#8d7562', '#b76225', '#ad8227', '#b5825a', '#ff7f29', '#c9a97a', '#f19936', '#f2c230', '#f7c46b', '#efe6cf'],
   cloud: ['#000208', '#050c05', '#060f19', '#001435', '#141826', '#1d1912', '#0b2034', '#212925', '#342516', '#203450', '#4a3721', '#324663', '#3b4a4a', '#674319', '#644a3e', '#465267', '#435a7a', '#5e6371', '#805d37', '#5f7493', '#767478', '#ac6c28', '#938479', '#b09276', '#ff7f29', '#e49635', '#d3a779', '#f2c230', '#f7c46b', '#b8d8ff', '#ffe276', '#efe6cf'],
-  edge: ['#010204', '#080c10', '#141826', '#221b10', '#091c36', '#182734', '#41291c', '#1d304f', '#313331', '#43391a', '#5a3c3d', '#633b1e', '#4c4470', '#574b3f', '#3a506d', '#2f5952', '#7b4e43', '#745938', '#8c542e', '#546788', '#ae6634', '#96753f', '#8d8176', '#6c85a9', '#b37d5f', '#cf894c', '#b1a285', '#ff7f29', '#e5a766', '#f2c230', '#f7c46b', '#efe6cf'],
+  edge: ['#010204', '#070b11', '#1a170f', '#141826', '#091b36', '#332213', '#1c2b3e', '#2c2f2c', '#1a2f50', '#50311c', '#473b22', '#4e3738', '#36495d', '#664240', '#70411d', '#605040', '#485d82', '#81533e', '#755c2d', '#9b5a2f', '#716f75', '#967051', '#6982a6', '#b57133', '#968877', '#be8963', '#d9904e', '#b2a78b', '#e7aa69', '#f2c230', '#f7c46b', '#efe6cf'],
   shillong: ['#100d14', '#141826', '#14193c', '#221e2f', '#1c2350', '#212c41', '#3e2240', '#2e2d3c', '#402b1d', '#3c3a44', '#30405a', '#613457', '#4f475e', '#565044', '#6c4731', '#844b6e', '#6a5d72', '#786a52', '#647395', '#c05377', '#938262', '#a57598', '#b87c51', '#d77a95', '#c294ae', '#ff7f29', '#f7a2bb', '#f2c230', '#f7c46b', '#e4cea8', '#e8cbd8', '#efe6cf'],
 };
 // ---- end PIXEL_PALETTES ----
@@ -158,6 +157,15 @@ export const FOLK = {
   basket: [['#6e4a22', '#a07236', '#c99a56'], ['#3e2a1a', '#5e4228', '#82613e']],
   // night: lit colour x mul + the night sky x add (paintMat's cool ambient); the warm key brightens a lit sprite
   night: { mul: [0.30, 0.34, 0.52], add: 0.5, sky: PALETTE.night, warm: [1.06, 0.98, 0.88], amber: PALETTE.amber },
+  rimCool: '#6c85a9',   // the 1 px rim on the lit side under a cool light (sky, moon); a warm light rims in the slot's warm step
+  // him in ink (the edge): the grandfather as a 1 px paper line; the ember [glowing, drawing on it], no halo
+  ghost: { line: '#fff9e5', ember: ['#ff7f29', '#f2c230'] },
+  // then (the flashback, setThen): hair goes sepia, cool colours go most of the way to the sepia tone, warm ones part way;
+  // dark steps fall toward a brown, not the navy night
+  then: {
+    hair: ['#3a2618', '#5a3c22', '#7b4e43'], tone: ['#2a1a10', '#7b4e43', '#ecd6aa'], cool: 0.8, warm: 0.4,
+    night: { mul: [0.52, 0.44, 0.36], add: 0.5, sky: '#2a1a10', warm: [1.06, 0.98, 0.88], amber: PALETTE.amber },
+  },
   shadow: UTIL.shadow,
   sheet: { cream: '#fff9e5', night: PALETTE.night, ink: '#3a2a1c', red: '#fd1500', grid: '#e8dcbc' },   // tools/folk-sheet.html
 };

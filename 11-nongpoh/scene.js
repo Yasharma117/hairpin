@@ -126,12 +126,13 @@ const reflBody = refl.children[0].children[0];
   const rain = new THREE.Mesh(g, m); rain.frustumCulled = false; rain.renderOrder = 9; scene.add(rain);
 }
 /* ---------- framing: follows the taxi along the road ---------- */
-let viewW = IW, viewH = IH, camX = 0;
+let viewW = IW, viewH = IH, camX = 0, OUT = .9;   // OUT: how far along the taxi is still whole in frame at the camera's last stop
 let cyRest = IH / 2;
 function resize(w, h) {
   const aspect = w / h, Z = aspect < 1 ? 1 : 1.3;
   if (aspect > IW / IH) { viewW = IW; viewH = IW / aspect; } else { viewH = IH; viewW = IH * aspect; }
   viewW /= Z; viewH /= Z;
+  OUT = (IW - viewW * .28 - FROM) / (TO - FROM);   // with a line still up the taxi eases off before here (wide margin: the near lane slides further than the frame)
   cyRest = clamp(.6 * IH, viewH / 2 + viewH * .08, IH - viewH / 2 - viewH * .08);
   stage.view(IW / 2, cyRest, viewH, aspect);   // the rest pose; following the taxi slides the camera from here
 }
@@ -150,23 +151,27 @@ let lineIdx = 0, lineFree = 0, done = false;
 
 /* ---------- loop: the taxi crosses from left to right, then on to the cloud line ---------- */
 const FROM = -.12 * IW, TO = 1.12 * IW;
-let x = FROM, speed = 1;
+let x = FROM, speed = 1, kick = 0;
 const U0 = +ctx.params.get('u');   // ?u=0.5 starts halfway along (for checking frames)
 if (U0) x = lerp(FROM, TO, U0);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 function frame(dt) {
   const t = (U.uTime.value += dt);
-  speed = lerp(speed, input.hold ? 2.6 : 1, damp(2, dt));   // HOLD: drive faster
-  ctx.rpm(1 + (speed - 1) / 1.6 * 2);   // and the engine with it
+  // HOLD: drive faster; but while a line is still up, ease off before the next line's mark (or the frame's edge), so the road never runs out first
+  const u0 = (x - FROM) / (TO - FROM), mark = t < lineFree ? (lineIdx < LINES.length ? LINES[lineIdx][0] : OUT) : 2;
+  speed = lerp(speed, (input.hold ? 2.6 : 1) * clamp((mark - u0) / .1, .2, 1), damp(2, dt));
+  kick = Math.max(0, kick - dt * 3);
+  ctx.rpm(1 + (speed - 1) / 1.6 * 2 + kick * 1.5);   // and the engine with it (a tap blips it)
   for (let i = 0; i < 4; i++) U.uFl.value[i] = .85 + .15 * (Math.sin(t * 7.3 + i * 13.1) * .5 + .5) * (Math.sin(t * 17.9 + i * 3.7) * .5 + .5);
   x = Math.min(TO, x + speed * dt * 95);   // across (then out of frame, until the last line is said), then the cloud line
-  if (!done && x >= TO && lineIdx >= LINES.length && t >= lineFree) { done = true; ctx.next(); }
+  if (!done && (x - FROM) / (TO - FROM) >= OUT && lineIdx >= LINES.length && t >= lineFree) { done = true; ctx.next(); }   // at the frame's edge: it drives out under the sheet
   const u = (x - FROM) / (TO - FROM);
   const dLane = stage.depthAt(clamp(x, 0, IW), LANE * IH), s = stage.place(jeep, x, LANE * IH, CAR_SIZE, dLane);
   body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
+  body.rotation.z = Math.sin(kick * Math.PI) * .06;   // a tap: the taxi lurches, nose up
   // the reflection mirrors about the tyres' contact line
   stage.place(refl, x, LANE * IH + .05 * CAR_SIZE, CAR_SIZE, dLane); refl.quaternion.copy(jeep.quaternion); refl.scale.y *= -1;
-  reflBody.position.copy(body.position);
+  reflBody.position.copy(body.position); reflBody.rotation.z = body.rotation.z;
   jeep.updateMatrixWorld(true);
   const a = stage.toPaint(body.localToWorld(v1.set(1.72, .62, 0))), b = stage.toPaint(body.localToWorld(v2.set(2.72, .62, 0)));
   U.uHead.value.set(...a); U.uDir.value.set(b[0] - a[0], b[1] - a[1]).normalize();
@@ -179,8 +184,7 @@ function frame(dt) {
   camX = clamp(lerp(camX || x, x + viewW * .15, damp(1.5, dt)), viewW / 2 + mW, IW - viewW / 2 - mW);
   Object.assign(stage.move, { dx: camX - IW / 2, dy: 0, dolly: 0 }); stage.apply();
   if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && t >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); lineFree = t + lineSecs(text, 4); }
-  ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .9;
   ctx.ink.render(scene, camera, jeep);
 }
-return { frame, resize, dispose() { disposeScene(scene); } };
+return { frame, resize, onTap() { kick = 1; }, dispose() { disposeScene(scene); } };
 }

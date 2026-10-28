@@ -4,7 +4,9 @@
 
 Per scene: k-means in Oklab over the scene's lit and dark paintings AFTER its grade (the final pass grades, then
 quantizes), plus the half-way blend of the two (the headlight pools mix them), plus the shared people ramps (skin tones
-in light, mid and shadow). The UI's key colours (ink, paper, amber, ember, the taxi's roof) are always in.
+in light, mid and shadow). The UI's key colours (ink, paper, amber, the taxi's roof) are always in; the ember orange only
+where something burns or glows that hot (not climb, stand, edge: there it lands as hot spots on cows and rock). Folk sprites
+skip the palette (shared/kit.js Ink.PIXEL_ART_LAYER), so their ramps don't need slots here.
 Shillong has no painting yet: its samples are the code-drawn placeholder and blossom swatches in style.js.
 """
 import json, os, re
@@ -30,7 +32,8 @@ def block(name):   # the source text of `export const NAME = {...};` in style.js
 def pal(key): return rgb([re.search(rf"\b{key}: '(#\w{{6}})'", block('PALETTE')).group(1)])[0]
 
 
-FIXED = np.array([pal('ink'), pal('paper'), pal('amber'), pal('ember'), rgb([re.search(r"roof: '(#\w{6})'", block('LIVERY')).group(1)])[0]])
+FIXED = np.array([pal('ink'), pal('paper'), pal('amber'), rgb([re.search(r"roof: '(#\w{6})'", block('LIVERY')).group(1)])[0], pal('ember')])
+NO_EMBER = {'climb', 'stand', 'edge'}   # FIXED minus its last entry
 SKIN = rgb(HEX(block('SKIN_TONES')))
 PEOPLE = np.concatenate([SKIN, SKIN * .62, SKIN * .38])   # each skin tone in light, mid and shadow
 
@@ -86,7 +89,8 @@ if __name__ == '__main__':
     for name, (lit, dark) in SCENES.items():
         x = samples(name, lit, dark)
         x = np.concatenate([x, np.repeat(PEOPLE, max(1, len(x) // 400), 0)])   # the people ramps: about 4% of the weight
-        c = from_lab(kmeans(to_lab(x) * W, to_lab(FIXED) * W, N) / W)
+        fixed = FIXED[:-1] if name in NO_EMBER else FIXED
+        c = from_lab(kmeans(to_lab(x) * W, to_lab(fixed) * W, N) / W)
         c = c[np.argsort(to_lab(c)[:, 0])]   # dark to light
         out[name] = ['#%02x%02x%02x' % tuple(v) for v in np.round(c * 255).astype(int)]
         print(f'{name:9s}', ' '.join(out[name]))

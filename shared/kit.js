@@ -35,40 +35,34 @@ export function colorize(g, hex, emit = 0) {
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
 }
 export function paintMat(uMode) {
-  // Painted, not flat-shaded (STYLE.md): three-tone cel shading, a warm key from the nearest real light (uKey: its direction
-  // in view space; uL: how strong), cool navy ambient, a moonlit rim along the top edges, and a brush-stroke texture that also
-  // breaks up the band edges so they read as painted.
+  // Pixel-art shading (PIXEL.md 1): three hard tones (shadow, mid, lit) from a warm key toward the nearest real light (uKey:
+  // its direction in view space; uL: how strong), cool navy ambient, a hard moonlit rim along the top edges. No texture
+  // and no smooth falloff: those turn into dither noise in the final pass.
   return new THREE.ShaderMaterial({
     uniforms: { uL: { value: .3 }, uKey: { value: new THREE.Vector3(-.4, .7, .6).normalize() }, uMode, uLamp: { value: 1 }, uExposure: { value: 1 } },
     vertexShader: /* glsl */`
       attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
       void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
-    fragmentShader: NOISE + GLSL_PALETTE + /* glsl */`
+    fragmentShader: GLSL_PALETTE + /* glsl */`
       uniform float uL, uMode, uLamp, uExposure; uniform vec3 uKey; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
       void main(){
         vec3 n = normalize(vN);
         if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * mix(.22, 1.08, uLamp), 1.); return; }   // its own lamps (uLamp: 0 = off)
-        // brush: long strokes along the body, used to jitter the bands and to texture the paint
-        float brush = vn2(vec2(vP.x * 9. + vP.z * 3., vP.y * 34.)) * .7 + vn2(vec2(vP.x * 23., vP.y * 70. + vP.z * 11.)) * .3;
-        float k = dot(n, normalize(uKey)) + (brush - .5) * .35;
-        float key = clamp(uL, .2, 1.2);
-        // three tones: shadow, mid, lit
-        float mid = smoothstep(-.12, -.04, k), lit = smoothstep(.38, .46, k) * smoothstep(.15, .5, key);
-        if (uMode > 1.5) { mid = 1.; lit = smoothstep(-.1, 0., k); } else if (uMode > .5) { lit = 0.; }
+        float k = dot(n, normalize(uKey)), key = clamp(uL, .2, 1.2);
+        // three hard tones: shadow, mid, lit
+        float mid = step(-.08, k), lit = step(.42, k) * step(.3, key);
+        if (uMode > 1.5) { mid = 1.; lit = step(-.05, k); } else if (uMode > .5) { lit = 0.; }
         vec3 shade = vC * COOL_AMBIENT + C_NIGHT * .5;
         vec3 midC = mix(vC * COOL_AMBIENT * 1.35 + C_RIDGE * .18, vC * WARM_KEY * .72 + C_AMBER * .05, clamp(key * .6, 0., 1.));
         vec3 litC = vC * WARM_KEY * (.5 + key * .3) + C_AMBER * .035 * key;
         vec3 col = mix(mix(shade, midC, mid), litC, lit);
         // the moon on the top edges
-        float rim = smoothstep(.55, .92, 1. - abs(n.z)) * smoothstep(-.1, .5, n.y);
-        col += C_CLOUD * .35 * rim * (1. - lit * .6);
-        if (vE > 1.5) {   // glass: dark, with a painted streak of reflected sky
-          float streak = smoothstep(.72, .8, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2 + brush * .15));
+        col += C_CLOUD * .35 * step(.75, 1. - abs(n.z)) * step(.2, n.y) * (1. - lit * .6);
+        if (vE > 1.5) {   // glass: dark, with a hard streak of reflected sky
+          float streak = step(.76, fract((vP.x * 1.3 + vP.y * 2.4) * 1.2));
           col = mix(C_NIGHT * 1.2, C_CLOUD * .85, streak * .5 + step(.55, n.y) * .2 + lit * .1);
         }
-        col *= (.84 + brush * .3) * uExposure;   // the paint isn't flat (uExposure: how much of the night it sits in)
-        col *= mix(.82, 1.06, smoothstep(-1.7, 1.7, vP.x + vP.y * .6));   // and each panel falls off a little, front to back, like a painted shape
-        gl_FragColor = vec4(col, 1.);
+        gl_FragColor = vec4(col * uExposure, 1.);   // uExposure: how much of the night it sits in
       }`,
   });
 }
@@ -210,10 +204,14 @@ export function makeTruck(uMode) {
 
 /* ---------- the final pass: one pixel grid for the whole frame (PIXEL.md 1) ---------- */
 // The scene renders at a low internal resolution (an integer pixel scale, about 270 px tall in landscape, 300 in portrait),
-// at 2x that grid and box-filtered down so the paintings don't shimmer. The pixel pass then draws a 1 px line round things
-// that move (from a normals pass of layer 1), grades, quantizes to the scene's palette (Oklab, shared/style.js
+// at 2x that grid and box-filtered down so the paintings don't shimmer. The pixel pass then draws a 1 px line round the
+// vehicles (from a normals pass of layer 1), grades, quantizes to the scene's palette (Oklab, shared/style.js
 // PIXEL_PALETTES) with a light 4x4 ordered dither only in smooth gradients, and the upscale blows it up with nearest
 // filtering, shifted by the camera's sub-pixel remainder (Stage.apply snaps the camera to the grid).
+// Pixel art (folk sprites, anything already drawn on the grid) opts out of all of it: put its meshes on
+// Ink.PIXEL_ART_LAYER (mesh.layers.enable(Ink.PIXEL_ART_LAYER)) and they're drawn again, at the grid, with their own
+// material (so discard gives the silhouette, not the quad), and those pixels come out exactly as the sprite drew them:
+// no smoothing, grade, palette, dither or Ink line (a sprite brings its own). Only vehicles (layer 1) hide them there.
 export const PIX = { scale: 0, w: 0, h: 0 };   // the current pixel grid, for Stage's snapping
 const SS = 2;   // scene supersampling over the pixel grid
 const pixelGrid = (pw, ph) => { const s = Math.max(2, Math.round(ph / (ph > pw ? 300 : 270))); return [s, Math.ceil(pw / s), Math.ceil(ph / s)]; };
@@ -233,30 +231,36 @@ const OKLAB_GLSL = /* glsl */`
 const infoMat = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 vN; void main(){ vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'varying vec3 vN; void main(){ gl_FragColor = vec4(normalize(vN) * .5 + .5, 1.); }' });
 const quad = mat => { const s = new THREE.Scene(); s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat)); return s; };
 const VERT = 'void main(){ gl_Position = vec4(position.xy, 0., 1.); }';
+const depthMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+const noop = () => {};
 export class Ink {
+  static PIXEL_ART_LAYER = 3;   // 1 is the vehicles
   constructor(renderer) {
     this.renderer = renderer;
     const nearest = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter };
     this.rtColor = new THREE.WebGLRenderTarget(1, 1);                       // the scene, at SS x the grid (linear: one tap is a 2x2 box)
     this.rtInfo = new THREE.WebGLRenderTarget(1, 1, nearest);              // layer 1's normals and coverage, at the grid
+    this.rtArt = new THREE.WebGLRenderTarget(1, 1, nearest);               // the pixel-art layer as drawn, alpha = coverage, at the grid
     this.rtPix = new THREE.WebGLRenderTarget(1, 1, { ...nearest, depthBuffer: false });   // the finished pixel frame
     this.size = new THREE.Vector2(1, 1);   // the pixel grid, in pixels (the scene itself renders at SS x this)
     this.uniforms = {
-      tColor: { value: this.rtColor.texture }, tInfo: { value: this.rtInfo.texture }, uLow: { value: this.size }, uAnchor: { value: new THREE.Vector2() },
+      tColor: { value: this.rtColor.texture }, tInfo: { value: this.rtInfo.texture }, tArt: { value: this.rtArt.texture }, uLow: { value: this.size }, uAnchor: { value: new THREE.Vector2() },
       uLift: { value: new THREE.Vector3(0, 0, 0) }, uGamma: { value: new THREE.Vector3(1, 1, 1) }, uGain: { value: new THREE.Vector3(1, 1, 1) }, uSat: { value: 1 },
       uPal: { value: Array.from({ length: 32 }, () => new THREE.Vector3()) }, uLab: { value: Array.from({ length: 32 }, () => new THREE.Vector3()) }, uN: { value: 0 }, uDither: { value: DITHER },
-      uTime: { value: 0 }, uBoil: { value: 0 }, uJeepScale: { value: .7 },   // kept for the scenes that still set them; the line no longer boils
     };
     this.post = quad(new THREE.ShaderMaterial({
       uniforms: this.uniforms, depthTest: false, depthWrite: false, vertexShader: VERT,
       fragmentShader: GLSL_PALETTE + OKLAB_GLSL + `const float CHROMA = ${CHROMA.toFixed(1)};` + /* glsl */`
-        uniform sampler2D tColor, tInfo; uniform vec2 uLow, uAnchor; uniform vec3 uLift, uGamma, uGain, uPal[32], uLab[32]; uniform float uSat, uDither; uniform int uN;
+        uniform sampler2D tColor, tInfo, tArt; uniform vec2 uLow, uAnchor; uniform vec3 uLift, uGamma, uGain, uPal[32], uLab[32]; uniform float uSat, uDither; uniform int uN;
         const vec3 LUM = vec3(.299, .587, .114);
         const float BAYER[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
         vec4 info(ivec2 p){ return texelFetch(tInfo, clamp(p, ivec2(0), ivec2(uLow) - 1), 0); }
         vec3 at(ivec2 p){ return texture2D(tColor, (vec2(p) + .5) / uLow).rgb; }
         void main(){
           ivec2 p = ivec2(gl_FragCoord.xy);
+          // pixel art is already pixel art: out as drawn
+          vec4 art = texelFetch(tArt, p, 0);
+          if (art.a > .5) { gl_FragColor = vec4(art.rgb, 1.); return; }
           // a 3x3 Kuwahara: the flattest 2x2 quadrant's mean, so the painting's brush texture settles into clean pixel
           // clusters instead of speckle, while edges stay sharp. Its numbers also tell gradients (dithered) from detail.
           vec3 n[9]; float y[9];
@@ -268,22 +272,28 @@ export class Ink {
             float v = dot(abs(n[o] - m) + abs(n[o + 1] - m) + abs(n[o + 3] - m) + abs(n[o + 4] - m), vec3(1));
             if (v < best) { best = v; col = m; }
           }
-          // but keep what must stay crisp: things that move (layer 1, drawn in their own pixels) and thin strokes that stand
-          // out from their surroundings (rain, wires, lamps)
-          if (texelFetch(tInfo, p, 0).a > .5 || abs(y[4] - dot(col, LUM)) > .07) col = n[4];
+          // but keep what must stay crisp: the vehicles (layer 1, drawn in their own pixels) and small things that stand
+          // out from their surroundings (rain, wires, lamps, Jorabat's dashboard)
+          vec4 c = info(p);
+          if (c.a > .5 || abs(y[4] - dot(col, LUM)) > .035) col = n[4];
           vec2 g = vec2(y[5] - y[3], y[7] - y[1]) * .5;   // the slope, and how far the 3x3 strays from that plane: the detail
           float detail = 0.;
           for (int j = 0; j < 3; j++) for (int i = 0; i < 3; i++) detail = max(detail, abs(y[j * 3 + i] - y[4] - dot(g, vec2(i - 1, j - 1))));
-          float smooth_ = smoothstep(.0008, .004, length(g)) * (1. - smoothstep(.012, .035, detail));
-          // the line, 1 px: ink just outside the silhouette; a darker local colour on creases inside it (one side only, so 1 px)
-          vec4 c = info(p), l = info(p - ivec2(1, 0)), d = info(p - ivec2(0, 1));
-          bool outer = c.a < .5 && max(max(l.a, info(p + ivec2(1, 0)).a), max(d.a, info(p + ivec2(0, 1)).a)) > .5;
+          float smooth_ = smoothstep(.003, .01, length(g)) * (1. - smoothstep(.012, .035, detail));
+          // the line, 1 px: just outside the silhouette, ink, or a light line where the ground is darker than the body (so a
+          // black taxi on black rock still reads); a darker local colour on creases inside it (one side only, so 1 px)
+          ivec2 o4[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0), ivec2(0, -1), ivec2(0, 1));
+          vec3 body = vec3(0); float nb = 0.;
+          for (int i = 0; i < 4; i++) if (info(p + o4[i]).a > .5) { body += at(p + o4[i]); nb++; }
+          bool outer = c.a < .5 && nb > 0.;
+          vec4 l = info(p - ivec2(1, 0)), d = info(p - ivec2(0, 1));
           if (c.a > .5 && ((l.a > .5 && length(l.rgb - c.rgb) > .45) || (d.a > .5 && length(d.rgb - c.rgb) > .45))) col *= .5;
+          vec3 line = dot(col, LUM) < dot(body, LUM) / max(nb, 1.) ? C_CLOUD : C_INK;
           // the scene's grade (fitted to the edge painting: see STYLE.md and shared/grade.js), and a very soft vignette
           col = uLift + (uGain - uLift) * pow(clamp(col, 0., 1.), uGamma);
           col = mix(vec3(dot(col, LUM)), col, uSat);
           vec2 q = gl_FragCoord.xy / uLow - .5; col *= 1. - dot(q, q) * .2;
-          if (outer) col = C_INK;
+          if (outer) col = line;
           // the palette: the nearest two colours in Oklab, and a Bayer threshold between them, anchored to the painting
           vec3 L = oklab(clamp(col, 0., 1.)) * vec3(1, CHROMA, CHROMA); float d1 = 1e9, d2 = 1e9; int i1 = 0, i2 = 0;
           for (int i = 0; i < 32; i++) {
@@ -294,7 +304,9 @@ export class Ink {
           vec3 ab = uLab[i2] - uLab[i1];
           float t = clamp(dot(L - uLab[i1], ab) / max(dot(ab, ab), 1e-6), 0., 1.);
           ivec2 b = (p + ivec2(uAnchor)) & 3;
-          float s = uDither * smooth_ * float(!outer);
+          // dither only in gradients, never on the vehicles or their line, never between far-apart colours (ΔL > .12, or
+          // far in hue, like cream and amber): those read as a dot grid
+          float s = uDither * smooth_ * (1. - c.a) * float(!outer) * step(abs(ab.x), .12) * step(length(ab), .15);
           gl_FragColor = vec4(uPal[(t - .5) + ((BAYER[b.y * 4 + b.x] + .5) / 16. - .5) * s > 0. ? i2 : i1], 1.);
         }`,
     }));
@@ -315,31 +327,40 @@ export class Ink {
     pal.forEach((h, i) => { const n = parseInt(h.slice(1), 16); u.uPal.value[i].set((n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); u.uLab.value[i].copy(okLab(h)); });
     u.uN.value = pal.length;
   }
-  // pw, ph: the canvas in device px
+  // pw, ph: the canvas in device px (it fills the window). --px: one frame pixel in CSS px, for the UI's borders and shadows
   resize(pw, ph) {
     const [s, w, h] = pixelGrid(pw, ph);
     Object.assign(PIX, { scale: s, w, h }); this.size.set(w, h);
-    this.rtColor.setSize(w * SS, h * SS); this.rtInfo.setSize(w, h); this.rtPix.setSize(w, h);
+    this.rtColor.setSize(w * SS, h * SS); this.rtInfo.setSize(w, h); this.rtArt.setSize(w, h); this.rtPix.setSize(w, h);
     this.upU.uScale.value = s; this.upU.uPad.value.set((w * s - pw) / 2, (h * s - ph) / 2);
+    document.documentElement.style.setProperty('--px', s * innerWidth / pw + 'px');
   }
   // vehicles: the taxi's group, a list of vehicles (the taxi and the truck), or null when there's none in the shot
   render(scene, camera, vehicles, clear = UTIL.clear) {
-    const r = this.renderer, px = camera.userData.pix || [0, 0, 0, 0];
+    const r = this.renderer, px = camera.userData.pix || [0, 0, 0, 0], cars = [].concat(vehicles || []).some(v => v.visible);
+    const auto = r.autoClear; r.autoClear = false;   // every pass clears its own target; autoClear would wipe the vehicles' depth before the art layer
     r.setRenderTarget(this.rtInfo); r.setClearColor(UTIL.infoClear, 0); r.clear();
-    if ([].concat(vehicles || []).some(v => v.visible)) {   // info pass: layer 1 only, normals in rgb, coverage in alpha
+    if (cars) {   // info pass: layer 1 only, normals in rgb, coverage in alpha
       scene.overrideMaterial = infoMat; camera.layers.set(1); r.render(scene, camera);
       scene.overrideMaterial = null; camera.layers.set(0);
     }
+    // the pixel-art pass: the vehicles' depth (so they hide what's behind them), then the art layer with its own materials
+    const hook = scene.onAfterRender; scene.onAfterRender = noop;   // scene hooks are for the passes above
+    r.setRenderTarget(this.rtArt); r.setClearColor(UTIL.black, 0); r.clear();
+    if (cars) { scene.overrideMaterial = depthMat; camera.layers.set(1); r.render(scene, camera); scene.overrideMaterial = null; }
+    camera.layers.set(Ink.PIXEL_ART_LAYER); r.render(scene, camera); camera.layers.set(0);
+    scene.onAfterRender = hook;
     r.setRenderTarget(this.rtColor); r.setClearColor(clear, 1); r.clear(); r.render(scene, camera);
     this.uniforms.uAnchor.value.set(px[2], px[3]); this.upU.uShift.value.set(px[0], px[1]);
     r.setRenderTarget(this.rtPix); r.render(this.post, this.postCam);
     r.setRenderTarget(null); r.render(this.up, this.postCam);
+    r.autoClear = auto;
   }
 }
 
 /* ---------- the passenger: picked at the stand, remembered next to the banked wish ---------- */
 const ROSTER = window.HAIRPIN_ROSTER || { beats: {}, lines: {} };   // shared/roster.js
-// { name, build, skin, hair, top, acc }, as dressed at the stand (shared/look.js); an old saved pick (a teammate's id) reads as none
+// { name, build, skin, hair, top, extra }, as dressed at the stand (shared/folk.js); an old saved pick (a teammate's id) reads as none
 export function passenger() { let p = null; try { p = JSON.parse(localStorage.getItem('hairpin.passenger')); } catch (e) {} return p && typeof p.name === 'string' && p.name.trim() ? { ...p, first: p.name.trim(), lines: ROSTER.lines } : null; }
 export function pick(look) { try { localStorage.setItem('hairpin.passenger', JSON.stringify(look)); } catch (e) {} }
 // a subtitle's label: PASSENGER becomes their first name once someone's riding
@@ -466,24 +487,6 @@ const _k = new THREE.Vector3();
 export function keyLight(jeepMat, camera, from, to, strength) {
   _k.copy(to).sub(from).normalize().transformDirection(camera.matrixWorldInverse);
   jeepMat.uniforms.uKey.value.copy(_k); jeepMat.uniforms.uL.value = strength;
-}
-
-// placeholder figures, painted to match (STYLE.md): a flat two-tone shade (lit from the upper left) and a thin ink outline
-export function paintFigure(src, ink, w = 2) {
-  const W = src.width, H = src.height, pad = Math.ceil(w) + 1;
-  const tint = mkCanvas(W, H), tx = tint.getContext('2d');   // the silhouette, in ink
-  tx.drawImage(src, 0, 0); tx.globalCompositeOperation = 'source-in'; tx.fillStyle = ink; tx.fillRect(0, 0, W, H);
-  const out = mkCanvas(W, H), x = out.getContext('2d');
-  for (let a = 0; a < 12; a++) x.drawImage(tint, Math.cos(a / 12 * Math.PI * 2) * w, Math.sin(a / 12 * Math.PI * 2) * w);   // the line, all round
-  x.drawImage(src, 0, 0);
-  // shade: the side away from the light a step darker, cut on a soft diagonal like a painted plane change
-  x.globalCompositeOperation = 'source-atop';
-  const g = x.createLinearGradient(W * .35, 0, W * .75, H * .3);
-  const shade = k => UTIL.black + Math.round(k * 255).toString(16).padStart(2, '0');   // black at strength k
-  g.addColorStop(0, shade(0)); g.addColorStop(.48, shade(0)); g.addColorStop(.52, shade(.28)); g.addColorStop(1, shade(.34));
-  x.fillStyle = g; x.fillRect(0, 0, W, H);
-  x.globalCompositeOperation = 'source-over';
-  return out;
 }
 
 /* ---------- the viewer steers the light: the pointer (a finger drag on phones) swings a beam within a fixed arc ---------- */

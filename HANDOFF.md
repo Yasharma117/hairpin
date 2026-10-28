@@ -90,3 +90,47 @@ only; wave has no back view; no line-only ghost style.
   Ink smoothing blurs low-contrast pixel art (skip "already pixel art"); a pale patch where the beam hits the tree;
   "Again" sits between the truck and the pair.
 - **Phase 2 committed** on `pixel`. Phase 3 (critics vs pocket.design, then fixes) next.
+- Phase 3 started: three read-only critics (pixel art direction, play-through feel, UI/type/code health), frames in
+  scratchpad/phase3-{art,feel,ui}. Next: merge their findings with the "Needs" above into fix agents by file ownership
+  (kit.js Ink + palettes; folk.js; index.html UI; each scene), then remove shared/look.js + people/p-*.png, update
+  README/STYLE.md, commit, and ask Yash to test locally before any push.
+- Phase 3 critics done → reviews/pixel-review-2026-10-28.md (the fix list). Fix round running: F1 pipeline+palettes
+  (kit.js, fit_palette.py, palette block), F2 folk.js (lit rim, ghost line variant, then-mode, lookup), F3 index.html UI +
+  docs + delete dead files, F5 drive scenes (01, 10, 11, 12). **Still to launch after F2+F3 report: F4 = the stand,
+  the edge, Shillong** (stand ▼ collision/one selected state/walk route + door; edge: pair near-size on the lip ~x620,
+  subAt('bottom') while seated, hornable only in the truck phase, HOLD TO BRAKE fill, tap feedback while seated, folk
+  ghost + then-mode, drop the COVER_LAYER hack once Ink has the pixel-art path; Shillong: one quote box, an ending card
+  (credits by Yash Sharma, Again, Title), sign-off before the star, setLight 1.1, phone framing, lookup on the star).
+- 2026-10-28 ~04:20: limit stopped F1, F2, F5 mid-work (edits on disk, uncommitted); F3 (UI/docs/cleanup) **done**:
+  new ctx APIs `ctx.hornable(bool)` (HORN hidden by default, reset per scene), `ctx.subAt('top'|'bottom')`, `.pick`
+  selected state, type vars `--t1/--t2/--t3/--t-cue`, `--u` scale; dead files deleted (staged). F1, F2, F5 resumed.
+  If lost: re-run them from the briefs in this log, then F4 (stand/edge/Shillong), then commit.
+- F1 (pipeline) **done**: pixel-art path = `mesh.layers.enable(Ink.PIXEL_ART_LAYER)` (3): drawn with its own material,
+  no smoothing/grade/palette/dither; vehicles 3 hard tones, light outer line on dark; dither guards; ember out of
+  climb/stand/edge palettes; smoothing .035; `--px` set on <html>. For F4: remove the edge's cover()/COVER_LAYER/
+  onAfterRender/ALWAYS hack; scenes 01/08/11/12 stop setting ink.uniforms uTime/uJeepScale/uBoil (then delete the shims
+  in kit.js); fix the stale look.js comment at style.js:49.
+- F5 (drive scenes) **done**: Jorabat name chips + quiet until the YOU line ends; climb hold hint, tap lurch + rpm
+  blip, hornable(true); pacing slows instead of parking; cloud beam in 3 hard pools; phone framing. Waiting on F2 (folk)
+  before F4.
+- F2 (folk) **done**: setLight(level, side, rim 'auto'|'warm'|'cool'|'none'), setThen(on), 'ghost' (near, line-only,
+  play('drag'), setEmber(k)), play('lookup'); every folk mesh on layer 3. Last fixes running: F4a = the edge, F4b = the
+  stand + Shillong (+ uniform calls in 01/11/12, style.js:49 comment). After both: delete the uTime/uJeepScale/uBoil
+  shims in kit.js, run check_style + a full shot pass, commit phase 3 on `pixel`, tell Yash to test locally.
+- F4a (edge) **done**: near-size pair on the side lip (lip(.58)), subAt bottom while seated, hornable only in the
+  truck phase, tap skips to the next line, HOLD TO BRAKE fill, folk ghost with drag + ember (its fade patches the folk
+  shader with slot numbers 39/40: fragile if folk.js changes), sepia flashback, COVER hack gone. ghost-1/2.png deleted
+  (unreferenced). Waiting on F4b, then the final pass.
+- F4b (stand + Shillong) **done**. Final pass (2026-10-28): fixed Ink.render autoClear (it wiped the vehicles' depth
+  before the art layer; the stand's workaround removed), deleted the uTime/uBoil/uJeepScale shims, 12 desktop + 3 phone
+  frames with zero page errors, check_style OK. **Phase 3 committed on `pixel`.**
+
+## Known follow-ups (after Yash tests)
+
+- The ghost at the edge (`folk.person('ghost')`, near, line-only, back view) reads as an abstract outline, not a man:
+  give it the seated side/¾ silhouette with the cigarette hand, or keep it front-¾ like the old drawing.
+- The cloud line's beam, seen from behind, still reads as a column rising over the roof: start it lower/wider on the road.
+- The ghost's fade patches folk's shader by slot numbers 39/40 (fragile); `SHILLONG_PLACEHOLDER.rimTown`, `SKIN_TONES`,
+  `BASE_SKIN` in style.js may be unused.
+- TITLE on the end card reloads the page (index.html has no "show title" API).
+- Not yet heard on a real phone; not yet pushed. Merge `pixel` → `main` only when Yash says so.

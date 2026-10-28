@@ -4,150 +4,156 @@
 <title>Hairpin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=VT323&family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=VT323&display=swap">
+<link rel="icon" href="data:,">
 <style>
 /* Layout: one page. A title card, then every scene swapped in place on one canvas, with a pixel sheet between them.
-   Shared overlay: scene tag top-left, mute top-right, the dialogue box up top, one advance button at the bottom.
-   The UI is pocket.design's cream paper on top of our navy night (PIXEL.md section 3). Colours: shared/style.js.
+   Shared overlay: scene tag top-left, mute top-right, the dialogue box (top, or bottom with ctx.subAt), one advance
+   button at the bottom, HORN bottom-right on touch while the scene says so (ctx.hornable). PIXEL.md section 3.
 
    Shared classes, for scenes to put in their own layer (no need to restyle them):
-     .panel          cream sheet, 2px warm-ink border, hard 4px shadow. Square corners.
-     .btn            VT323 uppercase button, 48px tall, nowrap. Pressed: shadow 0, moved 2px.
-     .btn.on, .btn[aria-pressed="true"]   the chosen one: signal-red fill, cream text.
+     .panel          cream sheet, a world-pixel warm-ink border, hard shadow. Square corners.
+     .btn            VT323 uppercase button, 48px tall, nowrap. Pressed: shadow 1 px, moved 1 px. Disabled: 60%, flat.
      .btn.sm         a 44px button for dense groups (option pickers).
+     .pick           anything choosable (a .btn, an avatar frame): with aria-pressed="true" (or .on) it is the chosen
+                     one: a 2px red ring and a red ▼ inside its top-right corner. The one selected state.
      .tag            the scene tag, fixed top-left ("HAIRPIN · THE EDGE").
-     .label          a VT323 red caps label (form keys, kickers). On navy add .on-night.
+     .label          a VT323 rust caps label (form keys, group names).
      .box            the dialogue box: put a .who (speaker tab) and a .line (serif) inside. Add .done for the red ▼.
-     .hint           a floating instruction over the world ("HOLD TO WISH"): cream chip, blinks once shown with .on.
-     .avatar         a round pixel head frame (the only rounded thing), 48px; .avatar.on rings it in red.
+     .hint           an instruction over the world ("HOLD TO WISH"): cream words on a see-through ink strip, dashed
+                     edge, no shadow (it is not a button), clicks pass through. Shown with .on.
      .cue            an urgent red stamp ("BRAKE").
-   Fonts: --display Young Serif, --serif Newsreader, --pixel VT323. --body/--mono (Archivo, Plex) remain only
-   until the scenes' own styles move to these. */
+   Sizes: --t1 16, --t2 20, --t3 24, --t-cue 32 (VT323 steps), all times --u (1 to 1.5, by width, set in resize()).
+   Pixels: --px is the world's pixel in CSS px (set from Ink.resize); borders are one --px, shadows two.
+   Colours: --ui-* from shared/style.js. Signal red only for glyphs (▼ ▶) and text 24px and up; small red text is rust. */
 :root {   /* colours come from shared/style.js (applyCSS, applyUICSS); the page stays hidden until they're set */
   --display: "Young Serif", "Newsreader", Georgia, serif;
   --serif: "Newsreader", Georgia, serif;
   --pixel: "VT323", ui-monospace, Menlo, monospace;
-  --body: "Archivo", system-ui, -apple-system, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --edge: 2px solid var(--ui-ink);
-  --drop: 4px 4px 0 var(--ui-ink);
-  --gutter: 16px;
+  --u: 1;
+  --t1: calc(16px * var(--u)); --t2: calc(20px * var(--u)); --t3: calc(25px * var(--u)); --t-cue: calc(32px * var(--u));
+  --line: var(--px, 3px);
+  --edge: var(--line) solid var(--ui-ink);
+  --drop: calc(var(--line) * 2) calc(var(--line) * 2) 0 var(--ui-ink);
+  --gutter: calc(16px * var(--u));
   --top: calc(env(safe-area-inset-top, 0px) + var(--gutter));
+  --bottom: calc(env(safe-area-inset-bottom, 0px) + 20px * var(--u));
+  --horn-w: calc(76px * var(--u));
   color-scheme: dark;
 }
 html:not(.styled) { visibility: hidden; }
 html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--ui-cream); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+::selection { background: var(--ui-ink); color: var(--ui-cream); }
 [hidden] { display: none !important; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 #layer { position: fixed; inset: 0; pointer-events: none; }
 #layer > * { pointer-events: auto; }
-:focus-visible { outline: 3px solid var(--ui-signal); outline-offset: 3px; }
+:focus-visible { outline: var(--line) solid var(--ui-signal); outline-offset: var(--line); }
 
 /* ----- the shared pieces ----- */
 .panel { background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); }
-.label { font: 400 18px/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-signal); }
-.label.on-night { color: var(--ui-wood); }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 16px; box-sizing: border-box;
-  font: 400 22px/1 var(--pixel); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; text-decoration: none;
+.label { font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-rust); }
+.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: calc(10px * var(--u)); min-height: calc(48px * var(--u)); padding: 0 calc(16px * var(--u)); box-sizing: border-box;
+  font: 400 var(--t3)/1 var(--pixel); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; text-decoration: none;
   color: var(--ui-ink); background: var(--ui-cream); border: var(--edge); border-radius: 0; box-shadow: var(--drop); cursor: pointer;
   -webkit-tap-highlight-color: transparent; user-select: none; transition: transform 90ms steps(2), box-shadow 90ms steps(2), background-color 90ms steps(1); }
-.btn.sm { min-height: 44px; padding: 0 12px; font-size: 20px; }
-.btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ui-ink); }
-.btn.on, .btn[aria-pressed="true"] { background: var(--ui-signal); color: var(--ui-cream); }
-.btn:disabled { cursor: progress; }
-@media (hover: hover) and (pointer: fine) { .btn:hover:not(.on):not([aria-pressed="true"]):not(:disabled) { background: var(--ui-cream-deep); } }
+.btn.sm { min-height: calc(44px * var(--u)); padding: 0 calc(12px * var(--u)); font-size: var(--t2); }
+.btn:active:not(:disabled) { transform: translate(var(--line), var(--line)); box-shadow: var(--line) var(--line) 0 var(--ui-ink); }
+.btn:disabled { opacity: .6; box-shadow: none; cursor: progress; }
+@media (hover: hover) and (pointer: fine) { .btn:hover:not(.on):not(.pick[aria-pressed="true"]):not(:disabled) { background: var(--ui-cream-deep); } }
+/* the one selected state: a 2px red ring outside the ink edge, rust words, a red ▼ inside the top-right corner */
+.btn.on, .pick.on, .pick[aria-pressed="true"] { position: relative; color: var(--ui-rust); box-shadow: 0 0 0 2px var(--ui-signal), var(--drop); }
+.btn.on::after, .pick.on::after, .pick[aria-pressed="true"]::after { content: "▼"; position: absolute; top: 2px; right: 3px; font: 400 var(--t1)/1 var(--pixel); color: var(--ui-signal); pointer-events: none; }
 .tag { position: fixed; top: var(--top); left: calc(env(safe-area-inset-left, 0px) + var(--gutter)); z-index: 11; pointer-events: none;
   background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 5px 10px 3px;
-  font: 400 20px/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .cue { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 10; pointer-events: none;
   background: var(--ui-signal); color: var(--ui-cream); border: var(--edge); box-shadow: var(--drop); padding: 8px 16px 5px;
-  font: 400 32px/1 var(--pixel); letter-spacing: .16em; animation: blink 1s steps(1) infinite; }
+  font: 400 var(--t-cue)/1 var(--pixel); letter-spacing: .16em; animation: blink 1s steps(1) infinite; }
 .hint { position: fixed; left: 50%; transform: translateX(-50%); z-index: 10; pointer-events: none; white-space: nowrap;
-  background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 7px 14px 4px;
-  font: 400 24px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; opacity: 0; transition: opacity 160ms steps(2); }
+  background: color-mix(in srgb, var(--ui-ink) 72%, transparent); color: var(--ui-cream); border: 1px dashed var(--ui-cream-deep); padding: 7px 14px 4px;
+  font: 400 var(--t3)/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; opacity: 0; transition: opacity 160ms steps(2); }
 .hint.on { opacity: 1; }
-.avatar { width: 48px; height: 48px; border-radius: 50%; overflow: hidden; background: var(--ui-cream-deep); border: var(--edge); image-rendering: pixelated; box-sizing: border-box; }
-.avatar.on { box-shadow: 0 0 0 2px var(--ui-cream), 0 0 0 4px var(--ui-signal); }
 
 /* the dialogue box: sized once for the whole line (the untyped rest is laid out, invisible), then typed out */
 .box { position: relative; background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 14px 34px 16px 20px; box-sizing: border-box; }
-.box .who { position: absolute; left: 14px; bottom: calc(100% - 2px); background: var(--ui-cream); border: var(--edge); border-bottom: 0; padding: 4px 10px 1px;
-  font: 400 20px/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-signal); white-space: nowrap; }
+.box .who { position: absolute; left: 14px; bottom: calc(100% - var(--line)); background: var(--ui-cream); border: var(--edge); border-bottom: 0; padding: 4px 10px 1px;
+  font: 400 var(--t2)/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-rust); white-space: nowrap; }
 .box .who:empty { display: none; }
-.box .line { font: 500 clamp(18px, 2.3vw, 23px)/1.36 var(--serif); font-optical-sizing: auto; text-wrap: pretty; margin: 0; }
+.box .line { font: 500 clamp(18px, 2.3vw, calc(23px * var(--u)))/1.36 var(--serif); font-optical-sizing: auto; text-wrap: pretty; margin: 0; }
 .box .line .rest { color: transparent; }
-.box::after { content: "▼"; position: absolute; right: 12px; bottom: 9px; font: 400 16px/1 var(--pixel); color: var(--ui-signal); opacity: 0; }
+.box::after { content: "▼"; position: absolute; right: 12px; bottom: 9px; font: 400 var(--t1)/1 var(--pixel); color: var(--ui-signal); opacity: 0; }
 .box.done::after { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
-.sub { position: fixed; left: 50%; top: calc(var(--top) + 64px); transform: translateX(-50%); width: max-content; max-width: min(620px, calc(100% - 2 * var(--gutter))); z-index: 10; pointer-events: none; }
+.sub { position: fixed; left: 50%; top: calc(var(--top) + 64px * var(--u)); transform: translateX(-50%); width: max-content; max-width: min(calc(620px * var(--u)), calc(100% - 2 * var(--gutter))); z-index: 10; pointer-events: none; }
+.sub.bottom { top: auto; bottom: calc(var(--bottom) + 48px * var(--u) + 28px); }   /* ctx.subAt('bottom'): above the advance button */
 .sub:not(.off) { animation: pop 160ms steps(2) both; }
 .sub.off { visibility: hidden; }
 @keyframes pop { from { opacity: 0; transform: translate(-50%, 6px); } }
 
-/* the one advance button */
-.chip { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); z-index: 10; max-width: calc(100% - 2 * var(--gutter)); transform: translateX(-50%); }
+/* the one advance button; with HORN up it centres in the space left of it, and may wrap */
+.chip { position: fixed; left: 50%; bottom: var(--bottom); z-index: 10; max-width: calc(100% - 2 * var(--gutter)); transform: translateX(-50%); }
+.horn-up .chip { left: calc(50% - (var(--horn-w) + 10px) / 2); max-width: calc(100% - 2 * var(--gutter) - var(--horn-w) - 10px); white-space: normal; text-align: center; padding-block: 8px 6px; }
 .chip::after { content: "▶"; color: var(--ui-signal); font-size: .8em; animation: nudge 1.2s steps(1) infinite; }
-.chip.btn:active:not(:disabled) { transform: translate(calc(-50% + 2px), 2px); }
+.chip.btn:active:not(:disabled) { transform: translate(calc(-50% + var(--line)), var(--line)); }
 @keyframes nudge { 50% { transform: translateX(2px); } }
-/* the horn, bottom-right, on touch only (H on a keyboard), in scenes that answer it */
-.horn { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); z-index: 10; min-width: 44px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* the horn, bottom-right, on touch only (H on a keyboard), while the scene says it answers (ctx.hornable) */
+.horn { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); bottom: var(--bottom); z-index: 10; width: var(--horn-w); padding: 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 
 /* mute, top-right, like their speaker button */
-.mute { position: fixed; top: var(--top); right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); z-index: 45; width: 44px; min-height: 44px; padding: 0; }
-.mute svg { width: 24px; height: 24px; shape-rendering: crispEdges; fill: currentColor; }
+.mute { position: fixed; top: var(--top); right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); z-index: 45; width: calc(44px * var(--u)); min-height: calc(44px * var(--u)); padding: 0; }
+.mute svg { width: calc(24px * var(--u)); height: calc(24px * var(--u)); shape-rendering: crispEdges; fill: currentColor; }
 .mute .x { display: none; }
-.mute[aria-pressed="true"] .x { display: inline; } .mute[aria-pressed="true"] .waves { display: none; }
-.mute[aria-pressed="true"] { background: var(--ui-cream); color: var(--ui-ink); }
-.mute[aria-pressed="true"] .x { fill: var(--ui-signal); }
+.mute[aria-pressed="true"] .x { display: inline; fill: var(--ui-signal); } .mute[aria-pressed="true"] .waves { display: none; }
 
-#fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 400 18px var(--pixel); color: var(--amber); background: var(--night); padding: 4px 6px; pointer-events: none; }
+#fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 400 var(--t1) var(--pixel); color: var(--amber); background: var(--night); padding: 4px 6px; pointer-events: none; }
 
-/* the sheet between scenes: cream paper with a stepped pixel edge, moved in whole steps */
-.tear { position: fixed; left: 0; right: 0; top: -32px; bottom: -32px; z-index: 50; background: var(--ui-cream); pointer-events: none; display: grid; place-items: center;
+/* the sheet between scenes: cream paper with a stepped edge on the world's pixel grid (the teeth and the overhang are
+   set in resize()), moved in whole steps */
+.tear { position: fixed; left: 0; right: 0; top: -40px; bottom: -40px; z-index: 50; background: var(--ui-cream); pointer-events: none; display: grid; place-items: center;
   transform: translateY(0); transition: transform .72s steps(12, jump-end); }
 .tear.up { transform: translateY(calc(-100% - 8px)); }
 .tear.below { transform: translateY(calc(100% + 8px)); transition: none; }
-.tear span { font: 400 clamp(44px, 8vw, 84px)/1 var(--display); color: var(--ui-ink); }
-.tear span::before { content: "▼"; display: block; text-align: center; font: 400 20px/1 var(--pixel); color: var(--ui-signal); margin-bottom: 10px; }
+.tear span { font: 400 clamp(44px, 8vw, calc(84px * var(--u)))/1 var(--display); color: var(--ui-ink); }
+.tear span:not(:empty)::before { content: "▼"; display: block; text-align: center; font: 400 var(--t2)/1 var(--pixel); color: var(--ui-signal); margin-bottom: 10px; }
 
 /* the title card: a cream board in a wood frame, on the night */
 #card { position: fixed; inset: 0; z-index: 40; overflow: auto; display: grid; place-items: center; padding: 72px var(--gutter) 40px; box-sizing: border-box;
-  background: var(--night) repeating-conic-gradient(var(--sky) 0 25%, transparent 0 50%) 0 0 / 8px 8px; }
-#card main { width: min(640px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 22px; padding: 36px 40px 34px;
-  background: var(--ui-cream); color: var(--ui-ink); border: 8px solid var(--ui-wood); outline: 2px solid var(--ui-ink); box-shadow: inset 0 0 0 2px var(--ui-ink), 10px 10px 0 2px var(--black); }
-#card .lead, #card .more { display: flex; flex-direction: column; gap: 22px; }
+  background: var(--night) repeating-conic-gradient(var(--sky) 0 25%, transparent 0 50%) 0 0 / calc(var(--line) * 3) calc(var(--line) * 3); }
+#card main { width: min(calc(640px * var(--u)), 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 22px; padding: 36px 40px 34px;
+  background: var(--ui-cream); color: var(--ui-ink); border: calc(var(--line) * 3) solid var(--ui-wood); outline: var(--edge); box-shadow: inset 0 0 0 var(--line) var(--ui-ink), calc(var(--line) * 4) calc(var(--line) * 4) 0 var(--line) var(--ui-ink); }
+#card .lead, #card .more { display: flex; flex-direction: column; gap: calc(22px * var(--u)); }
 #card .lead > *, #card .more { animation: rise 240ms steps(3) both; }
 #card .lead > :nth-child(2) { animation-delay: 60ms; } #card .lead > :nth-child(3) { animation-delay: 120ms; } #card .lead > :nth-child(4) { animation-delay: 160ms; } #card .more { animation-delay: 200ms; }
 @media (min-width: 900px) {
-  #card main { width: min(1040px, 100%); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 48px; padding: 44px 48px 44px; }
-  #card main h1 { font-size: clamp(72px, 7.6vw, 100px); }
+  #card main { width: min(calc(1040px * var(--u)), 100%); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: calc(48px * var(--u)); padding: calc(44px * var(--u)) calc(48px * var(--u)); }
+  #card main h1 { font-size: clamp(72px, 7.6vw, calc(100px * var(--u))); }
   #card .lead { justify-content: center; }
   #card .more { justify-content: flex-end; }
   #card .more .keys { border-top: 0; padding-top: 0; }
-  #card .lead { border-right: 2px dashed var(--ui-wood); padding-right: 48px; margin-right: -24px; }
+  #card .lead { border-right: 2px dashed var(--ui-wood); padding-right: calc(48px * var(--u)); margin-right: calc(-24px * var(--u)); }
 }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 #card .kicker { margin: 0 0 -14px; }
 #card h1 { margin: 0; font: 400 clamp(76px, 17vw, 144px)/.82 var(--display); letter-spacing: -.02em; color: var(--ui-ink); }
 #card h1 i { color: var(--ui-signal); font-style: normal; }
-#card p { margin: 0; font: 400 19px/1.5 var(--serif); max-width: 46ch; text-wrap: pretty; }
-#play { align-self: flex-start; min-height: 56px; padding: 0 22px; font-size: 28px; background: var(--ui-signal); color: var(--ui-cream); }
+#card p { margin: 0; font: 400 calc(19px * var(--u))/1.5 var(--serif); max-width: 46ch; text-wrap: pretty; }
+#play { align-self: flex-start; min-height: calc(56px * var(--u)); padding: 0 calc(22px * var(--u)); font-size: var(--t-cue); background: var(--ui-signal); color: var(--ui-cream); }
 #play::after { content: "▶"; font-size: .7em; }
 #play:disabled::after { content: none; }
 @media (hover: hover) and (pointer: fine) { #play:hover:not(:disabled) { background: var(--ui-rust); } }
-.keys { display: grid; grid-template-columns: max-content 1fr; gap: 10px 14px; margin: 0; padding: 16px 0 0; border-top: 2px dashed var(--ui-wood); font: 400 16px/1.45 var(--serif); }
-.keys dt { justify-self: start; align-self: start; font: 400 18px/1 var(--pixel); letter-spacing: .08em; color: var(--ui-ink); background: var(--ui-cream-deep); border: var(--edge); border-bottom-width: 4px; padding: 3px 8px 1px; min-width: 2ch; text-align: center; }
+.keys { display: grid; grid-template-columns: max-content 1fr; gap: 10px 14px; margin: 0; padding: 16px 0 0; border-top: 2px dashed var(--ui-wood); font: 400 calc(16px * var(--u))/1.45 var(--serif); }
+.keys dt { justify-self: start; align-self: start; font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; color: var(--ui-ink); background: var(--ui-cream-deep); border: var(--edge); border-bottom-width: calc(var(--line) * 2); padding: 3px 8px 1px; min-width: 2ch; text-align: center; }
 .keys dd { margin: 0; padding-top: 2px; }
 #card nav { display: flex; flex-direction: column; gap: 10px; }
-#card ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 10px; counter-reset: s; }
+#card ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: calc(10px * var(--u)); counter-reset: s; }
 #card ol .btn { counter-increment: s; gap: 8px; }
-#card ol .btn::before { content: "0" counter(s); color: var(--ui-signal); }
+#card ol .btn::before { content: "0" counter(s); color: var(--ui-rust); }
 @media (max-width: 520px) {
   #card { padding-top: 76px; }
   #card main { padding: 24px 20px 24px; gap: 18px; }
   #card p { font-size: 17px; }
-  #card ol .btn { font-size: 19px; min-height: 44px; padding: 0 10px; }
-  .tag { font-size: 18px; }
+  #card ol .btn { min-height: 44px; padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tear, .tear.up, .tear.below { transform: none; transition: opacity .2s ease; }
@@ -170,16 +176,16 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 <div id="card">
   <main>
     <div class="lead">
-    <span class="label kicker">A night drive</span>
+    <span class="label kicker">Jorabat → Shillong</span>
     <h1>Hairpin</h1>
-    <p>A night drive by taxi from Jorabat to Shillong. About four minutes. Built around one idea: a wish kept in the bank until you need it.</p>
+    <p>A night drive by taxi, about five minutes. Built around one idea: a wish kept in the bank until you need it.</p>
     <button id="play" class="btn" type="button">Play</button>
     </div>
     <div class="more">
     <dl class="keys" aria-label="Controls">
       <dt>HOLD</dt><dd>the mouse, the screen or Space: whatever the taxi does in that scene. Drive faster, brake.</dd>
       <dt>TAP</dt><dd>or Enter: the next thing.</dd>
-      <dt>H</dt><dd>the horn.</dd>
+      <dt id="horn-key">H</dt><dd id="horn-say">the horn.</dd>
     </dl>
     <nav aria-labelledby="jump">
       <span class="label" id="jump">Or jump to a scene</span>
@@ -203,7 +209,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { Ink, clamp, loadImg, who } from './shared/kit.js';
+import { Ink, PIX, clamp, loadImg, who } from './shared/kit.js';
 import { applyCSS, applyUICSS } from './shared/style.js';
 import { GRADES } from './shared/grade.js';
 applyCSS(); applyUICSS();
@@ -221,6 +227,7 @@ let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); if (!renderer.capabilities.isWebGL2) throw 0; }
 catch (e) { $('#card main p').textContent = 'Hairpin needs WebGL 2, which this browser does not have.'; $('#play').hidden = true; throw e; }
 const isTouch = matchMedia('(pointer: coarse)').matches;
+if (isTouch) { $('#horn-key').textContent = 'HORN'; $('#horn-say').textContent = 'the button, bottom right, when there is something to honk at.'; }
 // the canvas at the full device resolution, so the pixel grid's edges land on device pixels; the scene itself renders at
 // the low pixel grid (shared/kit.js Ink), so this costs only the upscale
 const DPR = Math.min(devicePixelRatio || 1, 3);
@@ -404,6 +411,12 @@ function prompt(label) {   // the one advance affordance: a chip, or nothing
   if (c.textContent !== label) c.textContent = label;
   c.hidden = false;
 }
+function subAt(where = 'top') { sub.classList.toggle('bottom', where === 'bottom'); }   // where the dialogue box sits
+function hornable(on) {   // the scene says whether a honk would be answered now; the HORN button shows on touch only
+  const up = isTouch && !!on;
+  $('#horn').hidden = !up; document.body.classList.toggle('horn-up', up);
+  if (!up) { hornUp?.(); hornUp = null; }
+}
 $('#chip').addEventListener('click', e => { e.stopPropagation(); tap(); });
 $('#mute').setAttribute('aria-pressed', String(muted));   // remembered across visits (the audio block)
 $('#mute').addEventListener('click', e => {
@@ -430,7 +443,6 @@ addEventListener('keydown', e => {
   else if (e.code === 'Enter' && !e.target.closest?.('button')) { e.preventDefault(); tap(); }
   else if (e.code === 'KeyH' && !e.repeat) { if (!current?.onHorn?.()) hornUp = honk(3); }   // held: the horn lasts until keyup (3 s at most)
   else if (QS.has('debug') && 'Digit1 Digit2 Digit3'.includes(e.code)) U.uMode.value = +e.code.slice(-1) - 1;
-  else if (QS.has('debug') && e.code === 'KeyB') ink.uniforms.uBoil.value = 1 - ink.uniforms.uBoil.value;
 });
 let hornUp = null;
 { const h = $('#horn'), up = () => { hornUp?.(); hornUp = null; };   // the H key's path: held, it lasts until release
@@ -444,12 +456,6 @@ function tap() { if (current && !busy) current.onTap?.(); }
 const tear = $('#tear');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 let busy = false, sceneName = null;
-{ // the sheet's stepped pixel edge, top and bottom (it overhangs the viewport by 32px, so a covering sheet is flat)
-  const cols = 24, step = i => [0, 12, 24, 12, 0, 24][(i * 5 + (i >> 1)) % 6], x = i => `${(i / cols * 100).toFixed(3)}%`, pts = [];
-  for (let i = 0; i < cols; i++) pts.push(`${x(i)} ${step(i)}px`, `${x(i + 1)} ${step(i)}px`);
-  for (let i = cols; i--;) pts.push(`${x(i + 1)} calc(100% - ${step(i + 3)}px)`, `${x(i)} calc(100% - ${step(i + 3)}px)`);
-  tear.style.clipPath = `polygon(${pts.join(', ')})`;
-}
 async function sheetDown(name) {
   tear.firstChild.textContent = name && $(`#card a[href="?scene=${name}"]`)?.textContent || '';   // the next scene's name on the sheet
   sfx.tear(); tear.classList.remove('up'); tear.classList.add('below'); tear.getBoundingClientRect(); tear.classList.remove('below'); await wait(780); }
@@ -462,7 +468,7 @@ function makeCtx(name) {
     get ac() { return ac; }, get out() { return out; }, get verb() { return verb; }, get voice() { return voice; },
     rpm, engineOff, duck, duckFor, sfx,
     on: (target, type, fn, opts) => target.addEventListener(type, fn, { ...opts, signal: ctrl.signal }),
-    bed, say, prompt, honk,
+    bed, say, prompt, honk, subAt, hornable,
     next: () => go(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length]),
     go,
     dispose() { ctrl.abort(); layer.remove(); },
@@ -476,16 +482,14 @@ function prefetch(name) {   // the next scene's code and paintings, while this o
 async function go(name) {
   if (busy || !SCENES[name]) return;
   busy = true;
-  const covering = sceneName ? sheetDown(name) : Promise.resolve();
-  const [mod] = await Promise.all([load(name), covering]);
+  const [mod] = await Promise.all([load(name), sheetDown(name)]);   // the first time too: the sheet covers the title
   if (current) { current.dispose?.(); scope.dispose(); current = null; }   // the outgoing scene ran under the sheet until here
-  say(null); prompt(null); $('#horn').hidden = true;
+  say(null); prompt(null); hornable(false); subAt('top');
   scope = makeCtx(name); sceneName = name;
   ink.setGrade(GRADES[name], name);   // every scene graded toward the edge painting, and quantized to its own palette
   try { current = await mod.load(scope); }
   catch (e) { console.error(e); current = null; }
   resize();
-  $('#horn').hidden = !(isTouch && current?.onHorn);
   current?.frame?.(0, now);   // its first frame, before the sheet lifts
   $('#card').hidden = true;
   sheetUp(); busy = false;
@@ -496,9 +500,20 @@ async function go(name) {
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   ink.resize(Math.floor(innerWidth * DPR), Math.floor(innerHeight * DPR));
+  document.documentElement.style.setProperty('--u', clamp(innerWidth / 1280, 1, 1.5).toFixed(3));   // the UI grows on big screens
+  { // the sheet's stepped edge on the world's pixel grid: teeth a whole number of world pixels wide (about 40 of them),
+    // 0/4/8 pixels deep; it overhangs the viewport by more than its deepest tooth, so a covering sheet is flat
+    const px = (PIX.scale || 3) / DPR, tw = Math.max(1, Math.round(innerWidth / 40 / px)) * px, cols = Math.ceil(innerWidth / tw) + 1;
+    const step = i => [0, 4, 8, 4, 0, 8][(i * 5 + (i >> 1)) % 6] * px, pts = [];
+    for (let i = 0; i < cols; i++) pts.push(`${i * tw}px ${step(i)}px`, `${(i + 1) * tw}px ${step(i)}px`);
+    for (let i = cols; i--;) pts.push(`${(i + 1) * tw}px calc(100% - ${step(i + 3)}px)`, `${i * tw}px calc(100% - ${step(i + 3)}px)`);
+    tear.style.clipPath = `polygon(${pts.join(', ')})`;
+    tear.style.top = tear.style.bottom = `${-10 * px}px`;
+  }
   current?.resize?.(innerWidth, innerHeight);
 }
 addEventListener('resize', resize);
+resize();
 
 /* ---------- the loop ---------- */
 const clock = new THREE.Clock();

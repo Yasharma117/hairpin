@@ -11,8 +11,9 @@ export const assets = ['lit.jpg', 'dark.jpg', 'strokes.jpg', 'depth.png', ...SPR
 
 export async function load(ctx) {
 const { renderer, canvas, layer, input } = ctx;
-layer.innerHTML = '<div class="tag">HAIRPIN · THE CLIMB</div>';
-ctx.bed({ engine: 1, crickets: .6 }); ctx.rpm(1);
+layer.innerHTML = '<div class="tag">HAIRPIN · THE CLIMB</div><div class="hint" style="bottom: 32px">Hold to go faster</div>';
+const hint = layer.querySelector('.hint');   // once, the first drive scene: ~3 s after the first line
+ctx.bed({ engine: 1, crickets: .6 }); ctx.rpm(1); ctx.hornable(true);   // the cows, dog and walker answer the horn
 const IW = 1774, IH = 887;              // painting size in px; the whole scene lives in these units
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -230,7 +231,7 @@ scene.add(jeep);
 let viewW = IW, viewH = IH, ZOOM = 1.5, baseW = IW, baseH = IH;
 function resize(w, h) {
   const aspect = w / h;
-  const Z = ZOOM;
+  const Z = ZOOM; portrait = aspect < 1;
   if (aspect > IW / IH) { baseW = IW; baseH = IW / aspect; } else { baseH = IH; baseW = IH * aspect; }
   viewW = baseW / Z; viewH = baseH / Z;
   stage.view(IW / 2, IH / 2, baseH / Z, aspect);   // the rest pose; following the taxi moves the camera from here
@@ -492,17 +493,22 @@ function bark() {
 
 /* ---------- loop ---------- */
 const total = curve.getLength();
-let s = 0, speed = 1, camX = IW / 2, camY = IH / 2;
+let s = 0, speed = 1, camX = IW / 2, camY = IH / 2, kick = 0, hintAt = Infinity, portrait = false;
 let done = false;
 const tmp = new THREE.Vector3(), q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
 window.__cl = { dog: () => ({ x: dog.pos.x|0, y: dog.pos.y|0, vis: sDog.m.visible, fr: sDog.frame, sc: sDog.m.scale.x|0, frames: Object.keys(FRAMES), car: curve.getPointAt(s / total) }), s: () => s / total, people: () => ({ walker, basket }), cam: camera, road: (u, side) => roadSide(u, side), zoom: z => { ZOOM = z; resize(); } };
 function frame(dt) {
   U.uTime.value += dt;
-  const fast = input.hold;   // HOLD: drive faster
-  speed = lerp(speed, fast ? 3 : 1, damp(2, dt));
+  const t = U.uTime.value;
+  // HOLD: drive faster; but while a line is still up, ease off before the next line's mark (or the top), so the road never runs out first
+  const mark = t < lineFree ? (lineIdx < LINES.length ? LINES[lineIdx][0] : .994) : 2;
+  speed = lerp(speed, (input.hold ? 3 : 1) * clamp((mark - s / total) / .08, .25, 1), damp(2, dt));
   const p0 = curve.getPointAt(s / total);
   s += speed * dt * lerp(26, 120, depthN(p0.y));
-  ctx.rpm(speed);   // the engine climbs with the hold
+  kick = Math.max(0, kick - dt * 3);
+  ctx.rpm(speed + kick * 1.5);   // the engine climbs with the hold (a tap blips it)
+  if (hintAt === Infinity && lineIdx > 0) hintAt = lineFree;   // the first line's end
+  hint.classList.toggle('on', t > hintAt && t < hintAt + 3 && !input.hold);
   if (s >= total * .994) s = total * .994;   // the top: wait there for the last line, then Nongpoh
   const u = s / total;
   if (!done && s >= total * .994 && lineIdx >= LINES.length && U.uTime.value >= lineFree) { done = true; ctx.next(); }
@@ -510,10 +516,12 @@ function frame(dt) {
   const dir = new THREE.Vector2(pa.x - p.x, pa.y - p.y).normalize();
   const n = depthN(p.y), sc = lerp(.32, 1, n);
   // camera follows, then parallax shifts nearer things more
-  const fx = p.x, fy = p.y - 30;
+  // portrait: on the taxi, led a little by its beam, and a touch below centre (under the dialogue)
+  const fx = portrait ? p.x + dir.x * viewW * .22 : p.x, fy = portrait ? p.y - viewH * .08 : p.y - 30;
   const mW = viewW * .08, mH = viewH * .1;   // keep clear of the edges: the near ground moves further than the frame
-  camX = lerp(camX, clamp(fx, viewW / 2 + mW, IW - viewW / 2 - mW), damp(1.4, dt));
-  camY = lerp(camY, clamp(fy, viewH / 2 + mH, IH - viewH / 2 - mH), damp(1.4, dt));
+  const follow = damp(portrait ? 3 : 1.4, dt);   // a narrow frame has to keep up, or the taxi slips out of it
+  camX = lerp(camX, clamp(fx, viewW / 2 + mW, IW - viewW / 2 - mW), follow);
+  camY = lerp(camY, clamp(fy, viewH / 2 + mH, IH - viewH / 2 - mH), follow);
   // the camera follows the taxi: a translation from the rest pose, so the hills slide past each other (real parallax)
   Object.assign(stage.move, { dx: camX - IW / 2, dy: camY - IH / 2 });
   stage.apply();
@@ -526,6 +534,7 @@ function frame(dt) {
   q1.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42); q2.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
   jeep.quaternion.copy(q1).multiply(q2);
   body.position.y = -PIVOT.y + Math.sin(U.uTime.value * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(U.uTime.value * 11.9)), 10) * .03;  // road shake + bass thump
+  body.rotation.z = Math.sin(kick * Math.PI) * .06;   // a tap: the taxi lurches, nose up
   // headlights start at the jeep's nose, along the road
   U.uHead.value.set(p.x + dir.x * 58 * sc, p.y + dir.y * 58 * sc - 8 * sc);
   U.uDir.value.copy(dir);
@@ -534,7 +543,6 @@ function frame(dt) {
   // the warm key: the nearest street lamp's bulb
   const lamp = LAMPS.reduce((a, b) => Math.hypot(a.x - p.x, a.y - p.y) < Math.hypot(b.x - p.x, b.y - p.y) ? a : b);
   keyLight(jeepMat, camera, jeep.position, stage.toWorld(lamp.x, lamp.y - 150, stage.depthAt(lamp.x, lamp.y), KEY_TO), clamp(Lj, .25, 1.2));
-  ctx.ink.uniforms.uJeepScale.value = sc; ctx.ink.uniforms.uTime.value = U.uTime.value;
   // subtitles
   if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && U.uTime.value >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); lineFree = U.uTime.value + lineSecs(text, 4); }
   updateLife(dt, p, dir, s, par);
@@ -544,6 +552,7 @@ function frame(dt) {
 }
 return {
   frame, resize,
+  onTap() { kick = 1; },
   onHorn() { honkT = 2.2; barkT = 1.4; bark(); return false; },   // they look up; the page plays the horn itself
   dispose() { walker.p.dispose(); basket.p.dispose(); disposeScene(scene); delete window.__cl; },
 };

@@ -5,23 +5,32 @@
 // parts (legs, body, arms, head) and overlays (hair, the top's details, extras, props), so every look is correct by
 // construction. A person's colours are ramps from FOLK in style.js; the night ramp is derived from the lit one, and the
 // shader picks each slot's colour from one of five light steps (quantized, never blended), plus a 1 px darker rim on the
-// side away from the light, plus a pixel ellipse shadow.
+// side away from the light and a 1 px light rim on the side toward it, plus a pixel ellipse shadow.
 //
 //   const p = folk.person(look | 'you' | 'grandpa' | 'friend' | 'walker' | 'basket', { size: 'near' | 'far' })
 //   scene.add(p.obj); stage.place(p.obj, x, y, paintPxPerSpritePx)   // p.obj's origin is the foot anchor; 1 unit = 1 sprite px
 //   p.face('left' | 'right' | 'front' | 'back'); p.play('walk');
 //   every frame: x += p.update(dt) * (facing left ? -1 : 1)          // update returns the sprite px walked: feet never slide
-//   p.setLight(0..1.2, side = -1)                                    // side: where the light comes from, -1 = screen left
+//   p.setLight(0..1.2, side = -1, rim = 'auto')                      // side: where the light comes from, -1 = screen left;
+//                                                                    // rim on the lit side: 'auto' | 'warm' | 'cool' | 'none'
+//   p.setThen(on)                                                    // the flashback: sepia hair, warmed colours
+//   sitting from behind: p.play('lookup')                            // the head tips back (to the star) and holds
+//   folk.person('ghost'): him in ink, a cream line only, sitting from behind; p.play('drag', { onEnd: () => p.play('sit') }),
+//   p.setEmber(0..1)                                                 // the cigarette's tip: > .5 is a drag (hot, 2 px)
+// Every mesh (and the shadow) is flagged pixel art (userData.pixelArt, layer 3) so Ink draws it as is.
 import * as THREE from 'three';
 import { FOLK } from './style.js';
 
 // ---------- slots ----------
 // . clear  o outline  S s l r skin (shadow, base, light, blush)  H h j hair  T t u top  V v w the top's second colour
 // D d E sleeve  F f g forearm (skin under short sleeves)  P p q trousers  B b n shoes (n: sole)  e eye  W eye glint
-// m mouth  A a c extra  X x y extra's second ramp, or a prop  K k z cap, or a prop's second ramp.   _ in an overlay erases.
-const CH = '.oSslrHhjTtuVvwDdEFfgPpqBbneWmAacXxyKkz';
+// m mouth  A a c extra  X x y extra's second ramp, or a prop  K k z cap, or a prop's second ramp  G the ember (a cigarette's
+// tip, coloured by setEmber)  Z its second pixel, lit only when it swells.   _ in an overlay erases.
+const CH = '.oSslrHhjTtuVvwDdEFfgPpqBbneWmAacXxyKkzGZ';
 const SLOT = Object.fromEntries([...CH].map((c, i) => [c, i]));
 const NS = CH.length;
+// each slot's lightest sibling in its ramp (the warm rim's colour): skin l, hair j, top u, and so on
+const LIGHT = [...CH].map((c, i) => { const g = ['Sslr', 'Hhj', 'Ttu', 'Vvw', 'DdE', 'Ffg', 'Ppq', 'Bbn', 'Aac', 'Xxy', 'Kkz'].find(g => g.includes(c)); return g ? SLOT[g[2]] : i; });
 
 // a head seen from behind: the same skull with the face taken off
 const faceless = (map, nose) => map.map((r, j) => [...r].map((c, i) => 'HeWmr'.includes(c) || (nose && j === nose[0] && i === nose[1]) ? 's' : c).join(''));
@@ -140,6 +149,28 @@ const N_ARMS_DOWN = [
   'olso.........osSo',
   'osso.........osSo',
   '.oo...........oo.'];
+// the cigarette, from behind (the ghost, sitting): his right hand (the viewer's right) at rest with it, and the drag, the
+// hand rising to his mouth. Columns 13-20 of a 21-wide arms map; the left arm hangs as in N_ARMS_DOWN. `top` is the map's
+// first row relative to the body's top. The tip is G; Z lights beside it when the ember swells.
+const smokeArms = (top, right) => [...Array(14 - top)].map((_, j) => {
+  const r = j + top, down = N_ARMS_DOWN[r] || '.................';
+  return (r >= 0 ? down.slice(0, 13) : '.............') + (right[j] ?? (r >= 0 && !Array.isArray(right) ? down.slice(13) + '....' : '........'));
+});
+const N_CIG = smokeArms(0, { 10: 'ofFo.Z..', 11: 'osSoWG..' });
+// the hand goes up in front of him (hidden), so only the upper arm shows; then it's at his mouth, the elbow out
+const N_DRAG0 = smokeArms(0, ['........', '.oo.....', 'odDo....', 'odDo....', 'odDo....', 'ofFo....', 'ofFo....', 'oFFo....', '.oo.....']);
+const N_DRAG1 = smokeArms(-4, [
+  '..oo..Z.',
+  '.olsoWG.',
+  '.osSo...',
+  '..ogfo..',
+  '...ogfo.',
+  '.oooogfo',
+  'odDDDEdo',
+  'odDDDDdo',
+  '.oooooo.']);
+// him in ink, from behind: a clean neck (two lines) instead of the jaw's edges, which read as dashes in line only
+const N_HEAD_GHOST = faceless(N_HEAD_M, [12, 9]).map((r, j) => j >= 15 ? '......oSSSo......' : r);
 // waving: the arm on the viewer's left goes up beside the head (20 wide at x 1; 8 rows above the body)
 const N_WAVE = hand => [
   ...(hand ? [
@@ -894,7 +925,7 @@ const NEAR = {
   },
   back: {
     head: { m: faceless(N_HEAD_M, [12, 9]), f: faceless(N_HEAD_M, [12, 9]) }, body: { m: N_BODY_B, f: N_BODY_BF },
-    arms: { down: N_ARMS_DOWN }, legs: N_LEGS, off: {},
+    arms: { down: N_ARMS_DOWN, cig: N_CIG, drag0: N_DRAG0, drag1: N_DRAG1 }, legs: N_LEGS, off: { drag1: [0, -4] },
   },
   hair: N_HAIR, tops: N_TOPS, extras: N_EXTRAS, face: N_FACE, props: {},
 };
@@ -1096,6 +1127,10 @@ export const ANIMS = {
   wave: { views: ['front', 'left'], loop: true, frames: { all: [{ arms: 'wave0', ms: 240 }, { arms: 'wave1', ms: 240 }] } },
   sitdown: { views: ['back'], loop: false, frames: { all: [{ legs: 'crouch', ms: 160 }, { legs: 'squat', ms: 140 }, { legs: 'seat', ms: 260 }] } },
   sit: { views: ['back'], loop: true, frames: { all: [{ legs: 'seat', ms: 1100 }, { legs: 'seat', headDx: 1, ms: 1100 }] } },
+  // seated, from behind: the head tips back to look up (at the star), and holds
+  lookup: { views: ['back'], loop: false, frames: { all: [{ legs: 'seat', tilt: 1, ms: 160 }, { legs: 'seat', tilt: 2, ms: 400 }] } },
+  // the ghost's cigarette: hand up, at the mouth (hold), down again; then play('sit')
+  drag: { views: ['back'], loop: false, frames: { all: [{ legs: 'seat', arms: 'drag0', ms: 220 }, { legs: 'seat', arms: 'drag1', ms: 1500 }, { legs: 'seat', arms: 'drag0', ms: 220 }] } },
 };
 const framesOf = (anim, view) => ANIMS[anim].frames[view] || ANIMS[anim].frames.all;
 
@@ -1123,6 +1158,8 @@ export const CHARACTERS = {
   walker: { name: 'Walker', build: 'm', skin: 3, hair: 'short', top: 'work', legs: 'dark', shoes: 'dark', prop: 'umbrella' },
   basket: { name: 'Basket', build: 'f', skin: 2, hair: 'bun', top: 'jainsem', legs: 'cloth', shoes: 'sandal', prop: 'basket' },
 };
+// him in ink: the grandfather as a line only (PIXEL.md 2), near size, sitting from behind with his cigarette
+CHARACTERS.ghost = { ...CHARACTERS.grandpa, name: 'Ghost', ghost: true, cig: true };
 export function normalise(look) {
   if (typeof look === 'string') look = CHARACTERS[look];
   look = { ...(look || {}) };
@@ -1162,13 +1199,36 @@ function litColours(look) {
 export const STEPS = [0.15, 0.5, 0.85, 1.05];   // light level thresholds between the steps
 export const step = L => STEPS.filter(t => L >= t).length;   // 0 = night .. 3 = lit .. 4 = warm
 const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
-function ramp(hex) {
-  const lit = hexRGB(hex), N = FOLK.night, sky = hexRGB(N.sky), am = hexRGB(N.amber);
+function ramp(lit, N = FOLK.night) {
+  const sky = hexRGB(N.sky), am = hexRGB(N.amber);
   const night = lit.map((v, i) => v * N.mul[i] + sky[i] * N.add), warm = lit.map((v, i) => Math.min(255, v * N.warm[i] + am[i] * .04));
   const mix = t => night.map((v, i) => Math.round(v + (lit[i] - v) * t));
   return [mix(0), mix(.4), mix(.75), lit, warm.map(Math.round)];
 }
-const palette = look => litColours(look).map(ramp);
+// then (the flashback): sepia hair; every other colour pulled toward the sepia tone of its own lightness, cool ones further
+function sepia(rgb) {
+  const T = FOLK.then, [d, m, l] = T.tone.map(hexRGB), y = (rgb[0] * .3 + rgb[1] * .59 + rgb[2] * .11) / 255;
+  const tone = y < .5 ? d.map((v, i) => v + (m[i] - v) * y * 2) : m.map((v, i) => v + (l[i] - v) * (y - .5) * 2);
+  const k = rgb[2] > rgb[0] ? T.cool : T.warm;
+  return rgb.map((v, i) => Math.round(v + (tone[i] - v) * k));
+}
+// a look's colours: per slot, five light steps of [r, g, b, a]. The ghost is its line only (alpha 0 elsewhere).
+function palette(look, then = false) {
+  const lit = litColours(look).map(hexRGB);
+  if (then) { lit.forEach((c, s) => { if (CH[s] !== 'W') lit[s] = sepia(c); }); [...'Hhj'].forEach((ch, i) => { lit[SLOT[ch]] = hexRGB(FOLK.then.hair[i]); }); }
+  const pal = lit.map(c => ramp(c, then ? FOLK.then.night : FOLK.night).map(v => [...v, 255]));
+  const W = pal[SLOT.W]; pal[SLOT.W] = W.map((_, k) => W[Math.max(k, 2)]);   // the eyes' catch-light stays cream
+  pal.forEach((r, s) => r.push(pal[LIGHT[s]][4]));   // row 5: the warm lit-side rim, from the slot's lightest sibling
+  if (look.ghost) {
+    const line = [...hexRGB(FOLK.ghost.line), 255];
+    pal.forEach((r, s) => r.forEach((_, k) => { r[k] = 'oWGZ'.includes(CH[s]) ? line : [0, 0, 0, 0]; }));
+  }
+  return pal;
+}
+const EMBER = FOLK.ghost.ember.map(h => hexRGB(h).map(v => v / 255));   // [glowing, drawing on it]
+// the rim on the lit side: 'warm' (the slot's warm step), 'cool' (FOLK.rimCool), 'none'; auto: warm from light step 2 up
+const RIMS = { none: 0, warm: 1, cool: 2 };
+const rimOf = (rim, st, then) => RIMS[rim] ?? (st >= 2 || then ? 1 : 2);
 
 /* ======================================================================================================================
    Composing a frame: parts and overlays, layer by layer, on one grid
@@ -1204,9 +1264,11 @@ export function compose(size, lookIn, view, f = {}) {
   const legsKey = f.legs || 'stand', legs = V.legs[legsKey] || V.legs.stand;
   let armsKey = f.arms || 'down';
   if (look.prop === 'umbrella' && !f.arms?.startsWith('wave') && V.arms.hold) armsKey = 'hold';
+  if (look.cig && armsKey === 'down' && V.arms.cig) armsKey = 'cig';
   const arms = V.arms[armsKey] || V.arms.down;
-  const body = V.body[look.build], head = V.head[look.build], off = k => V.off[k] || [0, 0];
-  const legsTop = H - legs.length, bodyY = legsTop - body.length + (f.breath || 0), headY = bodyY - head.length + 1;
+  const body = V.body[look.build], head = look.ghost && view === 'back' && size === 'near' ? N_HEAD_GHOST : V.head[look.build], off = k => V.off[k] || [0, 0];
+  const tilt = view === 'back' ? Math.min(f.tilt || 0, size === 'far' ? 1 : 2) : 0;   // looking up: the head drops, the neck goes
+  const legsTop = H - legs.length, bodyY = legsTop - body.length + (f.breath || 0), headY = bodyY - head.length + 1 + tilt;
   const hx = S.x + (f.headDx || 0), at = { head: [hx, headY], body: [S.x, bodyY] };
   const layers = { back: [], cloth: [], face: [], neck: [], hair: [], ears: [], over: [] };
   const add = list => list && list.forEach(o => layers[o.layer].push(o));
@@ -1223,7 +1285,7 @@ export function compose(size, lookIn, view, f = {}) {
     else if (layer === 'arms') {
       if (TOPS[look.top].check) check(buf, W, H, S.x, bodyY, 'Ttu');
       if (!armsOver) stamp(buf, W, H, arms, S.x + off(armsKey)[0], bodyY + off(armsKey)[1]);
-    } else if (layer === 'head') stamp(buf, W, H, f.blink ? blink(head) : head, hx, headY);
+    } else if (layer === 'head') stamp(buf, W, H, (f.blink ? blink(head) : head).slice(0, head.length - tilt), hx, headY);
     else layers[layer].forEach(put);
     if (layer === 'neck' && look.muffler === 'mufflerYou') check(buf, W, H, S.x + 1, bodyY, 'Aac');
   }
@@ -1235,27 +1297,37 @@ export function compose(size, lookIn, view, f = {}) {
    CPU render: previews, avatars, the sheet
    ==================================================================================================================== */
 const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-export function render(buf, W, H, cols, st = 3, { flip = false, side = -1, rim = false } = {}) {
+// the same rules as the shader (FRAG) below: keep the two in step
+export function render(buf, W, H, cols, st = 3, { flip = false, side = -1, rim = false, back = false, ember = 0, then = false } = {}) {
   const c = canvas(W, H), x = c.getContext('2d'), img = x.createImageData(W, H), d = img.data;
   const at = (i, j) => (i < 0 || i >= W || j < 0 || j >= H) ? 0 : buf[j * W + (flip ? W - 1 - i : i)];
+  const lit = rim ? rimOf(rim === true ? 'auto' : rim, st, then) : 0, cool = hexRGB(FOLK.rimCool);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const s = at(i, j); if (!s) continue;
-    let k = st, dim = 1;
-    if (rim && s !== 1 && at(i - side, j) <= 1) { if (k) k--; else dim = .8; }
-    const col = cols[s][k], p = (j * W + i) * 4;
+    let col, k = st, dim = 1;
+    if (s === SLOT.G) col = EMBER[ember > .5 ? 1 : 0].map(v => v * 255);
+    else if (s === SLOT.Z) { if (ember <= .5) continue; col = EMBER[0].map(v => v * 255); }
+    else {
+      if (back && s >= SLOT.H && s <= SLOT.j) k = Math.max(k, 2);   // hair from behind never sinks into the night
+      if (cols[s][k][3] < 128) continue;
+      if (rim && s !== 1 && at(i + side, j) <= 1 && lit) col = lit === 1 ? cols[s][5] : cool;
+      else { if (rim && s !== 1 && at(i - side, j) <= 1) { if (k) k--; else dim = .8; } col = cols[s][k]; }
+    }
+    const p = (j * W + i) * 4;
     d[p] = col[0] * dim; d[p + 1] = col[1] * dim; d[p + 2] = col[2] * dim; d[p + 3] = 255;
   }
   x.putImageData(img, 0, 0); return c;
 }
 // one frame as a canvas: who, size, view ('front' | 'left' | 'right' | 'back'), anim, frame index, blink, light 0..1.2
-export function frameCanvas(who, { size = 'near', view = 'front', anim = 'idle', i = 0, blink = false, light = 1, rim = false, side = -1 } = {}) {
-  const S = SIZES[size], v = view === 'right' ? 'left' : view, fr = framesOf(anim, v);
-  return render(compose(size, who, v, { ...fr[i % fr.length], blink }), S.W, S.H, palette(normalise(who)), step(light), { flip: view === 'right', rim, side });
+// rim: false, true (auto), 'warm', 'cool', 'none' (the dark rim only); then: the flashback's sepia; ember 0..1
+export function frameCanvas(who, { size = 'near', view = 'front', anim = 'idle', i = 0, blink = false, light = 1, rim = false, side = -1, then = false, ember = 0 } = {}) {
+  const S = SIZES[size], v = view === 'right' ? 'left' : view, fr = framesOf(anim, v), look = normalise(who);
+  return render(compose(size, look, v, { ...fr[i % fr.length], blink }), S.W, S.H, palette(look, then), step(light), { flip: view === 'right', rim: look.ghost ? false : rim, side, back: v === 'back', ember, then });
 }
 export const preview = look => frameCanvas(look, { size: 'near', view: 'front' });
 // the head and shoulders, for UI: a px x px canvas (whole-pixel scale, transparent around)
 export function avatar(look, px = 48) {
-  const S = NEAR, buf = compose('near', look, 'front', {}), cols = palette(normalise(look));
+  const S = NEAR, buf = compose('near', look, 'front', {}), cols = palette(normalise(look));   // (the ghost has no avatar)
   let top = S.H; for (let k = 0; k < buf.length; k++) if (buf[k]) { top = Math.floor(k / S.W); break; }
   const cw = 26, ch = 26, src = render(buf, S.W, S.H, cols, 3), out = canvas(px, px), x = out.getContext('2d');
   const z = Math.max(1, Math.floor(px / cw));
@@ -1271,7 +1343,8 @@ export const sizes = Object.fromEntries(Object.entries(SIZES).map(([k, s]) => [k
 const VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`;
 const FRAG = /* glsl */`
   precision highp float; precision highp int;
-  uniform sampler2D tIdx, tPal; uniform vec2 uCell, uOff; uniform float uFlip, uStep, uSide; varying vec2 vUv;
+  uniform sampler2D tIdx, tPal; uniform vec2 uCell, uOff; uniform float uFlip, uStep, uSide, uBack, uRim, uEmber;
+  uniform vec3 uRimCool, uEmber0, uEmber1; varying vec2 vUv;
   int slotAt(ivec2 p){
     if (p.x < 0 || p.y < 0 || p.x >= int(uCell.x) || p.y >= int(uCell.y)) return 0;
     if (uFlip > .5) p.x = int(uCell.x) - 1 - p.x;
@@ -1280,9 +1353,19 @@ const FRAG = /* glsl */`
   void main(){
     ivec2 p = ivec2(floor(vUv.x * uCell.x), floor((1. - vUv.y) * uCell.y));
     int s = slotAt(p); if (s == 0) discard;
+    if (s == ${SLOT.G}) { gl_FragColor = vec4(uEmber > .5 ? uEmber1 : uEmber0, 1.); return; }   // the ember: flat, no halo
+    if (s == ${SLOT.Z}) { if (uEmber <= .5) discard; gl_FragColor = vec4(uEmber0, 1.); return; }
     int k = int(uStep); float dim = 1.;
-    if (s != 1 && slotAt(p - ivec2(int(uSide), 0)) <= 1) { if (k > 0) k--; else dim = .8; }   // the rim, away from the light
-    gl_FragColor = vec4(texelFetch(tPal, ivec2(s, k), 0).rgb * dim, 1.);
+    if (uBack > .5 && s >= ${SLOT.H} && s <= ${SLOT.j}) k = max(k, 2);   // hair from behind never sinks into the night
+    if (texelFetch(tPal, ivec2(s, k), 0).a < .5) discard;   // the ghost: line only
+    vec3 c;
+    if (uRim > .5 && s != 1 && slotAt(p + ivec2(int(uSide), 0)) <= 1)   // the rim on the lit side
+      c = uRim > 1.5 ? uRimCool : texelFetch(tPal, ivec2(s, 5), 0).rgb;
+    else {
+      if (s != 1 && slotAt(p - ivec2(int(uSide), 0)) <= 1) { if (k > 0) k--; else dim = .8; }   // the rim, away from the light
+      c = texelFetch(tPal, ivec2(s, k), 0).rgb;
+    }
+    gl_FragColor = vec4(c * dim, 1.);
   }`;
 function shadowTex(w, h) {
   const c = canvas(w, h), x = c.getContext('2d'); x.fillStyle = FOLK.shadow;
@@ -1306,21 +1389,29 @@ export function person(who, { size = 'near' } = {}) {
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) data[((oy + j) * AW + ox + i) * 4] = buf[j * W + i];
   });
   const tIdx = new THREE.DataTexture(data, AW, AH, THREE.RGBAFormat);
-  const pal = palette(look), pd = new Uint8Array(NS * 5 * 4);
-  pal.forEach((r, s) => r.forEach((c, k) => pd.set([...c, 255], (k * NS + s) * 4)));
-  const tPal = new THREE.DataTexture(pd, NS, 5, THREE.RGBAFormat);
+  const pd = new Uint8Array(NS * 6 * 4), fill = then => palette(look, then).forEach((r, s) => r.forEach((c, k) => pd.set(c, (k * NS + s) * 4)));
+  fill(false);
+  const tPal = new THREE.DataTexture(pd, NS, 6, THREE.RGBAFormat);
   for (const t of [tIdx, tPal]) { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; }
   const mat = new THREE.ShaderMaterial({
-    uniforms: { tIdx: { value: tIdx }, tPal: { value: tPal }, uCell: { value: new THREE.Vector2(W, H) }, uOff: { value: new THREE.Vector2() }, uFlip: { value: 0 }, uStep: { value: 3 }, uSide: { value: -1 } },
+    uniforms: {
+      tIdx: { value: tIdx }, tPal: { value: tPal }, uCell: { value: new THREE.Vector2(W, H) }, uOff: { value: new THREE.Vector2() }, uFlip: { value: 0 }, uStep: { value: 3 }, uSide: { value: -1 },
+      uBack: { value: 0 }, uRim: { value: look.ghost ? 0 : 1 }, uEmber: { value: 0 }, uRimCool: { value: new THREE.Color(FOLK.rimCool) },
+      uEmber0: { value: new THREE.Vector3(...EMBER[0]) }, uEmber1: { value: new THREE.Vector3(...EMBER[1]) },
+    },
     vertexShader: VERT, fragmentShader: FRAG,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
   const sw = size === 'near' ? 17 : 11, sh = size === 'near' ? 5 : 3;
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshBasicMaterial({ map: shadowTex(sw, sh), transparent: true, opacity: .45, depthWrite: false }));
-  shadow.position.set(0, 1, -.5); shadow.renderOrder = -1;
+  shadow.position.set(0, 1, -.5); shadow.renderOrder = -1; shadow.visible = !look.ghost;
+  // pixel art already: Ink draws these as they are (no smoothing, grade, palette or dither; kit.js Ink.PIXEL_ART_LAYER)
+  for (const m of [mesh, shadow]) { m.userData.pixelArt = true; m.layers.enable(3); }
   const obj = new THREE.Group(); obj.add(shadow, mesh);
 
   let anim = 'idle', view = 'front', facing = 'front', frame = 0, t = 0, loop = true, onEnd = null, turnT = 0, blinkT = 2 + Math.random() * 3, blinking = 0;
+  let then = false, rim = 'auto';
+  if (look.ghost) { anim = 'sit'; view = facing = 'back'; }
   const p = {
     obj, mesh, shadow, look, size, w: W, h: H, foot: [S.cx + .5, H], stride: S.stride, done: false,
     get anim() { return anim; }, get facing() { return facing; },
@@ -1354,7 +1445,18 @@ export function person(who, { size = 'near' } = {}) {
       if (blinking > 0) blinking -= dt;
       show(); return walked;
     },
-    setLight(level, side = -1) { mat.uniforms.uStep.value = step(level); mat.uniforms.uSide.value = side < 0 ? -1 : 1; return p; },
+    // rim: the 1 px rim on the lit side, 'auto' (warm from light step 2 up, else cool), 'warm', 'cool' or 'none'
+    setLight(level, side = -1, rimKind = rim) {
+      const u = mat.uniforms; rim = rimKind; u.uStep.value = step(level); u.uSide.value = side < 0 ? -1 : 1;
+      u.uRim.value = look.ghost ? 0 : rimOf(rim, u.uStep.value, then); return p;
+    },
+    // the flashback: sepia hair, warmed colours (FOLK.then)
+    setThen(on = true) {
+      if (!!on === then) return p; then = !!on; fill(then); tPal.needsUpdate = true;
+      if (!look.ghost) mat.uniforms.uRim.value = rimOf(rim, mat.uniforms.uStep.value, then); return p;
+    },
+    // the cigarette's tip (the ghost): 0 glowing (1 px), above .5 drawing on it (hot, 2 px)
+    setEmber(k) { mat.uniforms.uEmber.value = k; return p; },
     dispose() { mesh.geometry.dispose(); mat.dispose(); tIdx.dispose(); tPal.dispose(); shadow.geometry.dispose(); shadow.material.map.dispose(); shadow.material.dispose(); },
   };
   function show() {
@@ -1362,7 +1464,7 @@ export function person(who, { size = 'near' } = {}) {
     if (turnT > 0) key = 'idle:left:0';
     else if (anim === 'idle' && view !== 'back' && blinking > 0) key += ':b';
     const [ox, oy] = where[key], flip = (turnT > 0 ? facing === 'left' : facing === 'right') ? 1 : 0;
-    mat.uniforms.uOff.value.set(ox, oy); mat.uniforms.uFlip.value = flip;
+    mat.uniforms.uOff.value.set(ox, oy); mat.uniforms.uFlip.value = flip; mat.uniforms.uBack.value = key.split(':')[1] === 'back' ? 1 : 0;
     const dx = W / 2 - (S.cx + .5);
     mesh.position.set(flip ? -dx : dx, H / 2, 0);
     return p;

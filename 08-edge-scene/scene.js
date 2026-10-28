@@ -2,28 +2,34 @@
 // the doors, sitting on the lip, the story wiping to the same cliff decades ago, him in ink with the ember, the flick,
 // the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
 import * as THREE from 'three';
-import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, makeTaxi, makeTruck, LIVERY, passenger, line, disposeScene, Stage, keyLight, Steer } from '../shared/kit.js';
+import { clamp, lerp, sstep, loadImg, tex, strokeMap, NOISE, makeTaxi, makeTruck, LIVERY, passenger, line, disposeScene, Stage, keyLight, Steer, Ink } from '../shared/kit.js';
 import * as folk from '../shared/folk.js';
+import { FOLK } from '../shared/style.js';
 
 const at = f => new URL(f, import.meta.url).href;
-const SPRITES = ['ghost-1', 'ghost-2', 'then-car'];
+const SPRITES = ['then-car'];
 export const assets = ['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg', 'depth.png', ...SPRITES.map(n => `sprites/${n}.png`)];
 
 const IW = 1672, IH = 941;              // edge-lit/dark/then.jpg size in px; the whole scene lives in these units
 
 // The cliff's side edge, traced off the painting as fractions: from the plateau's far corner down toward us, to where the rock face takes over.
 const EDGE = [[.522, .432], [.5, .55], [.478, .65], [.475, .72]];
-const SEATS = [[.445, .418], [.4, .42]];   // where the two of you sit: the passenger, then you, on the far lip
 const lip = y => {   // the point on the edge at height y (a fraction of the painting), in painting px
   const i = clamp(EDGE.findIndex(([, ey]) => ey >= y), 1, EDGE.length - 1), [x0, y0] = EDGE[i - 1], [x1, y1] = EDGE[i];
   return [lerp(x0, x1, clamp((y - y0) / (y1 - y0), 0, 1)) * IW, y * IH];
 };
-// a seated figure's height by depth: about 50 px a metre at the taxi, more as the edge comes toward us
-const figH = y => lerp(46, 70, (y / IH - EDGE[0][1]) / (EDGE[EDGE.length - 1][1] - EDGE[0][1]));
+// where the two of you sit, side by side on the side lip below the taxi, backs to us: you on the edge, legs over the drop,
+// the passenger just in from you (painting px)
+const SEATS = [[-50, -3], [-4, 0]].map(([dx, dy]) => { const [x, y] = lip(.58); return [x + dx, y + dy]; });
 
 export async function load(ctx) {
 const { input, layer, params: QS } = ctx;
-layer.innerHTML = '<div class="tag">HAIRPIN · THE EDGE</div><div class="cue" id="brake" hidden>BRAKE</div>';
+layer.innerHTML = `<style>
+.brake .fill { position: absolute; inset: 0; padding: inherit; background: var(--ui-cream); color: var(--ui-signal); clip-path: inset(0 100% 0 0); }
+.brake { white-space: nowrap; }
+.brake.held { animation: none; }
+</style>
+<div class="tag">HAIRPIN · THE EDGE</div><div class="cue brake" id="brake" hidden>HOLD TO BRAKE<span class="fill" id="bfill" aria-hidden="true">HOLD TO BRAKE</span></div>`;
 const $ = s => layer.querySelector(s);
 ctx.bed({ engine: 1, wind: .6 });
 const [imgs, spr, depthImg] = await Promise.all([Promise.all(['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg'].map(f => loadImg(at(f)))), Promise.all(SPRITES.map(n => loadImg(at(`sprites/${n}.png`)))), loadImg(at('depth.png'))]);
@@ -127,119 +133,55 @@ function pin(o, x, y, d, oddX = true) {
   return u / s;
 }
 
-/* ---------- keeping sprites crisp through the pixel pass ---------- */
-// Ink keeps only layer 1 (the vehicles) out of its smoothing and draws the 1 px ink line round it, and its info pass draws
-// layer 1 as solid geometry. A sprite is a quad, so each one gets a twin on layer 2 that writes coverage only where the
-// sprite has a pixel (not its own outline: the ink line lands on exactly those pixels). The twins are drawn into the info
-// target right after Ink's info pass. ponytail: a scene-local hook; belongs in Ink (shared/kit.js) for every scene's folk.
-const COVER_LAYER = 2;
-function cover(p) {
-  const m = p.mesh.material, fs = m.fragmentShader.replace('if (s == 0) discard;', 'if (s <= 1) discard; gl_FragColor = vec4(.5, .5, 1., 1.); return;');
-  if (fs === m.fragmentShader) return;   // folk changed shape: no twin, the sprite is just softer
-  const twin = new THREE.Mesh(p.mesh.geometry, new THREE.ShaderMaterial({ uniforms: m.uniforms, vertexShader: m.vertexShader, fragmentShader: fs, depthWrite: false }));
-  twin.layers.set(COVER_LAYER); twin.frustumCulled = false; p.mesh.add(twin);
-}
-let covering = false;
-scene.onAfterRender = (r, sc, cam) => {
-  if (!sc.overrideMaterial || covering) return;   // only after the info pass
-  covering = true; const ac = r.autoClear, ov = sc.overrideMaterial; r.autoClear = false; sc.overrideMaterial = null; cam.layers.set(COVER_LAYER);
-  try { r.render(sc, cam); } finally { cam.layers.set(1); sc.overrideMaterial = ov; r.autoClear = ac; covering = false; }
-};
-const ALWAYS = { visible: true };   // so Ink runs its info pass even when no vehicle is in the shot (the flashback)
-
-/* ---------- the two of us (shared/folk.js): out of the doors, a walk to the far lip, sit ---------- */
-// the passenger as dressed at the stand (a default look if nobody's been dressed), and you; backs to us once seated
+/* ---------- the two of us (shared/folk.js): out of the doors, a walk to the lip, sit ---------- */
+// the passenger as dressed at the stand (a default look if nobody's been dressed), and you; backs to us once seated.
+// Near size throughout: a cheat on the perspective, so the two of you read on the lip for the long talk.
 const DEFAULT_LOOK = { build: 'f', skin: 2, hair: 'long', top: 'hoodie', extra: 'none' };
 const people = [passenger() || DEFAULT_LOOK, 'you'].map((look, i) => {
-  const p = folk.person(look, { size: 'far' });
-  p.obj.visible = false; p.mesh.renderOrder = 3; scene.add(p.obj); cover(p);
-  return { p, state: 'off', t: 0, x: 0, y: 0, from: [0, 0], seat: [SEATS[i][0] * IW, SEATS[i][1] * IH], ppx: 2.6 };
+  const p = folk.person(look, { size: 'near' });
+  p.obj.visible = false; scene.add(p.obj);
+  return { p, state: 'off', t: 0, x: 0, y: 0, seat: SEATS[i], ppx: 2.6 };
 });
 const seat = w => { Object.assign(w, { state: 'seated', x: w.seat[0], y: w.seat[1] }); w.p.face('back'); w.p.play('sit'); };
-// one step of a person: wait for the door, walk left to the seat by exactly the stride the frames take, turn, sit
+// one step of a person: wait for the door, walk to the seat by exactly the stride the frames take, turn, sit
 function stepPerson(w, dt) {
   if (w.state === 'off') return;
   w.t += dt;
-  if (w.state === 'wait' && w.t > .55) { w.state = 'walk'; w.p.play('walk'); w.p.face('left'); }
-  if (w.state !== 'walk') { w.p.update(dt); return; }
-  const dx = w.p.update(dt) * w.ppx;   // painting px: the sprite px walked, at this depth
-  w.x = Math.max(w.seat[0], w.x - dx);
-  w.y = lerp(w.from[1], w.seat[1], clamp((w.from[0] - w.x) / (w.from[0] - w.seat[0]), 0, 1));
-  if (w.x <= w.seat[0]) {
-    w.state = 'sit'; w.p.face('back');
-    w.p.play('sitdown', { onEnd: () => { w.p.play('sit'); w.state = 'seated'; } });
+  if (w.state === 'wait' && w.t > .55) {
+    const rx = w.seat[0] - w.x, ry = w.seat[1] - w.y;
+    w.state = 'walk'; w.p.play('walk'); w.p.face(Math.abs(ry) > Math.abs(rx) ? (ry > 0 ? 'front' : 'back') : rx < 0 ? 'left' : 'right');
   }
+  if (w.state !== 'walk') { w.p.update(dt); return; }
+  const s = w.p.update(dt) * w.ppx, rx = w.seat[0] - w.x, ry = w.seat[1] - w.y, d = Math.hypot(rx, ry);   // painting px walked, at this depth
+  if (d > s) { w.x += rx / d * s; w.y += ry / d * s; return; }
+  w.x = w.seat[0]; w.y = w.seat[1]; w.state = 'sit'; w.p.face('back');
+  w.p.play('sitdown', { onEnd: () => { w.p.play('sit'); w.state = 'seated'; } });
 }
 
-/* ---------- him: in ink, two frames (cigarette down, and the drag), with the ember ---------- */
-// His drawings are fine line art; at this size they'd go to mush, so each is redrawn as a crisp 1 px line on the grid:
-// his silhouette's edge, plus the drawing's strong strokes (the hatching is thinner and drops out). He's in neither
-// painting, so the headlights can't touch him.
-const GHOST_PX = 44;   // his height in frame pixels, seated
-function inkLine(img, H) {
-  const W0 = img.width, H0 = img.height, c0 = mkCanvas(W0, H0), x0 = c0.getContext('2d'); x0.drawImage(img, 0, 0);
-  const a = x0.getImageData(0, 0, W0, H0).data, N = W0 * H0;
-  let line = new Uint8Array(N); for (let i = 0; i < N; i++) line[i] = a[i * 4 + 3] > 77;
-  const grow = (m, r, v = 1) => {   // r steps of a 4-neighbour max (v = 1) or min (v = 0); past the edge never erodes
-    for (let n = 0; n < r; n++) {
-      const o = m.slice();
-      for (let k = 0; k < N; k++) {
-        if (m[k] === v) continue; const i = k % W0;
-        if ((i > 0 && m[k - 1] === v) || (i < W0 - 1 && m[k + 1] === v) || (k >= W0 && m[k - W0] === v) || (k < N - W0 && m[k + W0] === v)) o[k] = v;
-      }
-      m = o;
-    }
-    return m;
-  };
-  // the silhouette: close the line up, flood the outside from the border, what's left is him
-  const shut = grow(line, 7), out = new Uint8Array(N), st = [];
-  for (let i = 0; i < W0; i++) st.push(i, (H0 - 1) * W0 + i); for (let j = 0; j < H0; j++) st.push(j * W0, j * W0 + W0 - 1);
-  while (st.length) { const k = st.pop(); if (out[k] || shut[k]) continue; out[k] = 1; const i = k % W0; if (i > 0) st.push(k - 1); if (i < W0 - 1) st.push(k + 1); if (k >= W0) st.push(k - W0); if (k < N - W0) st.push(k + W0); }
-  const inside = grow(out.map(v => 1 - v), 6, 0), thick = grow(grow(line, 1, 0), 1);   // thick: only strokes wider than the hatching
-  const W = Math.round(H * W0 / H0), down = m => {   // box average to the grid
-    const r = new Float32Array(W * H);
-    for (let j = 0; j < H0; j++) for (let i = 0; i < W0; i++) r[Math.min(H - 1, j * H / H0 | 0) * W + Math.min(W - 1, i * W / W0 | 0)] += m[j * W0 + i];
-    const n = W0 * H0 / (W * H); return r.map(v => v / n);
-  };
-  const S = down(inside), L = down(thick), c = mkCanvas(W, H), x = c.getContext('2d'), id = x.createImageData(W, H);
-  const inS = (i, j) => i < 0 || j < 0 || i >= W || j >= H || S[j * W + i] > .5;   // past the drawing's edge counts as him (no line along the cut)
-  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    if (!inS(i, j)) continue;
-    const edge = !inS(i - 1, j) || !inS(i + 1, j) || !inS(i, j - 1) || !inS(i, j + 1);
-    if (edge || L[j * W + i] > .2) id.data.fill(255, (j * W + i) * 4, (j * W + i) * 4 + 4);
-  }
-  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {   // no lone specks
-    const k = (j * W + i) * 4; if (!id.data[k + 3]) continue;
-    let n = 0; for (let b = -1; b <= 1; b++) for (let d = -1; d <= 1; d++) if ((b || d) && i + d >= 0 && i + d < W && j + b >= 0 && j + b < H && id.data[((j + b) * W + i + d) * 4 + 3]) n++;
-    if (!n) id.data[k + 3] = 0;
-  }
-  x.putImageData(id, 0, 0);
-  const t = tex(c); t.magFilter = t.minFilter = THREE.NearestFilter; return t;
+/* ---------- him: in ink (folk's line-only ghost), sitting where he sat, the ember on his cigarette ---------- */
+// He's in neither painting, so the headlights can't touch him. He comes and goes in four dithered steps on the grid (so
+// only the art pass draws him: the colour pass is at 2x and would dither differently); the ember can glow without him.
+const ghost = folk.person('ghost', { size: 'near' });
+ghost.mesh.layers.set(Ink.PIXEL_ART_LAYER); ghost.obj.visible = false; scene.add(ghost.obj);
+const EMBER_SLOTS = [39, 40];   // folk's G and Z (the ember and its second pixel)
+{
+  const m = ghost.mesh.material;
+  m.uniforms.uOp = { value: 0 }; m.uniforms.uLit = { value: 0 };
+  m.fragmentShader = m.fragmentShader.replace('varying vec2 vUv;', 'varying vec2 vUv; uniform float uOp, uLit; const int BAYER[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);')
+    .replace('if (s == 0) discard;', `if (s == 0) discard;
+      if (s == ${EMBER_SLOTS[0]} || s == ${EMBER_SLOTS[1]}) { if (uLit < .5) discard; }
+      else { ivec2 q = ivec2(gl_FragCoord.xy) & 3; if ((float(BAYER[q.y * 4 + q.x]) + .5) / 16. > uOp) discard; }`);
 }
-const QUAD = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }';
-const footGeo = new THREE.PlaneGeometry(1, 1).translate(0, .5, 0);   // origin at the bottom edge, where he sits
-const GHOST = [{ img: SPR['ghost-1'], tip: [.983, .354] }, { img: SPR['ghost-2'], tip: [.524, .847] }];   // tip: the cigarette's end, uv
-const ghostMat = new THREE.ShaderMaterial({
-  uniforms: { tG: { value: null }, uOp: { value: 0 } }, transparent: true, depthWrite: false, vertexShader: QUAD,
-  fragmentShader: 'uniform sampler2D tG; uniform float uOp; varying vec2 vUv; void main(){ gl_FragColor = vec4(.91, .88, .8, texture2D(tG, vUv).a * uOp); }',
-});
-const ghost = new THREE.Mesh(footGeo, ghostMat); ghost.frustumCulled = false; ghost.renderOrder = 4; scene.add(ghost);
-// sitting on the edge: his seat (a third of the way across the drawing) on the lip, knees and feet out over the drop
-const G = lip(.7), G_D = stage.depthAt(G[0] - 10, G[1] + 4);   // the lip under him
-const gs = { px: 0, w: 0, h: 0, gw: 1, gh: 1, x: G[0] };   // his size on the grid, and in painting px
-function regrid(ppx) {   // the grid's size changed: redraw him at GHOST_PX
-  if (gs.px === ctx.ink.size.y) return; gs.px = ctx.ink.size.y;
-  for (const g of GHOST) { g.tex?.dispose(); g.tex = inkLine(g.img, GHOST_PX); }
-  gs.w = GHOST[0].tex.image.width; gs.h = GHOST_PX; gs.gh = gs.h * ppx; gs.gw = gs.w * ppx; gs.x = G[0] + (.5 - .33) * gs.gw;
-}
-const tipAt = f => [gs.x + (GHOST[f].tip[0] - .5) * gs.gw, G[1] - GHOST[f].tip[1] * gs.gh];
-// the ember: an additive point that swells on each drag
-const emberMat = new THREE.ShaderMaterial({
-  uniforms: { uI: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  vertexShader: QUAD,
-  fragmentShader: 'uniform float uI; varying vec2 vUv; void main(){ float d = length(vUv - .5) * 2.; vec3 c = vec3(1., .5, .16) * (exp(-d * d * 18.) + exp(-d * d * 3.) * .25) + vec3(1., .9, .6) * exp(-d * d * 90.); gl_FragColor = vec4(c * uI, 1.); }',
-});
-const ember = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), emberMat); ember.frustumCulled = false; ember.renderOrder = 5; scene.add(ember);
+// the ember's pixel in his two poses (cigarette down, and the drag), in sprite px from his foot anchor, up
+const tipOf = f => { const b = folk.compose('near', folk.normalise('ghost'), 'back', f), i = Math.max(0, b.indexOf(EMBER_SLOTS[0])); return [i % ghost.w + .5 - ghost.foot[0], ghost.h - (i / ghost.w | 0) - .5]; };
+const TIPS = { sit: tipOf({ legs: 'seat' }), drag: tipOf({ legs: 'seat', arms: 'drag1' }) };
+const G = lip(.7), G_D = stage.depthAt(G[0] - 10, G[1] + 4), GX = G[0] + 4;   // the lip under him; his seat just in from it
+let gppx = 2.6, lastDrag = 0;   // painting px per sprite px where he sits; the last drag's cycle
+const tipAt = f => [GX + TIPS[f][0] * gppx, G[1] - TIPS[f][1] * gppx];
+// the flicked ember: 2 px, then 1, on the grid
+const rgb = h => new THREE.Vector3(...[1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255));
+const emberMat = new THREE.ShaderMaterial({ uniforms: { uC: { value: rgb(FOLK.ghost.ember[1]) } }, vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: 'uniform vec3 uC; void main(){ gl_FragColor = vec4(uC, 1.); }' });
+const ember = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), emberMat); ember.layers.set(Ink.PIXEL_ART_LAYER); ember.frustumCulled = false; ember.renderOrder = 5; scene.add(ember);
 const emb = { pos: new THREE.Vector2(), vel: new THREE.Vector2() };
 
 /* ---------- then: their car went over and the two of them stood here looking down at it. Only in the old painting. ---------- */
@@ -250,7 +192,7 @@ thenCar.rotation.z = -1.05;   // nose down the cliff face
 thenCar.frustumCulled = false; thenCar.renderOrder = 2; scene.add(thenCar);
 // grandfather and his friend, in the 1970s, by daylight, looking down at it
 const thenPair = [['grandpa', .395, .505], ['friend', .428, .5]].map(([who, x, y]) => {
-  const p = folk.person(who, { size: 'far' }); p.face('right'); p.setLight(1, -1); p.obj.visible = false; p.mesh.renderOrder = 3; scene.add(p.obj); cover(p);
+  const p = folk.person(who, { size: 'far' }); p.face('right'); p.setLight(1, -1).setThen(true); p.obj.visible = false; p.mesh.renderOrder = 3; scene.add(p.obj);
   return { p, x: x * IW, y: y * IH };
 });
 
@@ -382,7 +324,7 @@ function go(next) {
     Object.assign(drv, { u: 0, v: 180, inWin: 0, heldWin: 0 }); ctx.bed({ engine: 1, wind: .6 }); ctx.rpm(1);
     tips = 0; fallT = -1; quiet = false; ang = reset(); angV = 0; stage.place(jeep, CAR[0], CAR[1], CAR_SIZE, CAR_D); lineI = 0; say(null);
     doors.forEach(d => { Object.assign(d.userData, { open: 0, v: 0, delay: 0 }); d.rotation.y = 0; });
-    people.forEach(w => { w.state = 'off'; w.p.obj.visible = false; }); truck.visible = false; dieselOff();
+    people.forEach(w => { w.state = 'off'; w.p.obj.visible = false; }); truck.visible = false; dieselOff(); lastDrag = 0;
   }
   if (next === 'car') { hangSaid = false; ang = 0; angV = 1.3; creak(1.3); skid(false); ctx.bed({ wind: 1 }); }   // over the lip: the nose drops and seesaws
   if (next === 'pout' || next === 'yout') {
@@ -390,8 +332,9 @@ function go(next) {
     tips++; creak(1); ctx.sfx.door(); Object.assign(d.userData, { open: 1, delay: .12 });   // the latch and the creak, then the door swings
     // you step out by your door; the passenger comes round the back of the taxi, from behind it
     const p = stage.toPaint(body.localToWorld(i ? v1.set(.3, .1, 1.05) : v1.set(-1.5, .1, -.6)));
-    Object.assign(w, { state: 'wait', t: 0, x: p[0], y: p[1], from: p }); w.p.play('idle'); w.p.face('left');
+    Object.assign(w, { state: 'wait', t: 0, x: p[0], y: p[1] }); w.p.play('idle'); w.p.face('left');
   }
+  ctx.subAt(next === 'seated' || next === 'flick' ? 'bottom' : 'top');   // seated, the box sits below the two of you
   if (next === 'flick') emb.vel.set(120, -80);
   if (next === 'truck') { if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); dieselOn(); ctx.bed({ wind: .5 }); }   // far off, round the bend
   if (next === 'lift') horn(.09, .45);                                                                                    // it stops for you
@@ -399,7 +342,11 @@ function go(next) {
 const LABEL = { car: 'Open the passenger door', pout: 'Open your door', seated: 'Flick the ember', truck: 'Flag it down', lift: 'Ride to Shillong' };
 const NEXT = { car: 'pout', pout: 'yout', seated: 'flick', truck: 'lift' };
 const ready = () => phase === 'car' && since > 1.5 || phase === 'pout' && since > 1.2 || phase === 'seated' && since > T.flick || phase === 'truck' && since > ROLL || phase === 'lift' && since > 2;
-const advance = () => { if (!ready()) return; if (phase === 'lift') ctx.next(); else go(NEXT[phase]); };
+// seated, a tap brings the next line on now (never past the flick); otherwise it takes the next step once it's ready
+const advance = () => {
+  if (phase === 'seated' && !ready()) { since = Math.min(Math.max(since, lineI < SCRIPT.length ? SCRIPT[lineI][0] : T.flick), T.flick); ctx.sfx.tick(); return; }
+  if (!ready()) return; if (phase === 'lift') ctx.next(); else go(NEXT[phase]);
+};
 // ?auto plays the beat through on its own; ?speed=4 runs it faster (for checking timing)
 const AUTO = QS.has('auto'), SPEED = +QS.get('speed') || 1;
 // ?at=seated&t=12 jumps straight to a moment (for checking frames); at=pout or yout with t: that walk, t seconds in
@@ -408,7 +355,7 @@ function jump(at, secs) {
   go('drive');
   for (const p of order.slice(0, order.indexOf(at) + 1)) { jeep.updateMatrixWorld(true); go(p); }
   for (const d of doors) if (d.userData.open) { d.rotation.y = d.userData.side * 1.1; d.userData.delay = 0; }
-  emb.pos.set(...tipAt(0));
+  emb.pos.set(...tipAt('sit'));
   if (at === 'yout') seat(people[0]);
   else if (order.indexOf(at) > 2) people.forEach(seat);
   for (let s = 0; s < secs && (at === 'pout' || at === 'yout'); s += 1 / 60) people.forEach(w => stepPerson(w, 1 / 60));
@@ -419,11 +366,11 @@ function jump(at, secs) {
 /* ---------- loop ---------- */
 const hint = Object.assign(document.createElement('div'), { className: 'hint', textContent: ctx.isTouch ? 'Drag to look around' : 'Point to look around' });
 hint.style.bottom = '32px'; layer.appendChild(hint);
-let started = false;
+let started = false, hornOn = false, fillShown = -1;
+const brakeEl = $('#brake'), fillEl = $('#bfill');
 window.__edge = { phase: () => phase, go, ang: () => ang };
 const ptrPx = () => input.ptr && stage.screenToPaint(...input.ptr);
 function frame(dt0) {
-  regrid(2 * stage.rest.z * Math.tan(stage.fov * Math.PI / 360) / ctx.ink.size.y);   // painting px per frame px, at rest
   if (!started) { started = true; if (QS.get('at')) jump(QS.get('at'), +QS.get('t') || 0); else go('drive'); }
   const dt = dt0 * SPEED, t = (U.uTime.value += dt);
   const braking = input.hold;   // HOLD: brake (only counts on the drive)
@@ -501,23 +448,35 @@ function frame(dt0) {
   // him and the ember
   const seated = phase === 'seated', flick = phase === 'flick';
   const appear = seated ? sstep(...T.ghost, since) : flick ? 1 - sstep(0, 1.5, since) : 0;
-  const ptr = ptrPx();
-  const near = ptr ? sstep(gs.gh * .5, gs.gh * 2.2, Math.hypot(ptr[0] - gs.x, ptr[1] - (G[1] - gs.gh * .5))) : 1;
-  ghostMat.uniforms.uOp.value = Math.round(appear * near * 4) / 4;   // fades in steps, like everything on the grid
+  const ptr = ptrPx(), gh = 30 * gppx;   // he's about 30 px tall, sitting
+  const near = ptr ? sstep(gh * .5, gh * 2.2, Math.hypot(ptr[0] - GX, ptr[1] - (G[1] - gh * .5))) : 1;   // point at him and he goes
+  const gm = ghost.mesh.material.uniforms;
+  gm.uOp.value = Math.round(appear * near * 4) / 4;   // fades in steps, like everything on the grid
   let glow = 0;
   if (seated) {
-    const k = (Math.max(0, since - T.ember) / 7) % 1, drag = k < .12 ? sstep(0, .12, k) : Math.exp(-(k - .12) * 9);
-    const f = since > T.ghost[0] && k < .3 ? 1 : 0;   // the drag: cigarette at his lips
-    ghostMat.uniforms.tG.value = GHOST[f].tex; emb.pos.set(...tipAt(f));
-    glow = sstep(T.ember, T.ember + 1, since) * (.45 + .75 * drag + Math.sin(t * 23) * .05);
+    // a drag every 7 s from when he lights it: the hand goes up, the ember swells hot, the hand comes down
+    const c = Math.max(0, since - T.ember) / 7, k = c % 1, drag = k < .12 ? sstep(0, .12, k) : Math.exp(-(k - .12) * 9);
+    if (since > T.ghost[0] && (c | 0) !== lastDrag) { lastDrag = c | 0; ghost.play('drag', { restart: true, onEnd: () => ghost.play('sit') }); }
+    ghost.setEmber(drag);
+    glow = sstep(T.ember, T.ember + 1, since);
+    emb.pos.set(...tipAt(ghost.anim === 'drag' ? 'drag' : 'sit'));
   } else if (flick) {
     emb.vel.y += 38 * dt; emb.vel.x *= 1 - .4 * dt; emb.pos.addScaledVector(emb.vel, dt);   // falls slowly into the cloud
-    glow = (1 - sstep(0, 5, since)) * (.8 + .2 * Math.sin(t * 30));
-  } else emb.pos.set(...tipAt(0));
-  ember.visible = glow > 0;
-  emberMat.uniforms.uI.value = glow;
+    glow = 1 - sstep(0, 5, since);
+  } else emb.pos.set(...tipAt('sit'));
+  gm.uLit.value = seated && glow > 0 ? 1 : 0;   // the ember on his cigarette; flicked, it's the loose one below
+  ember.visible = flick && glow > 0;
   U.uEmb.value.set(emb.pos.x, emb.pos.y, (seated ? sstep(T.ember, T.ember + 2, since) : 0) + (flick ? 1 - sstep(0, 2, since) : 0));
-  $('#brake').hidden = !(phase === 'drive' && drv.u > BRAKE_FROM);
+  // the brake: the cue fills in eight steps with how much of the window you've held (where that leaves the nose)
+  const inWin = phase === 'drive' && drv.u > BRAKE_FROM;
+  brakeEl.hidden = !inWin;
+  if (inWin) {
+    const f = Math.round(clamp(1.1 * drv.heldWin / (drv.inWin + (1 - drv.u) * DRIVE_LEN / Math.max(drv.v, 1)), 0, 1) * 8) / 8;
+    if (f !== fillShown) { fillShown = f; fillEl.style.clipPath = `inset(0 ${100 - f * 100}% 0 0)`; }
+    brakeEl.classList.toggle('held', braking);
+  }
+  const hp = phase === 'truck' && ready();   // the horn only answers the truck
+  if (hp !== hornOn) ctx.hornable(hornOn = hp);
   ctx.prompt(ready() && LABEL[phase] || null);
   // the long seated stretch: once, a quiet word that the light can be moved; gone as soon as it is
   if (seated && !looked && since > T.look[1]) looked = true;
@@ -543,17 +502,15 @@ function frame(dt0) {
     w.p.setLight(truck.visible ? 1.1 : 1.1, truck.visible ? -1 : 1);   // the beam-lit cloud on the right; then the truck's lights on the left
   }
   for (const w of thenPair) { w.p.obj.visible = U.uThen.value > .75; if (w.p.obj.visible) { w.p.update(dt); pin(w.p.obj, w.x, w.y, stage.depthAt(w.x - 8, w.y + 4)); } }
-  ghost.visible = ghostMat.uniforms.uOp.value > 0;
-  if (ghost.visible || seated) { pin(ghost, gs.x, G[1], G_D, gs.w % 2 === 1); ghost.scale.x *= gs.w; ghost.scale.y *= gs.h; }
-  stage.place(ember, emb.pos.x, emb.pos.y, 34, G_D);
-  // render: colour, then the ink and paper rim around the taxi
-  ctx.ink.uniforms.uTime.value = t; ctx.ink.uniforms.uJeepScale.value = .7;
-  ctx.ink.render(scene, camera, [jeep, truck, ALWAYS]);
+  ghost.obj.visible = gm.uOp.value > 0 || gm.uLit.value > 0;
+  if (ghost.obj.visible) { ghost.update(dt); gppx = pin(ghost.obj, GX, G[1], G_D); }
+  if (ember.visible) { const big = glow > .5; pin(ember, emb.pos.x, emb.pos.y, G_D, !big); if (!big) ember.scale.multiplyScalar(.5); emberMat.uniforms.uC.value.copy(rgb(FOLK.ghost.ember[since < 1 ? 1 : 0])); }
+  ctx.ink.render(scene, camera, [jeep, truck]);
 }
 return {
   frame, resize,
   onTap: advance,
   onHorn() { if (phase === 'truck' && ready()) { go('lift'); return true; } return false; },   // flag the truck down with the horn
-  dispose() { skid(false); dieselOff(); people.concat(thenPair).forEach(w => w.p.dispose()); GHOST.forEach(g => g.tex?.dispose()); disposeScene(scene); delete window.__edge; },
+  dispose() { skid(false); dieselOff(); people.concat(thenPair).forEach(w => w.p.dispose()); ghost.dispose(); disposeScene(scene); delete window.__edge; },
 };
 }

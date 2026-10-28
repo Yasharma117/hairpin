@@ -1,11 +1,12 @@
 // The stand at Jorabat: the last taxi to Shillong, idling by the roadside tea stall. You (Yash) wait by its nose; the
 // passenger stands in its headlights, and the viewer makes them: a name, then who they are, as pixel people
-// (shared/folk.js) on the frame's own pixel grid. "Get in" and they turn, walk round to the passenger door on the far
-// side, and are gone as it shuts. The pointer (or a drag) swings the headlights.
+// (shared/folk.js) on the frame's own pixel grid. You wait at its tail, by the stall. "Get in" and they turn, walk round
+// the nose to the passenger door on the far side (never past you), the door swings open, they're in, it shuts. The
+// pointer (or a drag) swings the headlights.
 import * as THREE from 'three';
-import { clamp, sstep, mkCanvas, loadImg, tex, strokeMap, makeTaxi, passenger, pick, disposeScene } from '../shared/kit.js';
+import { clamp, sstep, mkCanvas, loadImg, tex, strokeMap, makeTaxi, passenger, pick, disposeScene, LIVERY } from '../shared/kit.js';
 import { Stage, keyLight, Steer } from '../shared/kit.js';
-import { FOLK } from '../shared/style.js';
+import { FOLK, TAXI as TAXI_COL } from '../shared/style.js';
 import * as folk from '../shared/folk.js';
 
 const at = f => new URL(f, import.meta.url).href;
@@ -16,7 +17,10 @@ const TAXI = [.2 * IW, .775 * IH];   // the taxi's foot on the road, painting px
 // Everything else is laid out in frame px (1 sprite px = 1 frame px), from the taxi's foot, so the taxi and the people
 // keep their sizes to each other on any screen. TAXI_K: frame px per taxi unit (the taxi is 3.4 long, 1.45 tall).
 const TAXI_K = 22;
-const SPOT = { you: [52, 5], rider: [98, 7], far: [56, -9], door: [10, -9] };   // [right, down] of the taxi's foot, frame px
+// [right, down] of the taxi's foot, frame px: you at the tail by the stall; the rider in the beam, then up past the nose
+// to the far side and left to the door (opened OPEN_AT px before it). Phones: closer in, so all three fit the frame's width
+const SPOTS = { wide: { you: [-52, 6], rider: [80, 7], far: [80, -9], door: [6, -9] }, narrow: { you: [-47, 6], rider: [56, 8], far: [56, -9], door: [6, -9] } }, OPEN_AT = 14;
+let SPOT = SPOTS.wide;
 const LABEL = { build: 'Who', hair: 'Hair', top: 'Top', extra: 'Extra' };
 
 export async function load(ctx) {
@@ -25,58 +29,51 @@ export async function load(ctx) {
   const look = { build: norm.build, skin: norm.skin, hair: norm.hair, top: norm.top, extra: norm.extra };
   let name = saved?.name || '';
 
-  const grp = g => `<fieldset class="grp"><legend class="label" id="k-${g}">${LABEL[g]}</legend><div class="opts" data-g="${g}" role="group" aria-labelledby="k-${g}">${folk.OPTIONS[g].map(([id, text]) => `<button type="button" class="av" value="${id}" aria-label="${text}"><canvas width="52" height="52"></canvas><span>${text}</span></button>`).join('')}</div></fieldset>`;
-  const skinGrp = `<fieldset class="grp"><legend class="label" id="k-skin">Skin</legend><div class="opts" data-g="skin" role="group" aria-labelledby="k-skin">${folk.OPTIONS.skin.map(([i, text]) => `<button type="button" class="sw" value="${i}" aria-label="${text} skin" style="--c:${FOLK.skin[i][1]};--d:${FOLK.skin[i][0]}"></button>`).join('')}</div></fieldset>`;
+  const grp = g => `<fieldset class="grp"><legend class="label" id="k-${g}">${LABEL[g]}</legend><div class="opts" data-g="${g}" role="group" aria-labelledby="k-${g}">${folk.OPTIONS[g].map(([id, text]) => `<button type="button" class="btn pick av" value="${id}" aria-label="${text}"><canvas></canvas><span aria-hidden="true">${text}</span></button>`).join('')}</div></fieldset>`;
+  const skinGrp = `<fieldset class="grp"><legend class="label" id="k-skin">Skin</legend><div class="opts" data-g="skin" role="group" aria-labelledby="k-skin">${folk.OPTIONS.skin.map(([i, text]) => `<button type="button" class="btn pick sw" value="${i}" aria-label="${text} skin" style="--c:${FOLK.skin[i][1]};--d:${FOLK.skin[i][0]}"></button>`).join('')}</div></fieldset>`;
   layer.innerHTML = `
     <style>
-      .dress { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); top: calc(var(--top) + 56px); width: 344px; box-sizing: border-box;
-        padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 14px; transition: transform 200ms steps(4), opacity 200ms steps(4); }
+      .dress { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); top: calc(var(--top) + 56px * var(--u)); width: calc(360px * var(--u)); box-sizing: border-box;
+        padding: calc(18px * var(--u)) calc(18px * var(--u)) calc(16px * var(--u)); display: flex; flex-direction: column; gap: calc(12px * var(--u)); transition: transform 200ms steps(4), opacity 200ms steps(4); }
       .dress.gone { transform: translateX(calc(100% + 40px)); opacity: 0; pointer-events: none; }
-      .dress h2 { margin: 2px 0 0; font: 400 26px/1.05 var(--display); color: var(--ui-ink); }
-      .dress .kick { display: block; margin-bottom: 6px; font-size: 16px; }
+      .dress h2 { margin: 2px 0 0; font: 400 calc(26px * var(--u))/1.05 var(--display); color: var(--ui-ink); text-wrap: balance; }
+      .dress .kick { display: block; margin-bottom: 6px; font-size: var(--t1); }
       /* the name, typed into an RPG box: a tab above its corner, the serif inside, a red ▼ once there's a name */
-      .namebox { position: relative; display: block; margin-top: 14px; border: var(--edge); background: var(--ui-cream); box-shadow: inset 0 -3px 0 var(--ui-cream-deep); }
-      .namebox .label { position: absolute; left: 10px; bottom: calc(100% - 2px); background: var(--ui-cream); border: var(--edge); border-bottom: 0; padding: 3px 8px 0; font-size: 17px; }
+      .namebox { position: relative; display: block; margin-top: calc(14px * var(--u)); border: var(--edge); background: var(--ui-cream); box-shadow: inset 0 -3px 0 var(--ui-cream-deep); }
+      .namebox .label { position: absolute; left: 10px; bottom: calc(100% - var(--line)); background: var(--ui-cream); border: var(--edge); border-bottom: 0; padding: 3px 8px 0; font-size: var(--t1); }
       .namebox input { display: block; width: 100%; box-sizing: border-box; border: 0; border-radius: 0; background: transparent; padding: 9px 34px 8px 12px;
-        font: 500 22px/1.2 var(--serif); color: var(--ui-ink); }
+        font: 500 calc(22px * var(--u))/1.2 var(--serif); color: var(--ui-ink); }
       .namebox input:focus { outline: none; }
       .namebox:focus-within { box-shadow: inset 0 -3px 0 var(--ui-cream-deep), 0 0 0 2px var(--ui-cream), 0 0 0 4px var(--ui-signal); }
       .namebox input::placeholder { color: var(--ui-ink-soft); opacity: .7; }
-      .namebox::after { content: "▼"; position: absolute; right: 11px; bottom: 11px; font: 400 15px/1 var(--pixel); color: var(--ui-signal); opacity: 0; }
+      .namebox::after { content: "▼"; position: absolute; right: 11px; bottom: 11px; font: 400 var(--t1)/1 var(--pixel); color: var(--ui-signal); opacity: 0; }
       .namebox.ready::after { animation: blink 1s steps(1) infinite; }
-      .grp { display: grid; gap: 6px; border: 0; margin: 0; padding: 0; min-width: 0; }
-      .grp > .label { padding: 0; font-size: 17px; }
-      .opts { display: flex; gap: 8px; }
-      .pair { display: flex; gap: 20px; } .pair .opts[data-g="skin"] { gap: 6px; padding-top: 8px; }
-      /* an avatar option: the head and shoulders in a frame; the chosen one framed in red, a red ▼ above it */
-      .av { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0; border: 0; background: none; cursor: pointer;
-        font: 400 15px/1 var(--pixel); letter-spacing: .06em; text-transform: uppercase; color: var(--ui-ink-soft); -webkit-tap-highlight-color: transparent; }
-      .av canvas { display: block; width: 52px; height: 52px; image-rendering: pixelated; background: var(--ui-cream-deep); border: var(--edge); box-shadow: 2px 2px 0 var(--ui-ink);
-        transition: transform 90ms steps(2), box-shadow 90ms steps(2); }
-      .av[aria-pressed="true"] { color: var(--ui-ink); }
-      .av[aria-pressed="true"] canvas { border-color: var(--ui-signal); box-shadow: 0 0 0 2px var(--ui-signal), 2px 2px 0 2px var(--ui-ink); }
-      .av[aria-pressed="true"]::before { content: "▼"; position: absolute; top: -12px; font: 400 12px/1 var(--pixel); color: var(--ui-signal); }
-      .av:active canvas { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ui-ink); }
-      .av:focus-visible { outline: none; } .av:focus-visible canvas { outline: 3px solid var(--ui-signal); outline-offset: 3px; }
-      @media (hover: hover) and (pointer: fine) { .av:hover:not([aria-pressed="true"]) canvas { background: var(--ui-cream); } }
+      .grp { display: grid; gap: calc(6px * var(--u)); border: 0; margin: 0; padding: 0; min-width: 0; }
+      .grp > .label { padding: 0; font-size: var(--t1); }
+      .opts { display: flex; gap: calc(8px * var(--u)); padding-bottom: calc(var(--t1) + 4px); }   /* room for the names under the frames */
+      .pair { display: flex; gap: calc(18px * var(--u)); } .pair .opts[data-g="skin"] { gap: calc(6px * var(--u)); padding-bottom: 0; }
+      /* options are shared .btn.pick frames (index.html): the chosen one gets the 2px red ring and the ▼ in its corner */
+      .av, .sw { padding: 0; min-height: 0; flex: none; }
+      .av { width: var(--av); height: var(--av); box-sizing: content-box; }
+      .av canvas { display: block; width: var(--av); height: var(--av); image-rendering: pixelated; }
+      .av span { position: absolute; top: calc(100% + var(--line) + 4px); left: 50%; transform: translateX(-50%); font: 400 var(--t1)/1 var(--pixel); letter-spacing: .02em; color: var(--ui-ink-soft); }
+      .av[aria-pressed="true"] span { color: var(--ui-rust); }
       /* skin: five pixel swatches, base over its shadow */
-      .sw { width: 30px; height: 30px; padding: 0; border: var(--edge); border-radius: 0; cursor: pointer; background: var(--c); box-shadow: inset 0 -7px 0 var(--d), 2px 2px 0 var(--ui-ink); }
-      .sw[aria-pressed="true"] { box-shadow: inset 0 -7px 0 var(--d), 0 0 0 2px var(--ui-cream), 0 0 0 4px var(--ui-signal); }
-      .sw:active { transform: translate(2px, 2px); }
+      .sw { width: calc(30px * var(--u)); height: calc(30px * var(--u)); background: linear-gradient(var(--c) 0 72%, var(--d) 0); }
+      .sw.pick[aria-pressed="true"]::after { top: 1px; right: 2px; }
+      @media (hover: hover) and (pointer: fine) { .sw:hover:not([aria-pressed="true"]) { background: linear-gradient(var(--c) 0 60%, var(--d) 0); } }
       /* phones: across the top, compact, labels beside the rows; the two of them in the light below it */
       @media (max-width: 700px), (max-aspect-ratio: 1/1) {
-        .pair { display: contents; } .pair .opts[data-g="skin"] { padding-top: 0; }
-        .dress { left: calc(env(safe-area-inset-left, 0px) + 12px); right: calc(env(safe-area-inset-right, 0px) + 12px); top: calc(var(--top) + 50px); width: auto; padding: 10px 12px 12px; gap: 8px; }
+        .pair { display: contents; }
+        .dress { left: calc(env(safe-area-inset-left, 0px) + 12px); right: calc(env(safe-area-inset-right, 0px) + 12px); top: calc(var(--top) + 50px); width: auto; padding: 10px 12px 12px; gap: 10px; }
         .dress.gone { transform: translateY(calc(-100% - 80px)); }
         .dress .kick { display: none; }
         .dress h2 { font-size: 20px; }
         .namebox { margin-top: 12px; } .namebox input { font-size: 20px; padding: 6px 30px 5px 10px; }
-        .grp { grid-template-columns: 44px 1fr; align-items: center; gap: 0 4px; }
-        .grp > .label { font-size: 16px; }
-        .opts { gap: 6px; }
-        .av { padding-top: 5px; } .av span { display: none; } .av[aria-pressed="true"]::before { top: -7px; font-size: 10px; }
-        .av canvas { width: 46px; height: 46px; }
-        .sw { width: 32px; height: 26px; }
+        .grp { grid-template-columns: 48px 1fr; align-items: center; gap: 0 4px; }
+        .opts, .pair .opts[data-g="skin"] { gap: 8px; padding-bottom: 0; }
+        .av span { display: none; }
+        .sw { width: 34px; height: 28px; }
       }
       @media (prefers-reduced-motion: reduce) { .dress { transition: opacity 200ms; } .dress.gone { transform: none; } .namebox.ready::after { animation: none; opacity: 1; } }
     </style>
@@ -93,7 +90,8 @@ export async function load(ctx) {
   ctx.bed({ engine: 1, crickets: 1 }); ctx.rpm(0);   // the taxi idling by the stall
 
   /* ---------- the painting: jorabat-lit.jpg once it's painted; until then the dark one, lifted warm, stands in ---------- */
-  const [iDark, iLit, depthImg] = await Promise.all([loadImg(at('jorabat-dark.jpg')), loadImg(at('jorabat-lit.jpg')), loadImg(at('depth.png'))]);
+  // jorabat-lit.jpg isn't painted yet: not fetched (a 404 every visit); once it exists, load it here and use it for iLit
+  const [iDark, depthImg] = await Promise.all([loadImg(at('jorabat-dark.jpg')), loadImg(at('depth.png'))]), iLit = null;
   if (!iDark || !depthImg) throw new Error('jorabat-dark.jpg did not load');
   const stage = new Stage({ W: IW, H: IH, depth: depthImg, k: .3 });
   function warmLift(src) {   // ponytail: stand-in for the lit painting; drop jorabat-lit.jpg in this folder when it exists
@@ -140,19 +138,24 @@ export async function load(ctx) {
   /* ---------- the taxi, on the road, nose along it ---------- */
   const taxi = makeTaxi(uMode);
   scene.add(taxi.jeep);
+  // the passenger's door (right-hand drive: the far side, -z), hinged at the A-pillar like 08-edge-scene's; a spring swings it
+  const door = new THREE.Group(); door.position.set(.9, 0, -.7); taxi.body.add(door);
+  taxi.put(new THREE.BoxGeometry(1.24, .6, .03), LIVERY.body, { x: -.62, y: .56, z: -.02 }, door).layers.enable(1);
+  taxi.put(new THREE.BoxGeometry(1.1, .05, .03), LIVERY.body, { x: -.6, y: 1.3, z: -.02 }, door).layers.enable(1);   // the window frame's top: it shows over the roof
+  taxi.put(new THREE.BoxGeometry(.05, .44, .03), LIVERY.body, { x: -1.12, y: 1.08, z: -.02 }, door).layers.enable(1);
+  taxi.put(new THREE.BoxGeometry(1.02, .4, .01), TAXI_COL.glass, { x: -.6, y: 1.08, z: -.03, emit: 2 }, door).layers.enable(1);
+  Object.assign(door.userData, { open: 0, v: 0 });
   taxi.jeep.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .42).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), .06));
 
   /* ---------- the two of you: pixel people, 1 sprite px = 1 frame px ---------- */
   const me = folk.person('you', { size: 'near' });
-  me.mesh.renderOrder = 5; me.mesh.material.depthTest = false;   // in front of the taxi's nose: always over it
+  me.mesh.renderOrder = 5; me.mesh.material.depthTest = false;   // by the tail, on the near side: always over it
   me.face('right'); me.play('idle'); scene.add(me.obj);
   let rider = null, behind = false;
   function dressRider() {   // a new atlas for every choice: instant, a few ms
     const was = rider;
     rider = folk.person({ ...look }, { size: 'near' });
-    rider.mesh.renderOrder = 4; rider.mesh.material.depthTest = false;
-    // walking behind the taxi it's drawn first and the depth cleared after it, so the taxi covers it
-    rider.mesh.onAfterRender = r => { if (behind) r.clearDepth(); };
+    rider.mesh.renderOrder = 4; rider.mesh.material.depthTest = false;   // walking behind the taxi, the depth test is on (go()): it covers them
     rider.face('left'); rider.play('idle');
     if (was) { rider.obj.position.copy(was.obj.position); rider.obj.scale.copy(was.obj.scale); scene.remove(was.obj); was.dispose(); }
     scene.add(rider.obj);
@@ -165,12 +168,12 @@ export async function load(ctx) {
   const walker = { x: 0, y: 0 };   // the rider's foot, painting px
   // put a person's foot on a painting point, snapped to the frame's pixel grid, at exactly 1 sprite px per frame px
   const V = new THREE.Vector3(), tanH = () => Math.tan(stage.fov * Math.PI / 360);
-  function pin(p, x, y) {
+  function pin(p, x, y, back = 1) {   // back > 1: pushed away along the sight line (same size on screen), behind the taxi's depth
     const grid = ctx.ink.size, d = stage.depthAt(x, y);
     stage.toWorld(x, y, d, V).project(camera);
     V.x = (Math.floor((V.x * .5 + .5) * grid.x) + .5) / grid.x * 2 - 1;   // the foot is the middle of a sprite column
     V.y = Math.round((V.y * .5 + .5) * grid.y) / grid.y * 2 - 1;          // the sole sits on a row's edge
-    V.unproject(camera); p.obj.position.copy(V);
+    V.unproject(camera).sub(camera.position).multiplyScalar(back).add(camera.position); p.obj.position.copy(V);
     const dist = camera.position.z - V.z, u = 2 * dist * tanH() / grid.y;   // world units per frame px, at that depth
     p.obj.scale.set(u * camera.aspect * grid.y / grid.x, u, 1);
   }
@@ -184,13 +187,23 @@ export async function load(ctx) {
       b.setAttribute('aria-pressed', String(look[k] === v));
       const cv = b.querySelector('canvas');
       if (!cv) continue;
-      const x = cv.getContext('2d'), L = { ...look, [k]: v }; x.clearRect(0, 0, 52, 52);
-      if (k === 'build') x.drawImage(folk.preview(L), 10, 4, 32, 48);   // the build shows in the body: the whole figure, 1:1
-      else x.drawImage(folk.avatar(L, 52), 0, 0);
+      if (cv.width !== avPx) cv.width = cv.height = avPx;
+      const x = cv.getContext('2d'), L = { ...look, [k]: v }, z = Math.max(1, Math.round(avPx / 52)); x.clearRect(0, 0, avPx, avPx); x.imageSmoothingEnabled = false;
+      if (k === 'build') x.drawImage(folk.preview(L), Math.round(avPx / 2 - 16 * z), z > 1 ? -2 * z : avPx - 50, 32 * z, 48 * z);   // the build shows in the body: the figure, whole-pixel scale (cut at the knees when it's big)
+      else x.drawImage(folk.avatar(L, avPx), 0, 0);
     }
     $('.namebox').classList.toggle('ready', !!name.trim());
   }
-  refresh();
+  // the frames' size: 52 CSS px (x --u) on a desktop, 44 on a phone; drawn at device pixels, so the faces stay whole-pixel
+  let avPx = 0;
+  function sizeAvatars() {
+    const css = narrow ? 44 : Math.round(52 * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 1));
+    const px = Math.max(52, Math.round(css * (devicePixelRatio || 1)));   // (a 1x phone: 52 shown at 44, as before)
+    sheet.style.setProperty('--av', `${css}px`);
+    if (px !== avPx) { avPx = px; refresh(); }
+  }
+  let narrow = matchMedia('(max-width: 700px), (max-aspect-ratio: 1/1)').matches;
+  sizeAvatars();
   let chosen = false, waveT = 0;
   const wave = secs => { me.play('wave', { restart: me.anim !== 'wave' }); waveT = secs; };
   on(sheet, 'click', e => {
@@ -209,15 +222,14 @@ export async function load(ctx) {
   on(nameIn, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
 
   /* ---------- framing: the taxi and the two of you beside the sheet (desktop) or below it (phone) ---------- */
-  let narrow = false;
   function resize(w, h) {
-    const aspect = w / h; narrow = w <= 700 || aspect <= 1;
+    const aspect = w / h; narrow = w <= 700 || aspect <= 1; SPOT = SPOTS[narrow ? 'narrow' : 'wide']; sizeAvatars();
     const viewH = Math.min(IH, IW / aspect), viewW = viewH * aspect;   // the whole painting's height: the people read at their size
     ppf = viewH / ctx.ink.size.y;
     stage.place(taxi.jeep, TAXI[0], TAXI[1], TAXI_K * ppf, stage.depthAt(TAXI[0], TAXI[1] + 14));
     U.uHead.value.set(TAXI[0] + 1.69 * TAXI_K * ppf, TAXI[1] - 14 * ppf);
     // the group: the taxi's tail to the rider; put its middle where there's room, its feet clear of the sheet and the button
-    const r = sheet.getBoundingClientRect(), left = TAXI[0] - (narrow ? 20 : 42) * ppf, right = P(SPOT.rider)[0] + 16 * ppf, feet = TAXI[1] + 8 * ppf;
+    const r = sheet.getBoundingClientRect(), left = P(SPOT.you)[0] - (narrow ? 10 : 22) * ppf, right = P(SPOT.rider)[0] + (narrow ? 10 : 16) * ppf, feet = TAXI[1] + 8 * ppf;
     const figH = 44 * h / ctx.ink.size.y, sx = narrow ? w / 2 : r.left / 2, sy = narrow ? (r.bottom + h - 84) / 2 + figH / 2 : h * .68;
     const cx = clamp((left + right) / 2 - (sx / w - .5) * viewW, viewW / 2, IW - viewW / 2);
     const cy = clamp(feet - (sy / h - .5) * viewH, viewH / 2, IH - viewH / 2);
@@ -226,7 +238,7 @@ export async function load(ctx) {
     if (!chosen) [walker.x, walker.y] = P(SPOT.rider);
   }
 
-  /* ---------- get in: they turn, walk round the nose to the far door, and are gone as it shuts ---------- */
+  /* ---------- get in: they turn, walk round the nose to the far door; it swings open, they're in, it shuts ---------- */
   let leg = 0, doneAt = 0, since = 0;
   function go() {
     if (chosen) return;
@@ -234,6 +246,7 @@ export async function load(ctx) {
     name = name.trim(); pick({ name, ...look });
     chosen = true; nameIn.blur(); sheet.classList.add('gone'); sheet.inert = true;
     rider.face('back'); rider.play('walk'); leg = 1; wave(2.4);
+    rider.mesh.material.depthTest = true;
   }
   const steer = new Steer(.3), AIM = U.uDir.value.clone();   // the scripted aim: straight along the road
   const lightAt = (x, y) => clamp(.3 + lightCPU(x, y) * .8, .3, 1);   // capped at "lit": the warm step quantizes skin to the palette's orange
@@ -247,9 +260,16 @@ export async function load(ctx) {
       ctx.rpm(0);
       // the walk: by exactly the px the feet take (frame px -> painting px), up past the nose, then left to the door
       const step = rider.update(dt) * ppf;
-      if (leg === 1) { walker.y -= step; if (walker.y <= P(SPOT.far)[1]) { walker.y = P(SPOT.far)[1]; rider.face('left'); leg = 2; behind = true; rider.shadow.visible = false; rider.mesh.renderOrder = -1; } }
-      else if (leg === 2) { walker.x -= step; if (walker.x <= P(SPOT.door)[0]) { ctx.sfx.door(); rider.obj.visible = false; leg = 3; doneAt = now; } }
-      else if (leg === 3 && now - doneAt > 1.1) { leg = 4; ctx.next(); }
+      if (leg === 1) { walker.y -= step; if (walker.y <= P(SPOT.far)[1]) { walker.y = P(SPOT.far)[1]; rider.face('left'); leg = 2; behind = true; rider.shadow.visible = false; } }
+      else if (leg === 2) {
+        walker.x -= step;
+        if (walker.x <= P([SPOT.door[0] + OPEN_AT, 0])[0]) door.userData.open = 1;   // the door swings out as they reach it
+        if (walker.x <= P(SPOT.door)[0]) { walker.x = P(SPOT.door)[0]; rider.face('back'); rider.play('idle'); leg = 3; doneAt = now; }
+      }
+      else if (leg === 3 && now - doneAt > .25) { rider.obj.visible = false; leg = 4; doneAt = now; }   // in
+      else if (leg === 4 && now - doneAt > .3) { door.userData.open = 0; ctx.sfx.door(); leg = 5; doneAt = now; }   // and it shuts
+      else if (leg === 5 && now - doneAt > 1.1) { leg = 6; ctx.next(); }
+      { const u = door.userData; u.v += (-49 * (door.rotation.y + 1.1 * u.open) - 7.7 * u.v) * dt; door.rotation.y += u.v * dt; }   // a spring (ω 7, ζ .55), like the edge's
       me.update(dt);
       if (waveT > 0 && (waveT -= dt) <= 0) me.play('idle');
       taxi.body.position.y = -taxi.PIVOT.y + Math.sin(now * 13) * .004;   // idling
@@ -258,8 +278,8 @@ export async function load(ctx) {
       stage.target.dolly = .04 * sstep(0, 8, since += dt);   // a slow push-in
       stage.update(dt, 4);
       const [yx, yy] = P(SPOT.you);
-      pin(me, yx, yy); pin(rider, walker.x, walker.y);
-      me.setLight(lightAt(yx, yy - 20 * ppf) * .9, -1);
+      pin(me, yx, yy); pin(rider, walker.x, walker.y, behind ? 3 : 1);
+      me.setLight(Math.max(.8, lightAt(yx, yy - 20 * ppf) * .9), 1);   // the stall's bulb, behind you on the right
       rider.setLight(lightAt(walker.x, walker.y - 20 * ppf) * (behind ? .7 : 1), -1);
       ctx.ink.render(scene, camera, taxi.jeep);
     },

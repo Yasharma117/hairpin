@@ -64,6 +64,34 @@ for (const night of [false, true]) {
   });
 }
 
+// from behind at night: the dark rim away from the light, the lit rim toward it (cool under sky, warm under a lamp);
+// back-view hair never below light step 2. Then the head tipping up to the star.
+block('night, from behind: the lit-side rim (cool at L .3, warm at L .95), light from the left / right; sit and lookup', true, r => {
+  for (const [L, rim] of [[.3, 'cool'], [.95, 'warm']]) for (const side of [-1, 1]) for (const who of ['you', PASSENGER, 'grandpa'])
+    cell(r, `${who.name || who} ${rim} ${side < 0 ? 'L' : 'R'}`, anim(who, 'near', 'back', 'sit', { light: L, rim: true, side }), 3);
+  for (const [L, rim] of [[.3, 'cool'], [.95, 'warm']]) for (const who of ['you', PASSENGER]) cell(r, `far ${rim}`, anim(who, 'far', 'back', 'sit', { light: L, rim: true }), 3);
+  for (const who of ['you', PASSENGER]) for (const size of ['near', 'far']) {
+    cell(r, `${size} sit`, () => fc(who, { size, view: 'back', anim: 'sit', light: .95, rim: true }), 3);
+    folk.ANIMS.lookup.frames.all.forEach((_, i) => cell(r, `${size} lookup ${i}`, () => fc(who, { size, view: 'back', anim: 'lookup', i, light: .95, rim: true }), 3));
+  }
+  for (const who of ['you', PASSENGER]) cell(r, 'lookup, playing', ms => fc(who, { size: 'near', view: 'back', anim: ms % 2400 < 1200 ? 'sit' : 'lookup', i: ms % 2400 < 1360 ? 0 : 1, light: .95, rim: true }), 3);
+});
+// him in ink: line only, sitting from behind; the drag lifts the cigarette and the ember swells
+block('the ghost (near, line only: a paper line, so night only): sit, drag (playing), every frame; the ember at 0 / .4 / 1', true, r => {
+  cell(r, 'sit + drag', ms => { const t = ms % 4000, d = t > 1800 ? t - 1800 : -1, i = d < 0 ? 0 : d < 220 ? 0 : d < 1720 ? 1 : 2; return d < 0 ? fc('ghost', { view: 'back', anim: 'sit', i: t < 1100 ? 0 : 1, ember: .2 }) : fc('ghost', { view: 'back', anim: 'drag', i, ember: i === 1 ? 1 : .2 }); }, 4);
+  folk.ANIMS.sit.frames.all.forEach((_, i) => cell(r, `sit ${i}`, () => fc('ghost', { view: 'back', anim: 'sit', i, ember: .2 }), 4));
+  folk.ANIMS.drag.frames.all.slice(0, 2).forEach((_, i) => cell(r, `drag ${i}`, () => fc('ghost', { view: 'back', anim: 'drag', i, ember: i ? 1 : .2 }), 4));
+  for (const e of [0, .4, 1]) cell(r, `ember ${e}`, () => fc('ghost', { view: 'back', anim: 'drag', i: 1, ember: e }), 4);
+  cell(r, 'lookup', () => fc('ghost', { view: 'back', anim: 'lookup', i: 1 }), 4);
+});
+// then: the flashback pair in sepia, now and then side by side, with the catch-light in the eyes
+for (const night of [false, true]) block(`then (setThen): grandpa and friend, now / then${night ? ' — night, light .95' : ''}`, night, r => {
+  for (const who of ['grandpa', 'friend', 'you']) for (const v of ['front', 'left', 'back']) for (const then of [false, true])
+    cell(r, `${who} ${v} ${then ? 'then' : 'now'}`, anim(who, 'near', v, 'idle', { light: night ? .95 : 1, rim: night, then }), 3);
+  for (const who of ['grandpa', 'friend']) for (const then of [false, true]) cell(r, `sit ${then ? 'then' : 'now'}`, anim(who, 'near', 'back', 'sit', { light: night ? .95 : 1, rim: night, then }), 3);
+  for (const who of ['grandpa', 'friend']) cell(r, `far then`, anim(who, 'far', 'front', 'idle', { light: night ? .95 : 1, rim: night, then: true }), 3);
+});
+
 // every frame, still, so each can be judged
 block('near: every frame, still (you)', false, r => {
   for (const [a, A] of Object.entries(folk.ANIMS)) for (const v of A.views) (A.frames[v] || A.frames.all).forEach((_, i) => cell(r, `${a} ${v} ${i}`, () => fc('you', { size: 'near', view: v, anim: a, i }), 3));
@@ -100,8 +128,10 @@ block('three.js: person() on the GPU (orthographic, 1 sprite px = 3 screen px), 
   const people = [
     ['you', 'near', 'walk', 'left', 300], [PASSENGER, 'near', 'walk', 'right', 20], ['walker', 'far', 'walk', 'left', 250], ['basket', 'far', 'walk', 'right', 60],
     ['grandpa', 'near', 'idle', 'left', 120], ['friend', 'near', 'wave', 'front', 160], [PASSENGER, 'near', 'sitdown', 'back', 200], ['you', 'far', 'sit', 'back', 230],
+    ['ghost', 'near', 'sit', 'back', 40], ['you', 'near', 'lookup', 'back', 75], ['grandpa', 'near', 'idle', 'front', 270],
   ].map(([who, size, a, dir, x], n) => {
     const p = folk.person(who, { size }); p.play(a); p.face(dir);
+    if (n === 10) p.setThen(true);
     p.obj.position.set(x, n < 4 ? 40 + (size === 'far' ? 4 : 0) - n * 3 : 2, n < 4 ? 0 : 1); scene.add(p.obj); return { p, dir };
   });
   let last = performance.now(), T = 0;
@@ -112,6 +142,10 @@ block('three.js: person() on the GPU (orthographic, 1 sprite px = 3 screen px), 
       if (p.obj.position.x < 10) p.face('right'); if (p.obj.position.x > W / PX - 10) p.face('left');
       p.setLight(.6 + .6 * Math.sin(T * .8 + p.obj.position.x * .02), Math.sin(T * .3) < 0 ? -1 : 1);
     }
+    const g = people[8].p;   // the ghost draws on his cigarette every 4 s; the lookup sits, then looks up again
+    if (g.anim === 'sit' && T % 4 < dt) g.play('drag', { restart: true, onEnd: () => g.play('sit') });
+    g.setEmber(g.anim === 'drag' ? 1 : .2);
+    const u = people[9].p; if (u.done && T % 3 < dt) u.play('sit', { onEnd: null }); else if (u.anim === 'sit' && T % 3 > 1.5 && T % 3 - dt <= 1.5) u.play('lookup');
     renderer.render(scene, cam); requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);

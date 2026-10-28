@@ -1,6 +1,8 @@
 # Hairpin style
 
 The source of truth for how Hairpin looks. When something here and something in the code disagree, the code is wrong.
+The pixel rebuild's contract, [PIXEL.md](PIXEL.md), comes first: it sets the pixel grid, the people and the UI, and this
+file holds for everything it doesn't change.
 
 ## The rule
 
@@ -9,7 +11,7 @@ The source of truth for how Hairpin looks. When something here and something in 
 - Never photographic texture.
 - Never thick impasto or gouache blocks.
 
-Every painting, figure and UI element is judged against that pair.
+Every painting is judged against that pair. The pixel pass (below) turns it, and everything on it, into one pixel grid.
 
 ## Palette
 
@@ -28,12 +30,13 @@ Every colour lives in `shared/style.js`; nothing else in the code may contain a 
 | gold | `#d89a30` | headlight on grass |
 | warmRock | `#bc7a38` | headlight on rock |
 | ember | `#ff7f29` | the cigarette |
-| paper | `#efe6cf` | UI paper |
-| ink | `#141826` | UI ink, and the line on things that move |
-| red | `#c8402f` | UI accent |
-| mist | `#aab0cc` | quiet UI text on navy |
+| ink | `#141826` | the line on things that move |
 
-Object colours (the taxi's parts, placeholder figures, the Shillong placeholder) also live in `style.js`, as named sets. Shaders get the palette as `GLSL_PALETTE` (`C_NIGHT`, `C_AMBER` and so on). The UI gets it as CSS variables (`--night`, `--paper` and so on), set by `applyCSS()`.
+The UI has its own set, `UI` in `style.js` (cream `#fff9e5`, warm ink `#3a2a1c`, signal red `#fd1500`, wood, olive,
+rust), set as `--ui-*` CSS variables by `applyUICSS()`. Each scene's pixel palette (`PIXEL_PALETTES`, about 32 colours)
+is written by `tools/fit_palette.py`; the people's ramps (`FOLK`) sit beside it.
+
+Object colours (the taxi's parts, placeholder figures, the Shillong placeholder) also live in `style.js`, as named sets. Shaders get the palette as `GLSL_PALETTE` (`C_NIGHT`, `C_AMBER` and so on). The UI gets it as CSS variables (`--night`, `--amber` and so on), set by `applyCSS()`.
 
 ## Light
 
@@ -44,17 +47,29 @@ Object colours (the taxi's parts, placeholder figures, the Shillong placeholder)
 
 ## Line
 
-- A thin, clean dark line (`ink`) goes on things that move: the taxi, people, animals, the truck.
+- A 1 px dark line (`ink`) goes on things that move: the taxi, people, animals, the truck. It never boils: pixel art is stable.
 - Never on backgrounds.
 - **The ghost is the one exception:** line only, no fill.
 
-## Texture
+## The pixel pass
 
-One shared paper grain goes on the final frame, at the same strength in every scene. It lives in the final pass in `shared/kit.js` (`Ink`).
+Every scene goes through one final pass, `Ink` in `shared/kit.js` (PIXEL.md section 1):
+
+1. The scene renders at twice a low pixel grid (an integer scale, the frame about 270 px tall in landscape, 300 in
+   portrait) and is box-filtered down to it.
+2. The 1 px outline on things that move, an edge-keeping smoothing, then the per-scene grade (below).
+3. Quantized to the scene's palette (`PIXEL_PALETTES`) in Oklab, with a light 4x4 ordered dither only in gradients.
+4. Blown up with nearest-neighbour, offset by the camera's sub-pixel remainder so slow moves stay smooth (the `Stage`
+   snaps the camera to the grid and moves on a critically damped spring).
+
+No paper grain, no boil.
+
+People are `shared/folk.js` sprites (PIXEL.md section 2), drawn on the same grid; every pose and option is on
+`tools/folk-sheet.html`.
 
 ## Grade
 
-Every scene goes through one final pass. It applies a per-scene grade (lift, gamma and gain per channel, plus saturation) fitted so the scene's lit and dark paintings sit close to edge-lit and edge-dark, then adds the paper grain.
+Inside the pixel pass, a per-scene grade (lift, gamma and gain per channel, plus saturation) is fitted so the scene's lit and dark paintings sit close to edge-lit and edge-dark.
 
 - The fitted values live in `shared/grade.js`, written by `tools/fit_grade.py`.
 - `tools/check_style.py` compares every painting's statistics to the edge pair, after the grade, and fails on outliers.
@@ -83,10 +98,9 @@ Every painting is 2.5D, which is what shows this is real-time 3D and not an illu
 
 ## UI
 
-- Torn-paper labels.
-- Archivo for words, IBM Plex Mono for labels.
-- Cream (`paper`) on navy (`night`).
-- Nothing else.
+Set in [PIXEL.md section 3](PIXEL.md): pocket.design's cream panels with a warm-ink edge and a hard shadow on the navy
+night, Young Serif and Newsreader for words, VT323 for labels. The shared classes and the type and pixel scale are
+documented at the top of `index.html`'s `<style>`.
 
 ## Framing
 

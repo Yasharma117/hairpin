@@ -1,7 +1,8 @@
 // Shillong: the truck that gave you a lift parks at the viewpoint above the city. It's November, and the cherry is in bloom:
 // a tree over the railing, blossom down the slopes, petals in the air (blossom.js). The engine goes off and ticks as it cools;
-// the passenger signs off; a shooting star crosses on a gust (hold while it's up to bank the wish, and the tree lets go of a
-// shower of petals); the quote sets itself, one box per line.
+// the passenger signs off; a shooting star crosses on a gust and the two of you look up (hold while it's up to bank the
+// wish, and the tree lets go of a shower of petals); the quote sets itself on the night, a line at a time (a tap brings
+// the next); then the end card: Hairpin, by Yash Sharma, Again or Title.
 import * as THREE from 'three';
 import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, passenger, disposeScene, Stage, makeTruck, keyLight } from '../shared/kit.js';
 import { SHILLONG_PLACEHOLDER } from '../shared/style.js';
@@ -56,23 +57,43 @@ function placeholder() {
 export async function load(ctx) {
 const { input, layer } = ctx;
 layer.innerHTML = `<style>
-.quote { position: fixed; left: 50%; top: calc(var(--top) + 64px); transform: translateX(-50%); width: min(600px, calc(100% - 2 * var(--gutter))); display: flex; flex-direction: column; align-items: flex-start; gap: 12px; pointer-events: none; z-index: 9; }
-.quote .box { padding: 10px 20px 12px; visibility: hidden; max-width: 100%; }
-.quote .box.on { visibility: visible; animation: qin 200ms steps(3) both; }
-.quote .box:nth-child(even) { margin-left: 24px; max-width: calc(100% - 24px); }
-.quote .star { color: var(--ui-signal); margin-left: 6px; }
-@keyframes qin { from { opacity: 0; transform: translateY(6px); } }
+/* the quote: serif lines straight on the night, no panels; each comes in as the one before settles */
+.quote { position: fixed; left: 50%; top: calc(var(--top) + 64px * var(--u)); transform: translateX(-50%); width: min(calc(640px * var(--u)), calc(100% - 2 * var(--gutter))); margin: 0;
+  display: flex; flex-direction: column; align-items: center; gap: calc(10px * var(--u)); pointer-events: none; z-index: 9; transition: opacity 400ms ease; }
+.quote p { margin: 0; text-align: center; text-wrap: balance; color: var(--ui-cream); font: 400 clamp(19px, 2.4vw, calc(26px * var(--u)))/1.34 var(--serif); font-optical-sizing: auto;
+  text-shadow: 0 var(--line) 0 var(--night), var(--line) 0 0 var(--night), calc(-1 * var(--line)) 0 0 var(--night), 0 calc(-1 * var(--line)) 0 var(--night);   /* a 1-pixel night edge: legible over petals and lights */
+  opacity: 0; transform: translateY(6px); transition: opacity 360ms cubic-bezier(.23, 1, .32, 1), transform 360ms cubic-bezier(.23, 1, .32, 1); }
+.quote p.on { opacity: 1; transform: none; }
+.quote p:last-child { margin-top: calc(10px * var(--u)); font-style: italic; font-size: clamp(22px, 2.9vw, calc(31px * var(--u))); }   /* the turn: the one being kept */
+.quote .star { color: var(--ui-signal); font-style: normal; margin-left: .3em; }
+.quote.gone { opacity: 0; }
 .wish { top: 46%; }
 .wish .fill { position: absolute; inset: 0; padding: inherit; background: var(--ui-signal); color: var(--ui-cream); clip-path: inset(0 100% 0 0); }
-@media (max-width: 520px) { .quote .box:nth-child(even) { margin-left: 12px; max-width: calc(100% - 12px); } .quote { gap: 10px; } }
-@media (prefers-reduced-motion: reduce) { .quote .box.on { animation: none; } }
+/* the end card: a cream sheet, the title as on the title card, the credit, the way out */
+.end { position: fixed; left: 50%; top: calc(var(--top) + 64px * var(--u)); z-index: 12; transform: translateX(-50%); width: max-content; max-width: calc(100% - 2 * var(--gutter)); box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: calc(6px * var(--u)); padding: calc(26px * var(--u)) calc(36px * var(--u)) calc(24px * var(--u)); text-align: center;
+  animation: endin 280ms steps(4) both; }
+.end h2 { margin: 0; font: 400 calc(64px * var(--u))/.9 var(--display); letter-spacing: -.02em; color: var(--ui-ink); }
+.end .by { margin: 0; font: italic 400 calc(21px * var(--u))/1.3 var(--serif); color: var(--ui-ink); }
+.end .for { font-size: var(--t1); }
+.end .row { display: flex; gap: calc(12px * var(--u)); margin-top: calc(14px * var(--u)); padding-top: calc(18px * var(--u)); border-top: 2px dashed var(--ui-wood); }
+.end .again::after { content: "▶"; color: var(--ui-signal); font-size: .8em; }
+@keyframes endin { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .quote p, .quote { transition: opacity 200ms; transform: none; } .end { animation: none; } }
 </style>
 <div class="tag">HAIRPIN · SHILLONG</div>
 <div class="quote" id="quote" aria-live="polite"></div>
-<div class="hint wish" id="wish" aria-hidden="true">Hold to wish<span class="fill" id="fill">Hold to wish</span></div>`;
+<div class="hint wish" id="wish" aria-hidden="true">Hold to wish<span class="fill" id="fill">Hold to wish</span></div>
+<section class="panel end" id="end" aria-labelledby="end-t" hidden>
+  <h2 id="end-t">Hairpin</h2>
+  <p class="by">by Yash Sharma</p>
+  <span class="label for">Made for Pocket FM Design</span>
+  <div class="row"><button class="btn again" id="again" type="button">Again</button><button class="btn" id="title" type="button">Title</button></div>
+</section>`;
 const $ = s => layer.querySelector(s);
 ctx.bed({ engine: 1, crickets: 1, wind: .4 }); ctx.rpm(0);   // the truck idling at the railing
-const [iLit, iDark] = await Promise.all([loadImg(at('shillong-lit.jpg')), loadImg(at('shillong-dark.jpg'))]);
+// shillong-lit.jpg + shillong-dark.jpg aren't painted yet: not fetched (two 404s a visit); load them here once they exist
+const iLit = null, iDark = null;
 const [srcLit, srcDark] = iLit && iDark ? [iLit, iDark] : placeholder();
 // depth: depth.png once the real pair exists (tools/make_depth.py); until then built from the placeholder's own layout
 function layoutDepth() {
@@ -159,20 +180,6 @@ const pair = [folk.person('you'), folk.person(rider || {})];
 const PAIR = { x: .585 * IW, y: RAIL * IH + 26, gap: 21 };   // gap: sprite px between the two
 for (const p of pair) { p.face('back'); p.play('sit'); p.obj.renderOrder = 3; p.mesh.renderOrder = 3; p.obj.traverse(o => { o.frustumCulled = false; }); scene.add(p.obj); }
 pair[1].update(.7);   // out of step with you: two heads don't sway as one
-// the town's glow behind them: a 1 px warm rim round each head and shoulders (outside folk's ink line), so dark hair reads on a dark
-// night. Copies of the sprite's own frame, drawn flat in the rim colour, offset a pixel left, right and up, behind it.
-const RIM_FRAG = /* glsl */`
-  precision highp float; uniform sampler2D tIdx; uniform vec2 uCell, uOff; uniform float uFlip; uniform vec3 cRim; varying vec2 vUv;
-  void main(){
-    ivec2 p = ivec2(floor(vUv.x * uCell.x), floor((1. - vUv.y) * uCell.y));
-    if (uFlip > .5) p.x = int(uCell.x) - 1 - p.x;
-    if (p.y > int(uCell.y) - 18 || texelFetch(tIdx, ivec2(uOff) + p, 0).r < .5 / 255.) discard;   // head and shoulders only
-    gl_FragColor = vec4(cRim, 1.);
-  }`;
-const rims = pair.flatMap(p => {
-  const u = p.mesh.material.uniforms, mat = new THREE.ShaderMaterial({ uniforms: { tIdx: u.tIdx, uCell: u.uCell, uOff: u.uOff, uFlip: u.uFlip, cRim: { value: new THREE.Color(SHILLONG_PLACEHOLDER.rimTown) } }, vertexShader: p.mesh.material.vertexShader, fragmentShader: RIM_FRAG, depthWrite: false });
-  return [[-1, 0], [1, 0], [0, 1]].map(([dx, dy]) => { const m = new THREE.Mesh(p.mesh.geometry, mat); m.renderOrder = 2; m.frustumCulled = false; m.userData = { p, dx, dy }; p.obj.add(m); return m; });
-});
 let g = 3;            // painting px per frame pixel, at the rest framing
 // snap obj so its local point (lx, ly) lands on a frame-pixel corner, through the moving camera
 const _p = new THREE.Vector3();
@@ -275,7 +282,7 @@ function chime() {   // the wish taking: two soft bells
 }
 
 /* ---------- the beat: engine off, the star, the quote ---------- */
-// cut B, one box per line
+// cut B, a line at a time
 const QUOTE = [
   'Years ago I saw one of these and didn’t wish.',
   'I just smiled, and kept it in the bank for when I’d need it.',
@@ -285,11 +292,13 @@ const QUOTE = [
 ];
 // ponytail: timeline in seconds; retime to the recorded narration. star: after the engine goes off. The star waits for
 // the viewer: unbanked it crawls (SLOW s to cross), banked it streaks off (FAST). The quote counts from when it's gone.
-const T = { firstTick: 1.7, hint: 1, star: 6, quote: [1.6, 5.6, 10.1, 14.6, 19.6], end: 23.6 };
+// bye: their sign-off, once the lights have died; the star after its box has gone (a breath of ticks between); card: the
+// end card, after the last line has sat a while
+const T = { firstTick: 1.7, bye: 1, hint: 1, star: 8, quote: [1.6, 5.6, 10.1, 14.6, 19.6], card: 24.6 };
 const SLOW = 9, FAST = 1.4;
 const HOLD_TO_BANK = .6;   // seconds of holding while the star is up
 const KEY = 'hairpin.wish';
-let phase = 'arrive', since = 0, heldFor = 0, banked = false, shown = 0, starK = 0, starEnd = Infinity;
+let phase = 'arrive', since = 0, heldFor = 0, banked = false, shown = 0, starK = 0, starEnd = Infinity, skip = 0;   // skip: s the quote was brought forward by taps
 const bye = line('shillong');   // the passenger's sign-off, before the star: never about the wish
 let byeSaid = false;
 function bankWish() {
@@ -301,18 +310,30 @@ function go(next) {
   phase = next; since = 0;
   if (next === 'stop') {
     ctx.engineOff();   // the revs sag, the key clicks; then near silence until the metal starts to tick
-    heldFor = 0; banked = false; shown = 0; byeSaid = false; starK = 0; starEnd = Infinity;
+    heldFor = 0; banked = false; shown = 0; byeSaid = false; starK = 0; starEnd = Infinity; skip = 0;
     ctx.say(null); tickGap = .25; nextTick = T.firstTick;
-    $('#quote').innerHTML = QUOTE.map(l => `<div class="box"><p class="line">${l}</p></div>`).join('');
+    $('#quote').innerHTML = QUOTE.map(l => `<p>${l}</p>`).join('');
   }
 }
-const LABEL = { arrive: 'Turn the engine off', done: 'Again' };
-const ready = () => phase === 'arrive' || phase === 'done';
-// Again: back to the stand; the star you banked is already on the dashboard
-const advance = () => { if (phase === 'arrive') go('stop'); else if (phase === 'done') ctx.go('stand'); };
+// the quote's own clock: from the star's end, plus whatever taps brought forward
+const qt = () => since - starEnd + skip;
+// a tap: turns the engine off; during the quote, brings the next line (after the last, the card) now
+function advance() {
+  if (phase === 'arrive') go('stop');
+  else if (phase === 'stop' && shown > 0) skip += Math.max(0, (shown < QUOTE.length ? T.quote[shown] : T.card) - qt());
+}
+// the end card: Again goes back to the stand (the star you banked is already on the dashboard); Title reloads to the title
+// card (index.html has no call that brings it back, and a reload leaves the piece as a first visit would find it)
+const endEl = $('#end');
+function showEnd() {
+  phase = 'done'; $('#quote').classList.add('gone');
+  endEl.hidden = false; $('#again').focus({ preventScroll: true });
+}
+ctx.on($('#again'), 'click', () => ctx.go('stand'));
+ctx.on($('#title'), 'click', () => { location.href = location.pathname; });
 // ?t=8 jumps straight to that moment after the engine goes off (for checking frames), the star unbanked
 if (ctx.params.has('t')) {
-  go('stop'); since = +ctx.params.get('t'); nextTick = since + .2; byeSaid = since > 6;
+  go('stop'); since = +ctx.params.get('t'); nextTick = since + .2; byeSaid = since > T.bye + 1;
   starK = clamp((since - T.star) / SLOW, 0, 1); if (starK >= 1) starEnd = T.star + SLOW;
 }
 
@@ -325,7 +346,7 @@ function frame(dt) {
   let starUp = false;
   if (phase === 'stop') {
     // their sign-off: the expression first, then the words
-    if (bye && !byeSaid && since > 2) { byeSaid = true; ctx.say(bye.who, bye.text, 3.6, bye.expr); }
+    if (bye && !byeSaid && since > T.bye) { byeSaid = true; ctx.say(bye.who, bye.text, 3.6, bye.expr); }
     // engine ticks, further and further apart
     if (ctx.ac && since > nextTick) { tick(); tickGap *= 1.18; nextTick = since + tickGap * (.7 + Math.random() * .6); }
     // the star comes in on a gust; the hint a second before it
@@ -342,25 +363,29 @@ function frame(dt) {
     wishEl.classList.toggle('on', asking || (banked && since < starEnd + .2));
     const f = banked ? 1 : Math.round(clamp(heldFor / HOLD_TO_BANK, 0, 1) * 8) / 8;   // in eight steps, like a pixel bar
     if (f !== fillShown) { fillShown = f; fillEl.style.clipPath = `inset(0 ${100 - f * 100}% 0 0)`; }
-    // the quote sets itself, one box at a time; a star on the last if you wished
-    while (shown < QUOTE.length && since > starEnd + T.quote[shown]) {
+    // the quote sets itself, a line at a time; a star after the last if you wished
+    while (shown < QUOTE.length && qt() > T.quote[shown]) {
       const p = $('#quote').children[shown++]; p.classList.add('on');
-      if (shown === QUOTE.length && banked) p.firstChild.insertAdjacentHTML('beforeend', '<span class="star" aria-label="wish banked">★</span>');
+      if (shown === QUOTE.length && banked) p.insertAdjacentHTML('beforeend', '<span class="star" aria-label="wish banked">★</span>');
     }
-    if (since > starEnd + T.end) phase = 'done';
+    if (shown === QUOTE.length && qt() > T.card) showEnd();
   }
-  ctx.prompt(ready() ? LABEL[phase] : null);
+  ctx.prompt(phase === 'arrive' ? 'Turn the engine off' : null);
   // engine off: the headlights die back to a faint parking light
   U.uHeadI.value = phase === 'arrive' ? 1 : .12 + .88 * (1 - Math.min(1, since / 1.4));
   truckMat.uniforms.uLamp.value = U.uHeadI.value;
   keyLight(truckMat, camera, truck.position, stage.toWorld(.6 * IW, .55 * IH, 0), .2);   // the city's glow below
   // the camera: low on the road at first, then a slow rise to the city while the quote sets
-  const rise = phase === 'arrive' || starEnd === Infinity ? 0 : sstep(starEnd + T.quote[0] - 1, starEnd + T.quote[T.quote.length - 1] + 2, since);
-  Object.assign(stage.target, { dy: lerp(.1, -.06, rise) * IH, pitch: lerp(-.01, .025, rise) });
+  const rise = phase === 'arrive' || starEnd === Infinity ? 0 : sstep(T.quote[0] - 1, T.quote[T.quote.length - 1] + 2, qt());
+  Object.assign(stage.target, { dy: lerp(.1, .01, rise) * IH, pitch: lerp(-.01, .025, rise) });   // not so far that the two of you leave the frame
   stage.update(dt, phase === 'arrive' ? 4 : 1);
-  // the two of us: the city's glow on our backs, the beam's spill while it's on; snapped to the pixel grid
-  for (const p of pair) { p.update(dt); p.setLight(.9, -1); snap(p.obj, p.mesh.position.x - p.w / 2, 0); }
-  for (const m of rims) m.position.set(m.userData.p.mesh.position.x + m.userData.dx, m.userData.p.mesh.position.y + m.userData.dy, -.2);
+  // the two of us: the city's glow on our backs (folk's own lit rim, 'auto'), the beam's spill while it's on; snapped to the pixel grid
+  // the star: you look up, they follow a beat later; both back down once it's gone
+  pair.forEach((p, i) => {
+    const look = phase === 'stop' && since > T.star + .2 + i * .3 && since < starEnd + .6 + i * .3;
+    if (look !== (p.anim === 'lookup')) p.play(look ? 'lookup' : 'sit');
+  });
+  for (const p of pair) { p.update(dt); p.setLight(1.1, -1, 'auto'); snap(p.obj, p.mesh.position.x - p.w / 2, 0); }
   snap(tree, -TREE.anchorU, 0);
   // the star, in frame pixels
   star.visible = starUp;
