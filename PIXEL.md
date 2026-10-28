@@ -74,5 +74,9 @@ anything this file doesn't change.
 - Edit only the files your brief gives you. If you need a change in someone else's file, say so in your report.
 - Check your work by rendering it: `tools/shot.mjs` (headless Chrome) against `python3 -m http.server`. Look at the
   frames you make. Leave no page errors.
+- **Headless Chrome must quit cleanly.** Use `tools/shot.mjs`, or end your own CDP scripts with
+  `Browser.close` and wait for the process to exit; never just kill it. On macOS every killed Chrome leaves a 1.4 GB
+  copy of itself in `/var/folders/…/X/com.google.Chrome.code_sign_clone` (300+ piled up on 2026-10-27/28). Delete your
+  `--user-data-dir` profile afterwards.
 - Lines of dialogue are Yash's: never rewrite them; DRAFT stays DRAFT.
 - Paintings are Yash's: the pixel look comes from the pipeline, never from regenerating his art.

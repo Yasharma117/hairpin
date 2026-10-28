@@ -134,3 +134,6 @@ only; wave has no back view; no line-only ghost style.
   `BASE_SKIN` in style.js may be unused.
 - TITLE on the end card reloads the page (index.html has no "show title" API).
 - Not yet heard on a real phone; not yet pushed. Merge `pixel` → `main` only when Yash says so.
+- 2026-10-28: the disk filled up. Our killed headless Chrome runs had left 335 code-sign clones (deleted; only ~2.3 GB
+  real, they share blocks). tools/shot.mjs now quits Chrome with Browser.close (tested: no clone left); PIXEL.md §5 says
+  every CDP script must. The rest of the disk is Yash's: iOS simulators ~50 GB, Claude vm_bundles 11 GB, caches 12 GB.

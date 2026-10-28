@@ -40,6 +40,11 @@ try {
   }
 } finally {
   console.log(errors.length ? errors.map(e => 'ERROR ' + e).join('\n') : 'no page errors');
-  ch.kill(); await sleep(500); rmSync(profile, { recursive: true, force: true });   // leave no profile behind
+  // Quit Chrome cleanly, never kill it: on macOS each launch copies the app into /var/folders/…/X/com.google.Chrome.code_sign_clone
+  // and only a clean exit removes that copy (killed runs left 300+ behind and filled the disk). Kill only as a last resort.
+  const exited = new Promise(r => ch.once('exit', r));
+  try { ws.send(JSON.stringify({ id: ++id, method: 'Browser.close' })); } catch (e) {}   // no await: Chrome may close the socket first
+  if (!await Promise.race([exited.then(() => true), sleep(5000).then(() => false)])) { ch.kill(); await exited; }
+  rmSync(profile, { recursive: true, force: true });   // leave no profile behind
 }
 process.exit(errors.length ? 1 : 0);
