@@ -2,11 +2,15 @@
 //   node tools/shot.mjs <list.json>      list: [{ url, w, h, out, wait }]
 // Prints page errors. Used by tools/contact_sheet.py.
 import { spawn } from 'node:child_process';
-import { writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
+import { isAbsolute, join, dirname } from 'node:path';
 
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const list = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-const port = 9300 + (process.pid % 500), profile = `/tmp/hairpin-shot-${process.pid}`;
+// Work files go on the external SSD when it's plugged in (the internal disk is nearly full): HAIRPIN_WORK, else
+// /Volumes/HOARDE/hairpin-work, else /tmp. Chrome's profile lives there, and relative `out` paths land in its captures/.
+const WORK = [process.env.HAIRPIN_WORK, '/Volumes/HOARDE/hairpin-work'].find(d => d && existsSync(d)) || '/tmp';
+const list = JSON.parse(readFileSync(process.argv[2], 'utf8')).map(s => ({ ...s, out: isAbsolute(s.out) ? s.out : join(WORK, 'captures', s.out) }));
+const port = 9300 + (process.pid % 500), profile = join(WORK, WORK === '/tmp' ? '' : 'chrome-profiles', `hairpin-shot-${process.pid}`);
 const ch = spawn(CHROME, ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--window-size=1280,720', 'about:blank'], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let tabs;
@@ -36,7 +40,7 @@ try {
     await sleep(s.wait || 3000);
     // .jpg outputs are JPEG (q 85, about a tenth of the PNG): the disk is tight, use them for anything but pixel-exact crops
     const jpg = /\.jpe?g$/i.test(s.out), r = await send('Page.captureScreenshot', jpg ? { format: 'jpeg', quality: 85 } : { format: 'png' });
-    writeFileSync(s.out, Buffer.from(r.result.data, 'base64'));
+    mkdirSync(dirname(s.out), { recursive: true }); writeFileSync(s.out, Buffer.from(r.result.data, 'base64'));
     console.log('shot', s.out);
   }
 } finally {

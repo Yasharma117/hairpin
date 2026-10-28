@@ -170,3 +170,6 @@ post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) nee
   bigger (near ~64 px, far ~38 px) with more detail; API unchanged. Agent H1 (folk.js, pixelGrid, sheet, PIXEL.md
   numbers) running. Next: agent H2 re-fits each scene's placement/framing for the new sprite sizes (stand, edge incl.
   the ghost's shader slots 39/40, Shillong, climb), shot pass, commit. Disk ~500 MB free: keep captures tiny.
+- 2026-10-28: external SSD **HOARDE** (exFAT, ~880 GB free) attached. Work dir `/Volumes/HOARDE/hairpin-work/`:
+  `captures/` (tools/shot.mjs puts relative outputs here), `chrome-profiles/`, `archive/` (old session scratch frames
+  moved there, nothing deleted). shot.mjs falls back to /tmp when the SSD isn't mounted. Internal disk ~750 MB free.

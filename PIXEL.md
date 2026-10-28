@@ -74,6 +74,9 @@ anything this file doesn't change.
 - Edit only the files your brief gives you. If you need a change in someone else's file, say so in your report.
 - Check your work by rendering it: `tools/shot.mjs` (headless Chrome) against `python3 -m http.server`. Look at the
   frames you make. Leave no page errors.
+- **Work files go on the external SSD** `/Volumes/HOARDE/hairpin-work/` (captures/, chrome-profiles/, archive/) when
+  it's mounted: `tools/shot.mjs` resolves relative `out` paths into its `captures/`. Never write screenshots to the
+  internal disk while it's attached.
 - **Keep captures tiny; delete nothing.** The disk is nearly full and Yash wants nothing deleted: write screenshots as
   `.jpg` (`tools/shot.mjs` saves JPEG for .jpg outputs, ~20 KB each), PNG only for pixel-exact crops, ~10 per task.
 - **Headless Chrome must quit cleanly.** Use `tools/shot.mjs`, or end your own CDP scripts with
