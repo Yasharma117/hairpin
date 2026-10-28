@@ -9,8 +9,9 @@ anything this file doesn't change.
 
 - The whole frame renders at a **low internal resolution** and is scaled up with **nearest-neighbour**. Everything in the
   3D scene (paintings, taxi, truck, blossom, petals, figures) lands on the same pixel grid. The DOM UI does not.
-- **Pixel size:** an integer screen-pixel scale chosen so the frame is about **270 px tall** in landscape
-  (`scale = max(2, round(canvasHeightInDevicePx / 270))`), about 300 tall in portrait. Never a fractional scale.
+- **Pixel size:** an integer screen-pixel scale chosen so the frame is about **360 px tall** in landscape
+  (`scale = max(2, round(canvasHeightInDevicePx / 360))`: 1280x720 is x2, 1920x1080 x3, a retina 1440 x4), about 400 tall
+  in portrait. Never a fractional scale.
 - **Palette:** the final pass quantizes to a fixed palette per scene (about 32 colours, from the scene's lit and dark
   paintings plus the shared UI and people ramps), in a perceptual space, with **4x4 ordered (Bayer) dithering at low
   strength** only in gradients (sky, beams, haze). Palettes live in `shared/style.js`, like every colour.
@@ -26,8 +27,9 @@ anything this file doesn't change.
 - Their style, our sprites. **Never copy pocket.design's assets.**
 - Proportions: about **2.5 heads tall**, big head, small body, 1 px outline, 3-tone ramps (shadow, base, light) for skin,
   hair and each garment, highlight pixels on hair. Two sizes, never scaled:
-  - **near**, about 44 px tall standing (the stand, Shillong, the customiser preview)
-  - **far**, about 26 px tall standing (the climb's walker and basket woman, the edge)
+  - **near**, about 64 px tall standing, cell 48 x 72, stride 4 px (the stand, Shillong, the edge, the customiser preview):
+    faces with brows, catch-lit eyes and a smile, strands and highlight clusters in the hair, folds, soles
+  - **far**, about 39 px tall standing, cell 32 x 48, stride 3 px (the climb's walker and basket woman, the edge's flashback)
 - Views: front, three-quarter facing left and right (mirrored), and **back** (the edge and Shillong, sitting, from behind).
 - **Animation is drawn frames, never sliding:**
   - idle: 2 frames, breathing, about 1.2 s loop, with a blink

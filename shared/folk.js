@@ -36,10 +36,760 @@ const LIGHT = [...CH].map((c, i) => { const g = ['Sslr', 'Hhj', 'Ttu', 'Vvw', 'D
 const faceless = (map, nose) => map.map((r, j) => [...r].map((c, i) => 'HeWmr'.includes(c) || (nose && j === nose[0] && i === nose[1]) ? 's' : c).join(''));
 const L = (on, x, y, layer, map) => ({ on, x, y, layer, map });   // an overlay layer, riding on a part
 
+// a row of width w from [column, pixels] runs ('.' elsewhere): for limbs that move across the grid
+const at = (w, ...runs) => { const a = Array(w).fill('.'); for (const [c, s] of runs) [...s].forEach((ch, i) => { if (c + i >= 0 && c + i < w) a[c + i] = ch; }); return a.join(''); };
+const rows = (n, f) => [...Array(n)].map((_, j) => f(j));
+
 /* ======================================================================================================================
-   NEAR: about 44 px standing. Cell 32 x 48, figure centred on column 15, feet on the bottom row. Parts are 17 wide at x 7.
+   NEAR: about 64 px standing. Cell 48 x 72, figure centred on column 23, feet on the bottom row. Parts are 25 wide at
+   x 11: head 25 rows (22 of skull, the chin and neck), body 18, legs 19.
    ==================================================================================================================== */
 const N_HEAD_M = [
+  '........ooooooooo........',
+  '.....ooosssssssssooo.....',
+  '...oossssssssssssssSoo...',
+  '..osssssssssssssssssSSo..',
+  '.ossssssssssssssssssSSSo.',
+  '.ossssssssssssssssssSSSo.',
+  '.ossssssssssssssssssSSSo.',
+  '.ossssssssssssssssssSSSo.',
+  '.ossssssssssssssssssSSSo.',
+  '.osssssssssssssssssssSSo.',
+  '.osssssssssssssssssssSSo.',
+  '.ossssHHHsssssssHHHssSSo.',
+  '.osssssWesssssssWesssSSo.',
+  'oSssssseessssssseesssSSSo',
+  'oSssssseessssssseesssSSSo',
+  'oSslsrrssssssSssssrrsSSSo',
+  'oSsssssssssssssssssssSSSo',
+  '.ossssssssmsssmssssssSSo.',
+  '..ossssssssmmmsssssSSSo..',
+  '...osssssssssssssSSSSo...',
+  '....oosssssssssSSSSoo....',
+  '......ooosssSSSSooo......',
+  '.......oooSSSSSooo.......',
+  '.........oSSSSSo.........',
+  '.........osSSSSo.........'];
+const N_HEAD_F = N_HEAD_M.map((r, j) => j === 12 ? '.ossssseWesssssssWeesSSo.' : j === 11 ? '.osssssHHssssssssHHssSSo.' : r);
+const N_HEAD_L = [
+  ...N_HEAD_M.slice(0, 11),
+  '.osHHsssssHHHssssssssSSo.',
+  '.osWesssssWesssssssssSSo.',
+  '.oseesssssee' + 'ssssoos' + 'ssSSo.',
+  '.oseesssssee' + 'sssolSs' + 'ssSSo.',
+  'osSssssssrrssssosSsssSSo.',
+  '.osssssssssssss' + 'soos' + 'ssSSo.',
+  '.ossmssmsssssssssssssSSo.',
+  '..osssmmsssssssssssSSo...',
+  '...ossssssssssssSSSSo....',
+  '....oossssssssSSSSo......',
+  '......ooossSSSSSo........',
+  '.......oooSSSSSo.........',
+  '.........oSSSSSo.........',
+  '.........osSSSSo.........'];
+const N_HEAD_LF = N_HEAD_L.map((r, j) => j === 12 ? '.osWesssssWeessssssssSSo.' : r);
+const N_FACELESS = [15, 13];   // the nose, taken off with the face from behind
+
+const N_BODY_M = [
+  '......ooooooooooooo......',
+  '....ouutttSSSSStttTTo....',
+  '....ouutttTSSSTtttTTo....',
+  '....ouuttttTSTttttTTo....',
+  '....ouutttttttttttTTo....',
+  '....outtttttttttttTTo....',
+  '....outTttttttttttTTo....',
+  '....outtttttttttttTTo....',
+  '....outtttttttttttTTo....',
+  '....outttttttttttTTTo....',
+  '....outtttttttttttTTo....',
+  '....outtttttttttttTTo....',
+  '....outttTtttttttTTTo....',
+  '....outtttTtttttTtTTo....',
+  '....outtttttttttttTTo....',
+  '....outtttttttttttTTo....',
+  '....oTtttttttttttTTTo....',
+  '....oTTTTTTTTTTTTTTTo....'];
+const N_BODY_F = N_BODY_M.map((r, j) => j === 1 ? '....ouutSSSSSSSSStTTo....' : j === 2 ? '....ouuttSSSSSSSttTTo....' : j === 3 ? '....ouutttSSSSStttTTo....'
+  : j >= 8 && j <= 10 ? '.....outtttttttttTTo.....' : r);
+const N_BODY_L = [
+  '.......ooooooooooo.......',
+  '.....ouuttSSSSSttTTo.....',
+  '.....ouuttTSSSTttTTo.....',
+  '.....ouutttTSTtttTTo.....',
+  '.....ouuttttttttTTTo.....',
+  ...rows(11, j => j === 3 ? '.....outTtttttttTTTo.....' : j === 8 ? '.....outttTttttTtTTo.....' : '.....outtttttttttTTo.....'),
+  '.....oTttttttttTTTTo.....',
+  '.....oTTTTTTTTTTTTTo.....'];
+const N_BODY_LF = N_BODY_L.map((r, j) => j === 1 ? '.....ouuSSSSSSSStTTo.....' : j >= 8 && j <= 10 ? '......outtttttttTTo......' : r);
+const N_BODY_B = [
+  '......ooooooooooooo......',
+  '....ouutttSSSSStttTTo....',
+  '....ouuttttTTTttttTTo....',
+  '....ouutttttttttttTTo....',
+  ...rows(12, j => j === 3 ? '....outtttTtttTtttTTo....' : j === 4 ? '....outttTtttttTttTTo....' : '....outtttttttttttTTo....'),
+  '....oTtttttttttttTTTo....',
+  '....oTTTTTTTTTTTTTTTo....'];
+const N_BODY_BF = N_BODY_B.map((r, j) => j >= 8 && j <= 10 ? '.....outtttttttttTTo.....' : r);
+
+// arms, 5 px wide: the sleeve (E d D), the forearm (g f F: skin under short sleeves), the hand. 20 rows from the shoulder.
+const ARM = { up: ['oEddo', 'oEddo', 'oEddo', 'oEddo', 'oEddo', 'oDDdo'], fore: 'ogffo', hand: ['olsso', 'ossSo', 'oSsSo'] };
+const ARM_R = { up: 'oddDo', hem: 'oDDDo', fore: 'offFo', hand: ['ossSo', 'osSSo', 'oSsSo'] };
+const N_ARMS_DOWN = [
+  '.........................',
+  '..oo.................oo..',
+  '.oEdo...............odDo.',
+  ...rows(5, j => (j === 4 ? 'oDDdo' : 'oEddo') + '...............' + (j === 4 ? ARM_R.hem : ARM_R.up)),
+  ...rows(8, () => ARM.fore + '...............' + ARM_R.fore),
+  ...rows(3, j => ARM.hand[j] + '...............' + ARM_R.hand[j]),
+  '.ooo.................ooo.'];
+// the cigarette, from behind (the ghost, sitting): his right hand (the viewer's right) at rest with it, and the drag, the
+// hand rising to his mouth. Columns 20-29 of a 30-wide arms map; the left arm hangs as in N_ARMS_DOWN. `top` is the map's
+// first row relative to the body's top. The tip is G; Z lights beside it when the ember swells.
+const smokeArms = (top, right) => [...Array(20 - top)].map((_, j) => {
+  const r = j + top, down = N_ARMS_DOWN[r] || '.........................';
+  return (r >= 0 ? down.slice(0, 20) : '....................') + (right[j] ?? (r >= 0 && !Array.isArray(right) ? down.slice(20) + '.....' : '..........'));
+});
+const N_CIG = smokeArms(0, { 15: 'offFo..Z..', 16: 'ossSoWWG..', 17: 'osSSo.....' });
+// the hand goes up in front of him (hidden), so only the upper arm shows; then it's at his mouth, the elbow out
+const N_DRAG0 = smokeArms(0, ['..........', '.oo.......', 'odDo......', 'oddDo.....', 'oddDo.....', 'oddDo.....', 'oddDo.....', 'oDDDo.....', 'offFo.....', 'offFo.....', 'oFFFo.....', '.ooo......']);
+const N_DRAG1 = smokeArms(-7, [
+  '...oo.Z...',
+  '..olsoWG..',
+  '..ossSo...',
+  '...ogfo...',
+  '....ogfo..',
+  '.....ogfo.',
+  '......ogfo',
+  '.oo...ogfo',
+  'odDooooEdo',
+  'oddDDDDDdo',
+  'oDDDDDDDDo',
+  '.oooooooo.']);
+// him in ink, from behind: the skull's line into two neck lines (the jaw's edges read as dashes in line only)
+const N_HEAD_GHOST = N_HEAD_M.map((r, j) => j >= 20 ? '.........o.....o.........' : j === 19 ? '....ooooo.....ooooo......' : r.replace(/[HeWmrlS]/g, 's'));
+// waving, front: the arm on the viewer's left up beside the face, the hand open (31 wide at x -6, 12 rows above the body)
+const N_WAVE = hand => [
+  ...(hand ? ['.ooo..', 'olsso.', 'ossSo.', '.oSsSo'] : ['..ooo.', '.olsso', '.ossSo', '.oSsSo']),
+  ...rows(8, () => '.ogffo'),
+  '.ogfffoooo.',
+  '.ogffEEEddo',
+  '.oSffdddDDo',
+  '..ooDDDDDDo',
+  '....oooooo.',
+].map((l, k) => (l + '.'.repeat(26)).slice(0, 26) + (k >= 12 ? (N_ARMS_DOWN[k - 12] || '.'.repeat(25)).slice(20) : '.....'))
+  .concat(N_ARMS_DOWN.slice(5).map(r => '.'.repeat(26) + r.slice(20)));
+// three-quarter, facing left: the far arm (dark) at the front edge, the near arm over the body
+const N_ARMS_L = {
+  down: [
+    '.........................',
+    '..oo..........oo.........',
+    '..odDo........oEdo.......',
+    ...rows(5, j => (j === 4 ? '.oDDDo' : '.odDDo') + '.......' + (j === 4 ? 'oDDdo' : 'oEddo') + '.......'),
+    ...rows(8, () => '.ofFFo' + '.......' + 'ogffo' + '.......'),
+    ...rows(3, j => ['.osSSo', '.oSSSo', '.oSsSo'][j] + '.......' + ARM.hand[j] + '.......'),
+    '..ooo.........ooo........'],
+  fwd: [
+    '.........................',
+    at(25, [14, 'oo']), at(25, [14, 'oEdo']), at(25, [13, 'oEddo']), at(25, [13, 'oEddo']), at(25, [12, 'oEddo']), at(25, [12, 'oEddo']),
+    at(25, [11, 'oDDdo']), at(25, [11, 'ogffo']), at(25, [10, 'ogffo']), at(25, [10, 'ogffo']), at(25, [9, 'ogffo']), at(25, [9, 'ogffo']),
+    at(25, [8, 'ogffo']), at(25, [8, 'olsso']), at(25, [8, 'ossSo']), at(25, [8, 'oSsSo']), at(25, [9, 'ooo'])],
+  bwd: [
+    '.........................',
+    at(25, [2, 'oo'], [14, 'oo']), at(25, [2, 'odDo'], [14, 'oEdo']), at(25, [1, 'odDDo'], [13, 'oEddo']), at(25, [1, 'odDDo'], [14, 'oEddo']),
+    at(25, [0, 'odDDo'], [14, 'oEddo']), at(25, [0, 'odDDo'], [15, 'oEddo']), at(25, [0, 'oDDDo'], [15, 'oDDdo']),
+    at(25, [0, 'ofFFo'], [16, 'ogffo']), at(25, [0, 'ofFFo'], [16, 'ogffo']), at(25, [0, 'ofFFo'], [17, 'ogffo']), at(25, [0, 'ofFFo'], [17, 'ogffo']),
+    at(25, [0, 'osSSo'], [18, 'ogffo']), at(25, [0, 'oSSSo'], [18, 'olsso']), at(25, [0, 'oSsSo'], [18, 'ossSo']), at(25, [1, 'ooo'], [18, 'oSsSo']),
+    at(25, [19, 'ooo'])],
+};
+// waving at the taxi, three-quarter: the near arm up past the back of the head (28 wide at x 0, 13 rows above the body)
+const N_WAVE_L = hand => [
+  ...(hand ? ['oo...', 'olso.', 'ossSo', 'oSsSo'].map(s => at(28, [22, s])) : ['.ooo.', 'olsso', 'ossSo', 'oSsSo'].map(s => at(28, [21, s]))),
+  at(28, [21, 'ogffo']), at(28, [21, 'ogffo']), at(28, [20, 'ogffo']), at(28, [20, 'ogffo']), at(28, [19, 'oEdfo']),
+  at(28, [18, 'oEddo']), at(28, [17, 'oEddo']), at(28, [16, 'oEddo']), at(28, [15, 'oEddo']),
+  ...N_ARMS_L.down.slice(0, 20).map((r, k) => at(28, [0, r.slice(0, 7)], ...(k === 0 ? [[14, 'oEddo']] : k === 1 ? [[13, 'oDDDo']] : k === 2 ? [[14, 'ooo']] : []))),
+];
+
+// legs, generated: hips, two trouser legs, hems, shoes with a pale sole. Front (or from behind): `lift` raises a foot.
+function legsFront(liftL = 0, liftR = 0, hem = 14) {
+  const out = ['....oqppppppppppppPPo....', '....oqppppppPpppppPPo....'];
+  const part = (y, lift) => { const h = hem - lift, k = y - h; return k < 0 ? 'leg' : ['hem', 'shoe', 'shoe2', 'sole', 'bottom'][k] || ''; };
+  for (let y = 2; y < hem + 5; y++) {
+    const a = part(y, liftL), b = part(y, liftR), runs = [];
+    const L = { leg: [4, y === 8 ? 'oqppPpppP' : 'oqpppppP'], hem: [4, 'oPPPPPPP'], shoe: [3, 'obbbbnbbb'], shoe2: [2, 'obbbbbbbBb'], sole: [2, 'onnnnnnnnn'], bottom: [3, 'ooooooooo'] }[a];
+    const R = { leg: [13, y === 8 ? 'ppPppPPo' : 'pppppPPo'], hem: [13, 'PPPPPPPo'], shoe: [13, 'bbbnbbbBo'], shoe2: [13, 'bbbbbbbBBo'], sole: [13, 'nnnnnnnnno'], bottom: [13, 'ooooooooo'] }[b];
+    if (L) runs.push(L); if (R) runs.push(R);
+    if ((L && a !== 'bottom') || (R && b !== 'bottom')) runs.push([12, 'o']);
+    out.push(at(25, ...runs));
+  }
+  return out;
+}
+// three-quarter, facing left: each leg runs from its hip to its foot; the far leg in shadow, drawn first. A contact
+// frame is a row shorter, so the body dips. Feet are `x` (shoe centre) and `lift` rows up.
+function legsSide(near, far, n = 19) {
+  const out = ['.....oqpppppppppPPo.....'.padEnd(25, '.').slice(0, 25), '.....oqppppppppPPPo.....'.padEnd(25, '.').slice(0, 25)].map(r => r.split(''));
+  for (let y = 2; y < n; y++) out.push(Array(25).fill('.'));
+  const leg = ({ x, lift = 0 }, hx, dark) => {
+    const hem = n - 5 - lift, put = (y, c, s) => [...s].forEach((ch, i) => { if (c + i >= 0 && c + i < 25 && y < n) out[y][c + i] = ch; });
+    for (let y = 2; y < hem; y++) { const cx = Math.round(hx + (x - hx) * (y - 1) / (hem - 1)); put(y, cx - 4, dark ? 'opppPPPo' : 'oqppppPo'); }
+    put(hem, x - 4, dark ? 'oPPPPPPo' : 'oPPPPPPo');
+    put(hem + 1, x - 5, dark ? 'obbbBBBBo' : 'obbnbbbBo'); put(hem + 2, x - 6, dark ? 'obbbbBBBBo' : 'obbbbbbbBo');
+    put(hem + 3, x - 6, 'onnnnnnnno'); put(hem + 4, x - 5, 'oooooooo');
+  };
+  leg(far, 14, true); leg(near, 11, false);
+  return out.map(r => r.join(''));
+}
+const N_LEGS = {
+  stand: legsFront(), liftL: legsFront(2, 0), liftR: legsFront(0, 2),
+  // sitting down at a ledge, from behind: knees bend, then the seat lands on the ledge (legs over the edge, out of sight)
+  crouch: legsFront(0, 0, 9).map((r, j) => j === 1 ? '...oqpppppppPppppPPPo....'.slice(0, 25) : r),
+  squat: [
+    '...oqppppppppppppPPPo....',
+    '..oqpppppppPppppppPPPo...',
+    '..oqppppppo.oppppppPPo...',
+    '..oPPPPPPPo.oPPPPPPPPo...',
+    '.obbbbnbbbo.obbbnbbbBo...',
+    '.onnnnnnnno.onnnnnnnno...',
+    '..oooooooo...oooooooo....'],
+  seat: [
+    '...oqppppppppppppPPPo....',
+    '..oqpppppppPppppppPPPo...',
+    '..oqppppppppppppppPPPo...',
+    '..oPPPPPPPPPPPPPPPPPPo...',
+    '...ooooooooooooooooooo...'],
+};
+const N_LEGS_L = {
+  stand: legsSide({ x: 10 }, { x: 15 }),
+  w0: legsSide({ x: 8 }, { x: 16 }, 18), w1: legsSide({ x: 12 }, { x: 14, lift: 3 }),
+  w2: legsSide({ x: 16 }, { x: 8 }, 18), w3: legsSide({ x: 13, lift: 3 }, { x: 12 }),
+};
+
+// ---- near overlays ----
+const N_TOP = [   // the crown every style shares: rows -2 to 8 of the head, highlight clusters on the lit side
+  '........ooooooooo........',
+  '.....ooohhhhhhhhhooo.....',
+  '...oohhhjjjjhhhhhhhhoo...',
+  '..ohhjjjhhhhhhhhhhhhHHo..',
+  '.ohjjhhhhhhhhhhhhhhhHHHo.',
+  'ohjjhhhhhhhhhhhhhhhhhHHHo',
+  'ohjhhhhhHhhhhhhhhhhhHHHHo',
+  'ohhhhhhHhhhhhhhhHhhhHHHHo',
+  'ohhhhhHhhhhhhhhHhhhhhHHHo',
+  'ohhhhHhhhhhhhhHhhhhhhHHHo',
+  'ohhhHhhhhhhhhHhhhhhhhHHHo'];
+const N_R9 = 'ohhhhhhhhhhhhhhhhhhhhHHHo';
+const N_BACK = rows(10, j => [   // the back of a head of hair, rows 10-19 (ears showing at 13-16)
+  'ohhhhHhhhhhhhhhHhhhhhHHHo', 'ohhhHhhhhhhhhhHhhhhhhHHHo', 'ohhhhhhhhhhhhhhhhhhhHHHHo',
+  '..ohhhhhhhhhhhhhhhhhHHo..', '..ohhhhHhhhhhhhHhhhhHHo..', '..ohhhHhhhhhhhHhhhhhHHo..', '..ohhhhhhhhhhhhhhhhHHHo..',
+  '.ohhhhhhhhhhhhhhhhhhHHHo.', '..ohhhhhhhhhhhhhhhhhHHo..', '...ohhhhhhhhhhhhhhhHHo...'][j]);
+const N_HAIR = {
+  short: {
+    front: [L('head', 0, -2, 'hair', [...N_TOP, 'ohHHo.ohhhHHo..ohhhhhHHHo', 'oH.....................Ho', 'oH.....................Ho', 'oH.....................Ho'])],
+    left: [L('head', 0, -2, 'hair', [...N_TOP, 'oHHHo.oHHHHo.ohhhhhhhHHHo', '.............ohhhhhhhHHHo', '.............oHhhhhhhHHHo', '..............oHhhhhhhHHo',
+      '..................ohhHHHo', '...................ohHHHo', '...................oHHHHo', '....................oHHo.'])],
+    back: [L('head', 0, -2, 'hair', [...N_TOP, N_R9, ...N_BACK, '....oHhhhhhhhhhhhHHHo....', '......ooooooooooooo......'])],
+  },
+  long: {
+    front: [L('head', 0, 18, 'back', rows(16, j => j < 15 ? '..HHHHHHHHHHHHHHHHHHHHH..' : '..HoHHoHHHoHHHoHHoHHHoH..')),
+      L('head', 0, -2, 'hair', [...N_TOP.slice(0, 9),
+        'ohhhhhhhhhhhoHhhhhhhhHHHo',
+        'ohhhhhhhhhhoHHhhhhhhhHHHo',
+        'ohhhhhhhhhoHHHHhhhhhhHHHo',
+        'ohhhhhhHHo.ooHHHhhhhhHHHo',
+        'ohhhHHoo.......oHHhhhHHHo',
+        'ohhHo.............oHHhHHo',
+        ...rows(10, j => j < 5 ? 'ojhHo..............oHHhho' : 'ojhho..............oHhhHo'),
+        ...rows(8, j => j < 6 ? 'ohjhho............ohHhhHo'.padStart(25, '.').slice(-25) : j === 6 ? 'ohHhho............oHhHHo.'.padEnd(25, '.').slice(0, 25) : '.oooo..............oooo..'),
+      ])],
+    left: [L('head', 0, -2, 'hair', [...N_TOP, 'oHHHo.oHHHHo.ohhhhhhhHHHo', '..............ohhhhhHHHHo', '..............oHhhhhHHHHo',
+      ...rows(16, j => at(25, [18 + Math.min(1, j >> 3), j < 14 ? 'ohhHHHo'.slice(0, 7 - Math.min(1, j >> 3)) : 'ohHHo'])), at(25, [19, 'oooo'])])],
+    back: [L('head', 0, -2, 'hair', [...N_TOP, ...rows(19, j => {   // the curtain narrows to its ends
+      const k = j < 10 ? 0 : Math.min(4, (j - 8) >> 1), w = 21 - 2 * k;
+      return at(25, [k, j === 18 ? '.' + 'oHo'.repeat(8).slice(0, w) + '.' : 'o' + (j % 5 === 2 ? 'jhhhhHhhhhhhhhH' : 'jhhhhhhhhhhhhhhh').padEnd(w - 2, 'h') + 'HHHo']);
+    })])],
+  },
+  bun: {
+    front: [L('head', 0, -7, 'hair', [
+      '.........ooooooo.........',
+      '........ojjjhhhHo........',
+      '.......ojjhhhhhHHo.......',
+      '.......ohhhhhhhHHo.......',
+      '........oHhhhHHHo........',
+      ...N_TOP.slice(0, 11),
+      'ohhhhhhhhhhoohhhhhhhHHHHo',
+      'ohhhhhhhhhoo..ohhhhhhHHHo',
+      'ohhhhhHHoo......oHHhHHHHo',
+      'ohHHoo............ooHHHHo',
+      'oHo..................oHHo',
+      'oH.....................Ho'])],
+    left: [L('head', 0, -6, 'hair', [
+      '................ooooo....',
+      '...............ojjhhHo...',
+      '..............ojhhhhHHo..',
+      '..............ohhhhHHHo..',
+      '...............oHHHHHo...',
+      ...N_TOP.slice(1, 11),
+      'ohhhhhhhhhhhhhhhhhhhHHHHo',
+      'oHHHHo.oHHHHo.ohhhhhhHHHo', '..............ohhhhhHHHHo', '..............oHhhhhHHHHo',
+      '..................ohhHHo.', '...................oHHo..'])],
+    back: [L('head', 0, -7, 'hair', [
+      '.........ooooooo.........',
+      '........ojjjhhhHo........',
+      '.......ojjhhhhhHHo.......',
+      '.......ohhhHhhhHHo.......',
+      '........oHHhhHHHo........',
+      '.......ooHHHHHHHoo.......',
+      ...N_TOP.slice(1), N_R9, ...N_BACK, '....oHhhhhhhhhhhhHHHo....', '......ooooooooooooo......'])],
+  },
+  curly: {
+    front: [L('head', 0, -4, 'hair', [
+      '.....oo..ooo..ooo..oo....',
+      '...oojjooojhoohhhoohhoo..',
+      '..ojjhhjojhhhojhhhojhHHo.',
+      '.ojhhjhhjhhjhhhjhhhjhHHHo',
+      'ojhhjhhhjhhhhjhhhjhhhHHHo',
+      'ohjhhhjhhhjhhhhjhhhjhHHHo',
+      'ojhhjhhhjhhhjhhhjhhhHHHHo',
+      'ohhjhhhjhhhjhhhjhhhjHHHHo',
+      'ohjhhhjhhhjhhhjhhhjhhHHHo',
+      'ohhhjhhhjhhhjhhhjhhhHHHHo',
+      'ohhjhhHjhhHjhhHjhhHhHHHHo',
+      'ohHhhHhhHhhHhhHhhHhhHHHHo',
+      'oHHoHHoHHoHHoHHoHHoHHHHHo',
+      'oHo.oo.oo.oo.oo.oo.o.oHHo',
+      'oHH...................HHo',
+      '.oo...................oo.'])],
+    left: [L('head', 0, -4, 'hair', [
+      '.....oo..ooo..ooo..oo....',
+      '...oojjooojhoohhhoohhoo..',
+      '..ojjhhjojhhhojhhhojhHHo.',
+      '.ojhhjhhjhhjhhhjhhhjhHHHo',
+      'ojhhjhhhjhhhhjhhhjhhhHHHo',
+      'ohjhhhjhhhjhhhhjhhhjhHHHo',
+      'ojhhjhhhjhhhjhhhjhhhHHHHo',
+      'ohhjhhhjhhhjhhhjhhhjHHHHo',
+      'ohjhhhjhhhjhhhjhhhjhhHHHo',
+      'ohhhjhhhjhhhjhhhjhhhHHHHo',
+      'ohhjhhHjhhHjhhjhhjhhHHHHo',
+      'ohHhhHhhHhhHhhhjhhhjHHHHo',
+      'oHHoHHoHHoHHohhhjhhhHHHHo',
+      '.o.oo.oo.oo..ohjhhjhHHHo.',
+      '..............ohHhhHHHHo.',
+      '..................oHHHHo.',
+      '...................oHHo..',
+      '....................oo...'])],
+    back: [L('head', 0, -4, 'hair', [
+      '.....oo..ooo..ooo..oo....',
+      '...oojjooojhoohhhoohhoo..',
+      '..ojjhhjojhhhojhhhojhHHo.',
+      '.ojhhjhhjhhjhhhjhhhjhHHHo',
+      ...rows(16, j => ['ojhhjhhhjhhhhjhhhjhhhHHHo', 'ohjhhhjhhhjhhhhjhhhjhHHHo', 'ojhhjhhhjhhhjhhhjhhhHHHHo', 'ohhjhhhjhhhjhhhjhhhjHHHHo'][j % 4]),
+      '.ohHhhHhhHhhHhhHhhHhHHHo.',
+      '..oHoHHoHHoHHoHHoHHoHHo..',
+      '...o.oo.oo.oo.oo.oo.oo...'])],
+  },
+  cap: {
+    front: [L('head', 0, -3, 'hair', [
+      '.......ooooooooooo.......',
+      '....ooozzzkkkkkkkkkoo....',
+      '..oozzkkkkkkkkkkkkkkKoo..',
+      '.ozzkkkkkkkkzkkkkkkkKKKo.',
+      'ozkkkkkkkkkkzkkkkkkkkKKKo',
+      'okkkkkkkkkkkkkkkkkkkkKKKo',
+      'okkkkkkkkkkkkkkkkkkkKKKKo',
+      'okkkkkkkkkkkkkkkkkkKKKKKo',
+      'oKKKKKKKKKKKKKKKKKKKKKKKo',
+      'ozzzzzzzzzzzzzzzzzkkkkKKo',
+      'ozzzzzzzzzzzzzzzzzzkkkKKo',
+      'ooooooooooooooooooooooooo',
+      'oHHhH.................HHo',
+      'oHh....................Ho',
+      'oH.....................Ho'])],
+    left: [L('head', -6, -3, 'hair', [
+      '.............ooooooooooo.......',
+      '..........ooozzzkkkkkkkkkoo....',
+      '........oozzkkkkkkkkkkkkkkKoo..',
+      '.......ozzkkkkkkkkkkkkkkkkKKKo.',
+      '......ozkkkkkkkkkkkkkkkkkkkKKKo',
+      '......okkkkkkkkkkkkkkkkkkkkKKKo',
+      '......okkkkkkkkkkkkkkkkkkkKKKKo',
+      '......okkkkkkkkkkkkkkkkkkKKKKKo',
+      '......oKKKKKKKKKKKKKKKKKKKKKKKo',
+      'oooooozzzzzzzzzzzzzzoHhhhhHHHHo',
+      'ozzzzzzzzzzzzzzzzzzo.oHhhhHHHo.',
+      '.oooooooooooooooooo....oHhhHHHo',
+      '.......................oHhhHHo.',
+      '........................oHHHo..',
+      '.........................oHo...'])],
+    back: [L('head', 0, -3, 'hair', [
+      '.......ooooooooooo.......',
+      '....ooozzzkkkkkkkkkoo....',
+      '..oozzkkkkkkkkkkkkkkKoo..',
+      '.ozzkkkkkkkkkkkkkkkkKKKo.',
+      'ozkkkkkkkkkkkkkkkkkkkKKKo',
+      'okkkkkkkkkkkkkkkkkkkkKKKo',
+      'okkkkkkkkkkkkkkkkkkkKKKKo',
+      'okkkkkkkkkkkkkkkkkkKKKKKo',
+      'okkkkkkkkkkkkkkkkkKKKKKKo',
+      'oKKKKKKKKoooooooKKKKKKKKo',
+      'ohhhhhhHo.......oHhhhHHHo',
+      'ohhhhhhhHooooooHhhhhhHHHo',
+      N_R9, ...N_BACK, '....oHhhhhhhhhhhhHHHo....', '......ooooooooooooo......'])],
+  },
+};
+
+// the top's details, on the body (the colour of a top is its palette, so these only add what a palette can't)
+const N_KURTA_HEM = rows(10, j => j < 8 ? at(25, [4, j < 3 ? 'outtttttttttttTTo' : j < 6 ? 'oututtttttttttTTTo'.slice(0, 17) : 'ouuttttttttttTTTTo'.slice(0, 17)]).replace(/^(...)\./, '$1.') : j === 8 ? '...oTTTTTTTTTTTTTTTTTo...' : '...ooooooooooooooooooo...').map((r, j) => j >= 5 && j < 8 ? '...' + 'o' + r.slice(4, 21) + 'o' + '...' : r);
+const N_KURTA_HEM_L = rows(10, j => j < 8 ? at(25, [5, 'outtttttttttTTo']) : j === 8 ? at(25, [4, 'oTTTTTTTTTTTTTTo']) : at(25, [4, 'oooooooooooooooo']));
+const N_JAINSEM_HEM = rows(16, j => j < 14 ? '....outttttttttttTTTo....' : j === 14 ? '....oTTTTTTTTTTTTTTTo....' : '....ooooooooooooooooo....');
+const N_JAINSEM_HEM_L = rows(16, j => j < 14 ? '.....outtttttttttTTo.....' : j === 14 ? '.....oTTTTTTTTTTTTTo.....' : '.....ooooooooooooooo.....');
+const N_TOPS = {
+  hoodie: {
+    front: [L('body', 0, -1, 'cloth', [
+      '.....ooooo.....ooooo.....',
+      '....oTTTTTo...oTTTTTo....',
+      '.....uTTTTTTTTTTTTTT.....',
+      '......uttTTTTTTTTtt......',
+      '..........w...w..........',
+      '..........w...w..........',
+      '..........w...w..........',
+      '..........v...v..........',
+      '.........................',
+      '.........................',
+      '.........................',
+      '.......TTTTTTTTTTT.......',
+      '.......T.........T.......',
+      '......T...........T......',
+      '......T...........T......',
+      '......TTTTTTTTTTTTT......',
+      '.........................',
+      '.....tTtTtTtTtTtTtTt.....',
+      '.....TTTTTTTTTTTTTTT.....'])],
+    left: [L('body', 0, -1, 'cloth', [
+      '.............oooooo......',
+      '............oTTTTTTo.....',
+      '.......uTTTTTTTTTTTT.....',
+      '........uttTTTTTtt.......',
+      '..........w..............',
+      '..........w..............',
+      '..........w..............',
+      '..........v..............',
+      '.........................', '.........................', '.........................',
+      '.......TTTTTTTT..........',
+      '.......T.................',
+      '......T..................',
+      '......T..................',
+      '......TTTTTTTT...........',
+      '.........................',
+      '......tTtTtTtTtTtTt......',
+      '......TTTTTTTTTTTTT......'])],
+    back: [L('body', 0, -1, 'cloth', [
+      '.......ooooooooooo.......',
+      '......oTtttttttttTo......',
+      '......outtttttttTTo......',
+      '......oTutttttttTTo......',
+      '.......oTttttttTTo.......',
+      '........oTTTTTTTo........',
+      '.........ooooooo.........',
+      ...rows(10, () => '.........................'),
+      '.....tTtTtTtTtTtTtTt.....',
+      '.....TTTTTTTTTTTTTTT.....'])],
+  },
+  kurta: {
+    front: [L('body', 0, 1, 'cloth', ['............T............', '............V............', '............w............', '............V............', '............w............', '............V............', '............T............']), L('body', 0, 16, 'cloth', N_KURTA_HEM)],
+    left: [L('body', 0, 1, 'cloth', ['..........T..............', '..........V..............', '..........w..............', '..........V..............', '..........w..............', '..........V..............']), L('body', 0, 16, 'cloth', N_KURTA_HEM_L)],
+    back: [L('body', 0, 16, 'cloth', N_KURTA_HEM)],
+  },
+  denim: {
+    front: [L('body', 0, 0, 'cloth', [
+      '......ooooo...ooooo......',
+      '.....uuuuvvvvvvvuuuu.....',
+      '.....uuuTovvvvvoTuuu.....',
+      '......uTT.ovvvo.TTu......',
+      '.....TTTTT.vvv.TTTTT.....',
+      '.....T.w.T.vvv.T.w.T.....',
+      '.....TTTTT.vvv.TTTTT.....',
+      '...........vvv...........',
+      '...........vvv...........',
+      '...........vvv...........',
+      '...........vvv...........',
+      '...........vvv...........',
+      '...........vvv...........',
+      '...........vvv...........',
+      '...........vVv...........',
+      '...........VVV...........',
+      '.....tTtTtTtVtTtTtTt.....',
+      '.....TTTTTTTTTTTTTTT.....'])],
+    left: [L('body', 0, 0, 'cloth', [
+      '.......ooooo.ooooo.......',
+      '......uuvvvvvvvuuu.......',
+      '......uTovvvvvoTuu.......',
+      '.......T.ovvvo.TT........',
+      '.........vvv.TTTTT.......',
+      '.........vvv.T.w.T.......',
+      '.........vvv.TTTTT.......',
+      ...rows(8, () => '.........vvv.............'),
+      '.........vVv.............',
+      '.........VVV.............',
+      '......tTtVtTtTtTtT.......',
+      '......TTTTTTTTTTTT.......'])],
+    back: [L('body', 0, 0, 'cloth', ['......ooooooooooooo......', '.....uuuuuuuuuuuuuuu.....', '.....TTTTTTTTTTTTTTT.....', ...rows(11, j => j === 4 ? '.....T.............T.....' : '.........................'),
+      '.......T.........T.......', '.......T.........T.......', '.....tTtTtTtTtTtTtTt.....', '.....TTTTTTTTTTTTTTT.....'])],
+  },
+  shawl: {
+    front: [L('body', 0, 1, 'cloth', ['.....uttSSSSSSSSStT......', '.....uttTSSSSSSSTtT......', '......utTTSSSSSTTt.......', '.......utTTSSSTTt........']),
+      L('body', 0, 15, 'cloth', ['.....wTwTwTwTwTwTwTw.....', '.....w.w.w.w.w.w.w.w.....', '.....w.w.w.w.w.w.w.w.....', '......w...w...w...w......'])],
+    left: [L('body', 0, 15, 'cloth', ['......wTwTwTwTwTwTw......', '......w.w.w.w.w.w.w......', '......w.w.w.w.w.w.w......', '.......w...w...w.........'])],
+    back: [L('body', 0, 15, 'cloth', ['.....wTwTwTwTwTwTwTw.....', '.....w.w.w.w.w.w.w.w.....', '.....w.w.w.w.w.w.w.w.....', '......w...w...w...w......'])],
+  },
+  jacket: {
+    front: [L('body', 0, -1, 'cloth', [
+      '......ottto...ottto......',
+      '.....ouuuto...otuuuo.....',
+      '.....uuuuTo...oTtuuu.....',
+      '.....uuttT.....TttTT.....',
+      '.....uttTvw...vvTttT.....',
+      '.....uttTvwvvvvvTttT.....',
+      '.....uttTwvvvvvvTttT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uTtTvvvvvvvTtTT.....',
+      '.....utTTvvvvvvvTTtT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uttTvvvvvvvTttT.....',
+      '.....uttTVVVVVVVTttT.....',
+      '.....uuuTuuuuuuuTuuu.....',
+      '.....TTTTTTTTTTTTTTT.....'])],
+    left: [L('body', 0, -1, 'cloth', [
+      '.......ottto.ottto.......',
+      '......ouuuto.otuuo.......',
+      '......uuuuTo.oTuuu.......',
+      '......uuttT...TtTT.......',
+      '......uttTvw.vTttT.......',
+      '......uttTvvvvTttT.......',
+      ...rows(5, () => '......uttTvvvvTttT.......'),
+      '......uTtTvvvvTttT.......',
+      '......utTTvvvvTttT.......',
+      '......uttTvvvvTttT.......',
+      '......uttTvvvvTttT.......',
+      '......uttTvvvvTttT.......',
+      '......uttTVVVVTttT.......',
+      '......uuuTuuuuTuuu.......',
+      '......TTTTTTTTTTTT.......'])],
+    back: [L('body', 0, -1, 'cloth', ['......ooooooooooooo......', '.....ouuuuuuuuuuuuuo.....', '.....uTTTTTTTTTTTTTT.....', ...rows(14, j => j === 3 ? '.....ut............T.....' : '.........................'), '.....uuuuuuuuuuuuuuu.....', '.....TTTTTTTTTTTTTTT.....'])],
+  },
+  shirt: {
+    front: [L('body', 0, 0, 'cloth', [
+      '.......ooo.....ooo.......',
+      '......owwwoSSSSowwwo.....',
+      '......owwwwoSSowwwwo.....',
+      '.......owwwwoowwwwo......',
+      '............T............',
+      '.......TTTT.T............',
+      '.......T..T.v............',
+      '.......TTTT.T............',
+      '............T............',
+      '............v............',
+      '............T............',
+      '............T............',
+      '............v............',
+      '............T............',
+      '............T............',
+      '............v............'])],
+    left: [L('body', 0, 0, 'cloth', [
+      '........ooo...ooo........',
+      '.......owwwoSSowwo.......',
+      '.......owwwwoowwwo.......',
+      '........owwwwwwwo........',
+      '..........T..............',
+      '..........T..TTTT........',
+      '..........v..T..T........',
+      '..........T..TTTT........',
+      '..........T..............',
+      '..........v..............',
+      '..........T..............', '..........T..............', '..........v..............', '..........T..............', '..........T..............', '..........v..............'])],
+    back: [L('body', 0, 0, 'cloth', ['......ooooooooooooo......', '.....owwwwwwwwwwwwwo.....', '.....uwwwwwwwwwwwwwT.....', '.....TTTTTTTTTTTTTTT.....'])],
+  },
+  vest: {
+    front: [L('body', 0, 0, 'cloth', [
+      '.......ooo.....ooo.......',
+      '......owwwoSSSSowwwo.....',
+      '.....uowwwwoSSowwwwoT....'.slice(0, 25),
+      '.....utowwwwvvwwwwoTT....'.slice(0, 25),
+      '.....uttTwwvvvwwTtTT.....',
+      '.....utttTwvvvwTttTT.....',
+      '.....uttttTwvwTtttTT.....',
+      '.....utttttTwTttttTT.....',
+      '.....uttttttTtttttTT.....',
+      ...rows(6, () => '.........................'),
+      '.....TtTtTtTtTtTtTtT.....',
+      '.....tTtTtTtTtTtTtTt.....'])],
+    left: [L('body', 0, 0, 'cloth', [
+      '........ooo...ooo........',
+      '.......owwwoSSowwo.......',
+      '......uowwwwoowwoT.......',
+      '......utowwvvwwoTT.......',
+      '......uttTwvvwTtTT.......',
+      '......utttTwvTttTT.......',
+      '......uttttTwTttTT.......',
+      '......utttttTtttTT.......',
+      ...rows(7, () => '.........................'),
+      '......TtTtTtTtTtTT.......',
+      '......tTtTtTtTtTtT.......'])],
+    back: [L('body', 0, 0, 'cloth', ['......ooooooooooooo......', '.....owwwwwwwwwwwwwo.....', '.....uTTTTTTTTTTTTTT.....', ...rows(12, () => '.........................'), '.....TtTtTtTtTtTtTtT.....', '.....tTtTtTtTtTtTtTt.....'])],
+  },
+  jainsem: {
+    front: [L('body', 0, 0, 'cloth', ['......oTTo.....oTTo......', '.....oTwwTo...oTwwTo.....', '......oTTo.....oTTo......']), L('body', 0, 16, 'cloth', N_JAINSEM_HEM)],
+    left: [L('body', 0, 0, 'cloth', ['.............oTTo........', '............oTwwTo.......', '.............oTTo........']), L('body', 0, 16, 'cloth', N_JAINSEM_HEM_L)],
+    back: [L('body', 0, 16, 'cloth', N_JAINSEM_HEM)],
+  },
+};
+N_TOPS.work = N_TOPS.shirt;
+
+const N_EXTRAS = {
+  headphones: {
+    front: [L('head', 0, -4, 'ears', [
+      '.......ooooooooooo.......',
+      '....oooaaaaacaaaaaooo....',
+      '..ooaaao.........oaaAoo..',
+      '.oaao...............oAAo.',
+      '.oao.................oAo.',
+      ...rows(10, () => 'oao...................oAo'),
+      'oaao.................oaAo'.slice(0, 25),
+      'oaaao...............oaAAo',
+      'ocaao...............oaaAo',
+      'ocaao...............oaaAo',
+      'oaaao...............oaAAo',
+      'oaaao...............oaAAo',
+      '.ooo.................ooo.'])],
+    left: [L('head', 0, -4, 'ears', [
+      '........ooooooooooo......',
+      '.....oooaaaaacaaaaaooo...',
+      '...ooaaao.........oaaAoo.',
+      '..oaao...............oAAo',
+      '..oao.................oAo',
+      '.......................oo',
+      ...rows(9, () => '.........................'),
+      '..............ooooo......',
+      '.............oaaaaAo.....',
+      '.............ocaaaAo.....',
+      '.............ocaaAAo.....',
+      '.............oaaaAAo.....',
+      '..............ooooo......'])],
+    back: [L('head', 0, -4, 'ears', [
+      '.......ooooooooooo.......',
+      '....oooaaaaacaaaaaooo....',
+      '..ooaaao.........oaaAoo..',
+      '.oaao...............oAAo.',
+      '.oao.................oAo.',
+      ...rows(11, () => 'oao...................oAo'),
+      'oaaao...............oaAAo',
+      'oaaao...............oaaAo',
+      'oaaao...............oaaAo',
+      'oaaao...............oaAAo',
+      'oaaao...............oaAAo',
+      '.ooo.................ooo.'])],
+  },
+  glasses: {
+    front: [L('head', 0, 11, 'ears', ['.....AAAAA.....AAAAA.....', '.AAAA...AAAAAAA...AAAA...', '.....A...A.....A...A.....', '.....A..cA.....A..cA.....', '.....AAAAA.....AAAAA.....'])],
+    left: [L('head', 0, 11, 'ears', ['..AAAA...AAAAA...........', '..A..AAAAA...AAAAAA......', '..A..A..A...cA...........'.slice(0, 25), '..A.cA..A..c.A...........'.slice(0, 25), '..AAAA...AAAAA...........'])],
+    back: [L('head', 0, 13, 'ears', ['.A.....................A.'])],
+  },
+  muffler: {
+    front: [L('body', 0, -2, 'neck', [
+      '.......ooooooooooo.......',
+      '......oacccaaaaaaAo......',
+      '.....oaaaaaaaaaaaAAo.....',
+      '.....oaaaaaaaaaaAAAo.....',
+      '......ooAAaaaaaAAoo......',
+      '..........oaaAAo.........',
+      '..........oaaaAo.........',
+      '..........oaaaAo.........',
+      '..........oaaaAo.........',
+      '..........oaaaAo.........',
+      '..........oaaaAo.........',
+      '..........oaaAAo.........',
+      '..........oyxyxo.........',
+      '..........y.y.y..........'])],
+    left: [L('body', 0, -2, 'neck', [
+      '........oooooooooo.......',
+      '.......oacccaaaaaAo......',
+      '......oaaaaaaaaaaAAo.....',
+      '......oaaaaaaaaaAAAo.....',
+      '.......oaaAAAAAAAoo......',
+      '.......oaaAo.............',
+      '.......oaaAo.............',
+      '.......oaaAo.............',
+      '.......oaaAo.............',
+      '.......oaaAo.............',
+      '.......oaaAo.............',
+      '.......oyxyo.............',
+      '.......y.y...............'])],
+    back: [L('body', 0, -2, 'neck', [
+      '.......ooooooooooo.......',
+      '......oacccaaaaaaAo......',
+      '.....oaaaaaaaaaaaAAo.....',
+      '.....oaaaaaaaaaaAAAo.....',
+      '......ooooooooooooo......'])],
+  },
+};
+const N_FACE = {
+  beard: {
+    front: [L('head', 0, 13, 'face', [
+      '.H.....................H.',
+      '.HH...................HH.',
+      '.hH...................Hh.',
+      '.hhH......HHHHH......Hhh.',
+      '.ohhh....Hh...hH....hhHo.',
+      '..ohhhh...........hhhHo..',
+      '...ohhhhhhh...hhhhhHHo...',
+      '....oohhhhhhhhhhhHHoo....',
+      '......oooHhhhHHHooo......'])],
+    left: [L('head', 0, 13, 'face', [
+      '.........................',
+      '.........................',
+      '...............H.........',
+      '.....HHHH.....hH.........',
+      '.o..Hh..hH..hhhH.........',
+      '..o.......hhhhH..........',
+      '...ohhh..hhhhHo..........',
+      '....oohhhhhHHo...........',
+      '......oooHHHo............'])],
+  },
+  tache: {
+    front: [L('head', 0, 16, 'face', ['.........HHHHHHH.........', '.........H.....H.........'])],
+    left: [L('head', 0, 16, 'face', ['....HHHHHH...............', '....H....................'])],
+  },
+};
+// props, near: the walker's umbrella and the basket are drawn at far size only (PIXEL.md); near shows the person without
+
+const NEAR = {
+  W: 48, H: 72, cx: 23, x: 11, stride: 4, shadow: [25, 7], avatar: 36,
+  front: {
+    head: { m: N_HEAD_M, f: N_HEAD_F }, body: { m: N_BODY_M, f: N_BODY_F },
+    arms: { down: N_ARMS_DOWN, wave0: N_WAVE(0), wave1: N_WAVE(1) }, legs: N_LEGS,
+    off: { wave0: [-6, -12], wave1: [-6, -12] }, over: { wave0: 1, wave1: 1 },
+  },
+  left: {
+    head: { m: N_HEAD_L, f: N_HEAD_LF }, body: { m: N_BODY_L, f: N_BODY_LF },
+    arms: { ...N_ARMS_L, wave0: N_WAVE_L(0), wave1: N_WAVE_L(1) }, legs: N_LEGS_L,
+    off: { wave0: [0, -13], wave1: [0, -13] }, over: { wave0: 1, wave1: 1 },
+  },
+  back: {
+    head: { m: faceless(N_HEAD_M, N_FACELESS), f: faceless(N_HEAD_M, N_FACELESS) }, body: { m: N_BODY_B, f: N_BODY_BF },
+    arms: { down: N_ARMS_DOWN, cig: N_CIG, drag0: N_DRAG0, drag1: N_DRAG1 }, legs: N_LEGS, off: { drag1: [0, -7] },
+  },
+  ghostHead: N_HEAD_GHOST,
+  hair: N_HAIR, tops: N_TOPS, extras: N_EXTRAS, face: N_FACE, props: {},
+};
+
+/* ======================================================================================================================
+   FAR's drawings (they were the near size, 44 px, until the grid went to 360 rows): cell 32 x 48, figure centred on
+   column 15, feet on the bottom row, parts 17 wide at x 7. FAR below takes five flat rows out.
+   ==================================================================================================================== */
+const F_HEAD_M = [
   '.....ooooooo.....',
   '...oosssssssoo...',
   '..ossssssssssso..',
@@ -58,8 +808,8 @@ const N_HEAD_M = [
   '...osssssssSSo...',
   '....ooossSooo....',
   '......oSSSo......'];
-const N_HEAD_F = N_HEAD_M.map((r, j) => j === 10 ? 'oSseWesssssWeeSSo' : r);
-const N_HEAD_L = [
+const F_HEAD_F = F_HEAD_M.map((r, j) => j === 10 ? 'oSseWesssssWeeSSo' : r);
+const F_HEAD_L = [
   '.....ooooooo.....',
   '...oosssssssoo...',
   '..ossssssssssso..',
@@ -78,8 +828,8 @@ const N_HEAD_L = [
   '...osssssssSo....',
   '....oooosSSoo....',
   '......oSSSo......'];
-const N_HEAD_LF = N_HEAD_L.map((r, j) => j === 10 ? '.osesssWeesSSsSo.' : r);
-const N_BODY_M = [
+const F_HEAD_LF = F_HEAD_L.map((r, j) => j === 10 ? '.osesssWeesSSsSo.' : r);
+const F_BODY_M = [
   '....ooooooooo....',
   '...outTSSSTtTo...',
   '...outtTSTttTo...',
@@ -92,7 +842,7 @@ const N_BODY_M = [
   '...outtttttTTo...',
   '...outtttttTTo...',
   '...oTTTTTTTTTo...'];
-const N_BODY_F = [
+const F_BODY_F = [
   '....ooooooooo....',
   '...outSSSSStTo...',
   '...outtSSSttTo...',
@@ -105,7 +855,7 @@ const N_BODY_F = [
   '...outtttttTTo...',
   '...outtttttTTo...',
   '...oTTTTTTTTTo...'];
-const N_BODY_L = [
+const F_BODY_L = [
   '.....ooooooo.....',
   '....ouTSSSTto....',
   '....outTSTtTo....',
@@ -118,8 +868,8 @@ const N_BODY_L = [
   '....outtttTTo....',
   '....outtttTTo....',
   '....oTTTTTTTo....'];
-const N_BODY_LF = N_BODY_L.map((r, j) => j === 1 ? '....ouSSSSSto....' : j === 2 ? '....outSSStTo....' : j === 6 || j === 7 ? '.....ottttTo.....' : r);
-const N_BODY_B = [
+const F_BODY_LF = F_BODY_L.map((r, j) => j === 1 ? '....ouSSSSSto....' : j === 2 ? '....outSSStTo....' : j === 6 || j === 7 ? '.....ottttTo.....' : r);
+const F_BODY_B = [
   '....ooooooooo....',
   '...outtSSSttTo...',
   '...outttttttTo...',
@@ -132,9 +882,9 @@ const N_BODY_B = [
   '...outtttttTTo...',
   '...outtttttTTo...',
   '...oTTTTTTTTTo...'];
-const N_BODY_BF = N_BODY_B.map((r, j) => j === 6 || j === 7 ? '....ottttttTo....' : r);
+const F_BODY_BF = F_BODY_B.map((r, j) => j === 6 || j === 7 ? '....ottttttTo....' : r);
 
-const N_ARMS_DOWN = [
+const F_ARMS_DOWN = [
   '.................',
   '.oo...........oo.',
   'oEdo.........odDo',
@@ -149,30 +899,8 @@ const N_ARMS_DOWN = [
   'olso.........osSo',
   'osso.........osSo',
   '.oo...........oo.'];
-// the cigarette, from behind (the ghost, sitting): his right hand (the viewer's right) at rest with it, and the drag, the
-// hand rising to his mouth. Columns 13-20 of a 21-wide arms map; the left arm hangs as in N_ARMS_DOWN. `top` is the map's
-// first row relative to the body's top. The tip is G; Z lights beside it when the ember swells.
-const smokeArms = (top, right) => [...Array(14 - top)].map((_, j) => {
-  const r = j + top, down = N_ARMS_DOWN[r] || '.................';
-  return (r >= 0 ? down.slice(0, 13) : '.............') + (right[j] ?? (r >= 0 && !Array.isArray(right) ? down.slice(13) + '....' : '........'));
-});
-const N_CIG = smokeArms(0, { 10: 'ofFo.Z..', 11: 'osSoWG..' });
-// the hand goes up in front of him (hidden), so only the upper arm shows; then it's at his mouth, the elbow out
-const N_DRAG0 = smokeArms(0, ['........', '.oo.....', 'odDo....', 'odDo....', 'odDo....', 'ofFo....', 'ofFo....', 'oFFo....', '.oo.....']);
-const N_DRAG1 = smokeArms(-4, [
-  '..oo..Z.',
-  '.olsoWG.',
-  '.osSo...',
-  '..ogfo..',
-  '...ogfo.',
-  '.oooogfo',
-  'odDDDEdo',
-  'odDDDDdo',
-  '.oooooo.']);
-// him in ink, from behind: a clean neck (two lines) instead of the jaw's edges, which read as dashes in line only
-const N_HEAD_GHOST = faceless(N_HEAD_M, [12, 9]).map((r, j) => j >= 15 ? '......oSSSo......' : r);
 // waving: the arm on the viewer's left goes up beside the head (20 wide at x 1; 8 rows above the body)
-const N_WAVE = hand => [
+const F_WAVE = hand => [
   ...(hand ? [
     '..oo................',
     '.olso...............',
@@ -194,7 +922,7 @@ const N_WAVE = hand => [
   '........odo.......oo',
   '........o.o......odD',
   '..................od'];
-const N_ARMS_L = {
+const F_ARMS_L = {
   down: [
     '.................',
     '..oo.......oo....',
@@ -238,7 +966,7 @@ const N_ARMS_L = {
     '.oo..........oo..'],
 };
 // waving at the taxi: the near arm up past the back of the head (21 wide at x 7, 8 rows above the body)
-const N_WAVE_L = hand => [
+const F_WAVE_L = hand => [
   hand ? '.................oo..' : '..................oo.',
   hand ? '................olso.' : '.................olso',
   hand ? '................osSo.' : '.................osSo',
@@ -261,7 +989,7 @@ const N_WAVE_L = hand => [
   '.osSo................',
   '..oo.................'];
 
-const N_LEGS = {
+const F_LEGS = {
   stand: [
     '...oqpppppppPo...',
     '...oqpppPpppPo...',
@@ -326,7 +1054,7 @@ const N_LEGS = {
     '...ooooooooooo...'],
 };
 // three-quarter, facing left: 19 wide at x 6. Contact frames are a row shorter, so the body dips.
-const N_LEGS_L = {
+const F_LEGS_L = {
   stand: [
     '....oqpppppppPo....',
     '....oqpppPpppPo....',
@@ -393,7 +1121,7 @@ const N_LEGS_L = {
 };
 
 // ---- near overlays ----
-const N_HAIR = {
+const F_HAIR = {
   short: {
     front: [L('head', 0, -1, 'hair', [
       '....ooooooooo....',
@@ -674,12 +1402,12 @@ const N_HAIR = {
 };
 
 // the top's details, on the body (the colour of a top is its palette, so these only add what a palette can't)
-const N_KURTA_HEM = ['...outtttttTTo...', '...outtttttTTo...', '...outtttttTTo...', '...outttttTTTo...', '...outttttTTTo...', '..ouuttttttTTTo..', '..oTTTTTTTTTTTo..', '...ooooooooooo...'];
-const N_KURTA_HEM_L = ['....outtttTTo....', '....outtttTTo....', '....outtttTTo....', '....outttTTTo....', '....outttTTTo....', '...ouuttttTTTo...', '...oTTTTTTTTTo...', '....ooooooooo....'];
+const F_KURTA_HEM = ['...outtttttTTo...', '...outtttttTTo...', '...outtttttTTo...', '...outttttTTTo...', '...outttttTTTo...', '..ouuttttttTTTo..', '..oTTTTTTTTTTTo..', '...ooooooooooo...'];
+const F_KURTA_HEM_L = ['....outtttTTo....', '....outtttTTo....', '....outtttTTo....', '....outttTTTo....', '....outttTTTo....', '...ouuttttTTTo...', '...oTTTTTTTTTo...', '....ooooooooo....'];
 const hem = (mid, edge, end, n) => [...Array(n)].map((_, j) => j === n - 1 ? end : j === n - 2 ? edge : mid);
-const N_JAINSEM_HEM = hem('...outtttttTTo...', '...oTTTTTTTTTo...', '...ooooooooooo...', 10);
-const N_JAINSEM_HEM_L = hem('....outtttTTo....', '....oTTTTTTTo....', '....oooooooo.....', 10);
-const N_TOPS = {
+const F_JAINSEM_HEM = hem('...outtttttTTo...', '...oTTTTTTTTTo...', '...ooooooooooo...', 10);
+const F_JAINSEM_HEM_L = hem('....outtttTTo....', '....oTTTTTTTo....', '....oooooooo.....', 10);
+const F_TOPS = {
   hoodie: {
     front: [L('body', 0, -1, 'cloth', [
       '...ooo.....ooo...',
@@ -722,9 +1450,9 @@ const N_TOPS = {
       '....tTtTtTtTt....'])],
   },
   kurta: {
-    front: [L('body', 0, 1, 'cloth', ['........T........', '........V........', '........w........', '........V........', '........w........']), L('body', 0, 11, 'cloth', N_KURTA_HEM)],
-    left: [L('body', 0, 1, 'cloth', ['.......T.........', '.......V.........', '.......w.........', '.......V.........', '.......w.........']), L('body', 0, 11, 'cloth', N_KURTA_HEM_L)],
-    back: [L('body', 0, 11, 'cloth', N_KURTA_HEM)],
+    front: [L('body', 0, 1, 'cloth', ['........T........', '........V........', '........w........', '........V........', '........w........']), L('body', 0, 11, 'cloth', F_KURTA_HEM)],
+    left: [L('body', 0, 1, 'cloth', ['.......T.........', '.......V.........', '.......w.........', '.......V.........', '.......w.........']), L('body', 0, 11, 'cloth', F_KURTA_HEM_L)],
+    back: [L('body', 0, 11, 'cloth', F_KURTA_HEM)],
   },
   denim: {
     front: [L('body', 0, 1, 'cloth', [
@@ -798,14 +1526,14 @@ const N_TOPS = {
     back: [L('body', 0, 1, 'cloth', ['....uwwwwwwwT....']), L('body', 0, 10, 'cloth', ['....TtTtTtTtT....'])],
   },
   jainsem: {
-    front: [L('body', 0, 1, 'cloth', ['....oTo...oTo....', '....oTo...oTo....']), L('body', 0, 11, 'cloth', N_JAINSEM_HEM)],
-    left: [L('body', 0, 11, 'cloth', N_JAINSEM_HEM_L)],
-    back: [L('body', 0, 11, 'cloth', N_JAINSEM_HEM)],
+    front: [L('body', 0, 1, 'cloth', ['....oTo...oTo....', '....oTo...oTo....']), L('body', 0, 11, 'cloth', F_JAINSEM_HEM)],
+    left: [L('body', 0, 11, 'cloth', F_JAINSEM_HEM_L)],
+    back: [L('body', 0, 11, 'cloth', F_JAINSEM_HEM)],
   },
 };
-N_TOPS.work = N_TOPS.shirt;
+F_TOPS.work = F_TOPS.shirt;
 
-const N_EXTRAS = {
+const F_EXTRAS = {
   headphones: {
     front: [L('head', 0, -2, 'ears', [
       '.....ooooooo.....',
@@ -891,7 +1619,7 @@ const N_EXTRAS = {
       '.....ooooooo.....'])],
   },
 };
-const N_FACE = {
+const F_FACE = {
   beard: {
     front: [L('head', 0, 13, 'face', [
       '..h....hhh....H..',
@@ -909,210 +1637,73 @@ const N_FACE = {
     left: [L('head', 0, 13, 'face', ['.....HHHH........'])],
   },
 };
-// props, near: the walker's umbrella and the basket are drawn at far size only (PIXEL.md); near shows the person without
 
-const NEAR = {
+const FAR_SRC = {
   W: 32, H: 48, cx: 15, x: 7, stride: 3,
   front: {
-    head: { m: N_HEAD_M, f: N_HEAD_F }, body: { m: N_BODY_M, f: N_BODY_F },
-    arms: { down: N_ARMS_DOWN, wave0: N_WAVE(0), wave1: N_WAVE(1) }, legs: N_LEGS,
+    head: { m: F_HEAD_M, f: F_HEAD_F }, body: { m: F_BODY_M, f: F_BODY_F },
+    arms: { down: F_ARMS_DOWN, wave0: F_WAVE(0), wave1: F_WAVE(1) }, legs: F_LEGS,
     off: { wave0: [-6, -8], wave1: [-6, -8] }, over: { wave0: 1, wave1: 1 },
   },
   left: {
-    head: { m: N_HEAD_L, f: N_HEAD_LF }, body: { m: N_BODY_L, f: N_BODY_LF },
-    arms: { ...N_ARMS_L, wave0: N_WAVE_L(0), wave1: N_WAVE_L(1) }, legs: N_LEGS_L,
+    head: { m: F_HEAD_L, f: F_HEAD_LF }, body: { m: F_BODY_L, f: F_BODY_LF },
+    arms: { ...F_ARMS_L, wave0: F_WAVE_L(0), wave1: F_WAVE_L(1) }, legs: F_LEGS_L,
     off: { stand: [-1, 0], w0: [-1, 0], w1: [-1, 0], w2: [-1, 0], w3: [-1, 0], wave0: [0, -8], wave1: [0, -8] }, over: { wave0: 1, wave1: 1 },
   },
   back: {
-    head: { m: faceless(N_HEAD_M, [12, 9]), f: faceless(N_HEAD_M, [12, 9]) }, body: { m: N_BODY_B, f: N_BODY_BF },
-    arms: { down: N_ARMS_DOWN, cig: N_CIG, drag0: N_DRAG0, drag1: N_DRAG1 }, legs: N_LEGS, off: { drag1: [0, -4] },
+    head: { m: faceless(F_HEAD_M, [12, 9]), f: faceless(F_HEAD_M, [12, 9]) }, body: { m: F_BODY_B, f: F_BODY_BF },
+    arms: { down: F_ARMS_DOWN }, legs: F_LEGS, off: {},
   },
-  hair: N_HAIR, tops: N_TOPS, extras: N_EXTRAS, face: N_FACE, props: {},
+  hair: F_HAIR, tops: F_TOPS, extras: F_EXTRAS, face: F_FACE, props: {},
 };
 
 /* ======================================================================================================================
-   FAR: about 26 px standing. Cell 24 x 34, figure centred on column 11, parts 11 wide at x 6.
+   FAR: about 38 px standing. Cell 32 x 48, figure centred on column 15, parts 17 wide at x 7. These are the drawings
+   above, two skull rows, two body rows and a shin row shorter: every dropped row is a flat run, so nothing is lost.
    ==================================================================================================================== */
-const F_HEAD = [
-  '...ooooo...',
-  '.oosssssoo.',
-  'ossssssssSo',
-  'ossssssssSo',
-  'ossssssssSo',
-  'ossesssesSo',
-  'osrssmssrSo',
-  '.osssssSSo.',
-  '..ooosSoo..',
-  '....oSo....'];
-const F_HEAD_L = [
-  '...ooooo...',
-  '.oosssssoo.',
-  'ossssssssSo',
-  'ossssssssSo',
-  'ossssssssSo',
-  'osessesSsSo',
-  'ossmsrsSsSo',
-  '.ossssSSSo.',
-  '..oooSSoo..',
-  '....oSo....'];
-const F_BODY = ['..ooooooo..', '..ouTSTto..', '..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..oTTTTTo..'];
-const F_BODY_L = ['..ooooooo..', '..oTSStTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..oTTTTTo..'];
-const F_BODY_B = ['..ooooooo..', '..outSttTo.', '..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '..oTTTTTo..'];
-const F_ARMS = { down: ['...........', '.o.......o.', 'oEo.....oDo', 'oEo.....oDo', 'ogo.....oFo', 'ogo.....oFo', 'ogo.....oFo', 'oso.....oSo', '.o.......o.'] };
-const F_ARMS_L = {
-  down: ['...........', '.o.....o...', 'odo...oEo..', 'odo...oEo..', 'oFo...ogo..', 'oFo...ogo..', 'oFo...ogo..', 'oSo...oso..', '.o.....o...'],
-  fwd: ['...........', '.......o...', '......oEo..', '......oEo..', '.....ogo...', '.....ogo...', '....ogo....', '....oso....', '.....o.....'],
-  bwd: ['...........', '.o.....o...', 'odo...oEo..', 'odo...oEo..', 'oFo....ogo.', 'oFo....ogo.', 'oFo.....ogo', 'oSo.....oso', '.o.......o.'],
-  hold: ['...........', '.o.....o...', 'odo...oEo..', 'odo...oEoo.', 'oFo...oEso.', 'oFo...ogoo.', 'oFo...oo...', 'oSo........', '.o.........'],
-  wave0: ['.........oo', '........oso', '........ogo', '........ogo', '.o.....oEo.', 'odo...oEo..', 'odo...oo...', 'oFo........', 'oFo........', 'oFo........', 'oSo........', '.o.........'],
-  wave1: ['..........o', '.........os', '........ogo', '........ogo', '.o.....oEo.', 'odo...oEo..', 'odo...oo...', 'oFo........', 'oFo........', 'oFo........', 'oSo........', '.o.........'],
-};
-const F_HOLD = ['...........', '.o.......o.', 'oEo.....oDo', 'oEo.....oDo', 'ogo....osFo', 'ogo.....oo.', 'ogo........', 'oso........', '.o.........'];
-const F_WAVE = hand => [hand ? 'oo.........' : '.oo........', hand ? 'oso........' : 'oso........', 'ogo........', 'ogo........', '.oEo.....o.', '..oEo...oDo', '...oo...oDo', '........oFo', '........oFo', '........oFo', '........oSo', '.........o.'];
-const F_LEGS = {
-  stand: ['..oqpppPo..', '..oqpopPo..', '..oqpopPo..', '..oqpopPo..', '..oqpopPo..', '..oPPoPPo..', '.obbbobbBo.', '..ooo.ooo..'],
-  liftL: ['..oqpppPo..', '..oqpopPo..', '..oqpopPo..', '..oqpopPo..', '..oPPopPo..', '.obbboPPo..', '..oooobbBo.', '......ooo..'],
-  liftR: ['..oqpppPo..', '..oqpopPo..', '..oqpopPo..', '..oqpopPo..', '..oqpoPPo..', '..oPPobbBo.', '.obbbooooo.', '..ooo......'],
-  crouch: ['..oqpppPo..', '.oqpo.oPPo.', '.oqpo.oPPo.', '.oPPo.oPPo.', '.obbo.obbo.', '..oo...oo..'],
-  squat: ['.oqppppPPo.', '.oPPo.oPPo.', 'obbbo.obbbo', '.ooo...ooo.'],
-  seat: ['.oqppppPPo.', '.oPPPPPPPo.', '..ooooooo..'],
-};
-const F_LEGS_L = {
-  stand: ['..oqpppPo..', '..oqpopPo..', '..oqpopPo..', '..oqpopPo..', '..oqpopPo..', '..oPPoPPo..', '.obbbobbBo.', '..ooo.ooo..'].map(r => r.slice(1) + '.'),
-  w0: ['..oqpppPo..', '..oqpoPPo..', '.oqpo.oPPo.', '.oqpo.oPPo.', '.opPo.oPPo.', 'obbbo.oBbo.', '.ooo...oo..'],
-  w1: ['..oqpppPo..', '..oqpoPPo..', '..oqpoPPo..', '..oqpoPPo..', '..oqpooPPo.', '..opPo.oBbo', '.obbbo..oo.', '..ooo......'],
-  w2: ['..oqpppPo..', '..opPoqpo..', '.opPo.oqpo.', '.opPo.oqpo.', '.oPPo.opPo.', 'oBbbo.obbo.', '.ooo...oo..'],
-  w3: ['..oqpppPo..', '..opPoqpo..', '..opPoqpo..', '..opPoqpo..', '..opPooqpo.', '..oPPo.obbo', '.oBbbo..oo.', '..ooo......'],
-};
-const F_HAIR = {
-  short: {
-    front: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhhhHHHo', 'oHhHo.oHHHo', 'oH.......Ho'])],
-    left: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhhhHHHo', 'oHo..oHhHHo', '.o.....oHHo', '........Ho.'])],
-    back: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhhhHHHo', 'ohhhhhhHHHo', 'ohhhhhhHHHo', '.ohhhhhHHo.', '..oooooo...'])],
-  },
-  long: {
-    front: [L('head', 0, 7, 'back', ['.HHHHHHHHH.', '.HHHHHHHHH.', '.HHHHHHHHH.', '.HHHHHHHHH.']),
-      L('head', 0, -1, 'hair', ['..ooooooo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhoHHHHo', 'ohHo...oHHo', 'ojH.....HHo', 'ojH.....HHo', 'ojh.....Hho', 'ojho...oHho', 'ohho...oHho', 'ohHo...oHHo', '.oo.....oo.'])],
-    left: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhhhHHHo', 'oHo..ohhHHo', 'oH...ohhHHo', '.o...ohhHHo', '.....ohhHHo', '......ohHHo', '......ohHHo', '......ohHHo', '.......ooo.'])],
-    back: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhhhHHHo', 'ohhhhhhHHHo', 'ojhhhhhHHHo', 'ojhhhhhHHHo', 'ojhhhhhHHHo', 'ohhhhhhHHHo', 'ohhhhhHHHHo', 'ohHhhHhHHHo', '.ooHoHoooo.'])],
-  },
-  bun: {
-    front: [L('head', 0, -3, 'hair', ['....ooo....', '...ojhHo...', '...oHHHo...', '..ooooooo..', '.ohhjhhhHo.', 'ohjhhhhhHHo', 'ohhhhHhhHHo', 'ohhho.oHHHo', 'oHo.....HHo'])],
-    left: [L('head', 0, -2, 'hair', ['.......ooo.', '......ojhHo', '..oooooHHHo', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'oHHhhhhHHHo', '.oooHhhHHHo', '......oHHo.', '.......oo..'])],
-    back: [L('head', 0, -3, 'hair', ['....ooo....', '...ojhHo...', '...oHHHo...', '..ooHHHoo..', '.ohjjhhhHo.', 'ohjhhhhhHHo', 'ohhhhhhhHHo', 'ohhhhhhHHHo', 'ohhhhhhHHHo', 'ohhhhhhHHHo', '.oHhhhHHo..', '..oooooo...'])],
-  },
-  curly: {
-    front: [L('head', 0, -2, 'hair', ['..oo.oo.o..', '.ojhojhojo.', 'ojhhjhhjhHo', 'ohjhhjhhjHo', 'ojhhjhhjHHo', 'ohhhhhhHHHo', 'oHoHoHoHHHo', 'oHo.....oHo', '.o.......o.'])],
-    left: [L('head', 0, -2, 'hair', ['..oo.oo.o..', '.ojhojhojo.', 'ojhhjhhjhHo', 'ohjhhjhhjHo', 'ojhhjhhjHHo', 'ohhhhhhHHHo', 'oHoHoohjHHo', '.o.o.oHhHHo', '......oHHo.', '.......oo..'])],
-    back: [L('head', 0, -2, 'hair', ['..oo.oo.o..', '.ojhojhojo.', 'ojhhjhhjhHo', 'ohjhhjhhjHo', 'ojhhjhhjHHo', 'ohjhhjhhHHo', 'ojhhjhhjHHo', 'ohhhhhhHHHo', 'oHhHhHhHHHo', '.oHoHoHoHo.', '..o.o.o.o..'])],
-  },
-  cap: {
-    front: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ozzkkkkKo.', 'ozkkkzkkKKo', 'okkkkkkKKKo', 'oKKKKKKKKKo', 'ozzzzzzkkko', 'ooooooooooo', 'oH.......Ho'])],
-    left: [L('head', -3, -1, 'hair', ['.....ooooooo..', '....ozzkkkkKo.', '...ozkkkkkkKKo', '...okkkkkkKKKo', '...oKKKKKKKKKo', 'ooozzzzzoHhHHo', 'ozzzzzzo.oHHo.', '.ooooooo...oo.'])],
-    back: [L('head', 0, -1, 'hair', ['..ooooooo..', '.ozzkkkkKo.', 'ozkkkkkkKKo', 'okkkkkkKKKo', 'oKKKooKKKKo', 'ohhHo.oHHHo', 'ohhhhhHHHHo', '.ohhhhHHHo.', '..oooooo...'])],
-  },
-};
-const F_KURTA = ['..outttTo..', '..outttTo..', '..outtTTo..', '.ouuttTTTo.', '.oTTTTTTTo.', '..ooooooo..'];
-const F_JAINSEM = ['..outttTo..', '..outttTo..', '..outttTo..', '..outttTo..', '.ouutttTTo.', '.oTTTTTTTo.', '..ooooooo..'];
-const F_TOPS = {
-  hoodie: { front: [L('body', 0, 0, 'cloth', ['..ooo.ooo..', '...TTTTT...', '....w.w....', '...........', '....TTT....', '...tTtTt...'])], left: [L('body', 0, 0, 'cloth', ['.....oooo..', '....TTTTT..', '....w......'])], back: [L('body', 0, 0, 'cloth', ['...ooooo...', '..oTtttTo..', '...oTTTo...', '....ooo....'])] },
-  kurta: { front: [L('body', 0, 2, 'cloth', ['.....V.....', '.....w.....']), L('body', 0, 8, 'cloth', F_KURTA)], left: [L('body', 0, 2, 'cloth', ['....V......', '....w......']), L('body', 0, 8, 'cloth', F_KURTA)], back: [L('body', 0, 8, 'cloth', F_KURTA)] },
-  denim: { front: [L('body', 0, 1, 'cloth', ['...uvvvu...', '....vvv....', '...TvvvT...', '....vvv....', '....vvv....', '....vvv....', '...tVVVt...'])], left: [L('body', 0, 1, 'cloth', ['...uvvu....', '...vvv.....', '...vvvT....', '...vvv.....', '...vvv.....', '...vvv.....', '...VVVtT...'])], back: [L('body', 0, 1, 'cloth', ['...uuuuu...', '...........', '...TTTTT...'])] },
-  shawl: { front: [L('body', 0, 7, 'cloth', ['...wTwTw...', '...w.w.w...'])], left: [L('body', 0, 7, 'cloth', ['...wTwTw...', '...w.w.w...'])], back: [L('body', 0, 7, 'cloth', ['...wTwTw...', '...w.w.w...'])] },
-  jacket: { front: [L('body', 0, 0, 'cloth', ['...ot.to...', '...uvvvT...', '.....T.....', '.....T.....', '.....T.....', '.....T.....', '.....T.....', '...uuTuu...'])], left: [L('body', 0, 0, 'cloth', ['...ott.....', '...uvvT....', '....T......', '....T......', '....T......', '....T......', '....T......', '...uTuuu...'])], back: [L('body', 0, 0, 'cloth', ['..ottttto..', '...TTTTT...'])] },
-  shirt: { front: [L('body', 0, 1, 'cloth', ['...wwSww...', '.....T.....', '.....v.....', '.....T.....', '.....v.....'])], left: [L('body', 0, 1, 'cloth', ['...wSww....', '....T......', '....v......', '....T......', '....v......'])], back: [L('body', 0, 1, 'cloth', ['...uwwwT...'])] },
-  vest: { front: [L('body', 0, 1, 'cloth', ['...wvSvw...', '...Twvwt...', '....TwT....']), L('body', 0, 7, 'cloth', ['...TtTtT...'])], left: [L('body', 0, 1, 'cloth', ['...wvSw....', '...TwvT....', '....Tw.....']), L('body', 0, 7, 'cloth', ['...TtTtT...'])], back: [L('body', 0, 7, 'cloth', ['...TtTtT...'])] },
-  jainsem: { front: [L('body', 0, 1, 'cloth', ['...o...o...']), L('body', 0, 8, 'cloth', F_JAINSEM)], left: [L('body', 0, 8, 'cloth', F_JAINSEM)], back: [L('body', 0, 8, 'cloth', F_JAINSEM)] },
-};
-F_TOPS.work = F_TOPS.shirt;
-const F_EXTRAS = {
-  headphones: {
-    front: [L('head', 0, -2, 'ears', ['..ooooooo..', '.oaacaaaAo.', 'oao.....oAo', 'oa.......Ao', 'oa.......Ao', 'oa.......Ao', 'oao.....oAo', 'oaao...oAAo', 'ocao...oaAo', '.oo.....oo.'])],
-    left: [L('head', 0, -2, 'ears', ['..ooooooo..', '.oaacaaaAo.', 'oao.....oAo', '.........oo', '...........', '...........', '......ooo..', '.....oaaAo.', '.....ocaAo.', '......ooo..'])],
-    back: [L('head', 0, -2, 'ears', ['..ooooooo..', '.oaacaaaAo.', 'oao.....oAo', 'oa.......Ao', 'oa.......Ao', 'oa.......Ao', 'oao.....oAo', 'oaao...oAAo', 'oaao...oaAo', '.oo.....oo.'])],
-  },
-  glasses: {
-    front: [L('head', 0, 4, 'ears', ['..AAA.AAA..', '..A.AAA.A..', '..AAA.AAA..'])],
-    left: [L('head', 0, 4, 'ears', ['.AAAAAA....', '.A.AA.AA...', '.AAAAAA....'])],
-    back: [L('head', 0, 5, 'ears', ['A.........A'])],
-  },
-  muffler: {
-    front: [L('body', 0, -1, 'neck', ['...ooooo...', '..oacaaAo..', '..oaaaAAo..', '...ooaAo...', '....oaAo...', '....ocyo...', '.....o.....'])],
-    left: [L('body', 0, -1, 'neck', ['...ooooo...', '..oacaaAo..', '..oaaaAAo..', '..oaAoooo..', '..oaAo.....', '..ocyo.....', '...o.......'])],
-    back: [L('body', 0, -1, 'neck', ['...ooooo...', '..oacaaAo..', '..oaaaAAo..', '...ooooo...'])],
-  },
-};
-const F_FACE = {
-  beard: { front: [L('head', 0, 6, 'face', ['.oH.....Ho.', '..oHhhhHo..', '...ooHoo...'])], left: [L('head', 0, 6, 'face', ['.o.H...Ho..', '..oHhhHHo..', '...ooHHo...'])] },
-  tache: { front: [L('head', 0, 6, 'face', ['....HHH....'])], left: [L('head', 0, 6, 'face', ['..HHH......'])] },
-};
-// the walker's black umbrella, held up by the near hand; the basket woman's conical khoh, its strap across her forehead
-const F_CANOPY = [
-  '.......ooooo.......',
-  '.....ooyyxxxoo.....',
-  '...ooyyxxxxxxxoo...',
-  '..oyyxxxxxxxxxxXo..',
-  '.oyxxxxxxxxxxxxXXo.',
-  'oXXXxxxxxxxxxxXXXXo',
-  'oXoooXXXXXXXXXoooXo',
-  '.o...ooooooooo...o.'];
-const F_SHAFT = [...Array(15)].map((_, j) => j === 14 ? '.okoo' : j === 13 ? '.oko.' : '.oKo.').concat(['..oo.']);
+const DROP = { head: [4, 5], body: [4, 9] };
+const dropRows = (map, y0, drop) => map.filter((_, j) => !drop.includes(y0 + j));
+const shift = (y, drop) => y - drop.filter(r => r < y).length;
+function shrink(S) {
+  const ov = list => list.map(o => ({ ...o, y: shift(o.y, DROP[o.on]), map: dropRows(o.map, o.y, DROP[o.on]) }));
+  const deep = (v, f) => Object.fromEntries(Object.entries(v).map(([k, x]) => [k, f(x)]));
+  const view = V => ({
+    ...V, head: deep(V.head, m => dropRows(m, 0, DROP.head)), body: deep(V.body, m => dropRows(m, 0, DROP.body)),
+    arms: Object.fromEntries(Object.entries(V.arms).map(([k, m]) => [k, dropRows(m, (V.off[k] || [0, 0])[1], DROP.body)])),
+    legs: deep(V.legs, m => m.length >= 9 ? m.filter((_, j) => j !== 4) : m),
+  });
+  const kinds = v => deep(v, k => deep(k, ov));
+  return { ...S, front: view(S.front), left: view(S.left), back: view(S.back), hair: kinds(S.hair), tops: kinds(S.tops), extras: kinds(S.extras), face: kinds(S.face) };
+}
+const FAR = shrink(FAR_SRC);
+Object.assign(FAR, { stride: 3, shadow: [17, 5], avatar: 26, ghostHead: null });
+// the umbrella in the near hand (front and three-quarter), held at the chest
+FAR.front.arms.hold = FAR.front.arms.down.map((r, j) => r.slice(0, 9) + (['........', '....oo..', '...odDo.', '...odDo.', '.oooddDo', 'olsffFFo', 'osSoooo.', '.oo.....'][j] || '........'));
+FAR.left.arms.hold = FAR.left.arms.down.map((r, j) => r.slice(0, 7) + (['..........', '....oo....', '...oEdo...', '...oEdo...', '.oogEdo...', 'olsffo....', 'ossSo.....', '.ooo......'][j] || '..........'));
+// the walker's black umbrella (ribs from the apex, a scalloped hem), held up by the near hand; the basket woman's conical
+// khoh, woven, its strap across her forehead
+const F_CANOPY = ['...........ooooo...........', '........oyyxXXXxxxo........', '......oyyxXxxXxxXxXXo......', '....oyyxXxxxXxxxXxxXXXo....',
+  '...oyyXxxxXxxXxxXxxxXXXo...', '..oyxxxxxXxxxXxxxXxxxXXXo..', '.oxXxxxxXxxxxXxxxxXxxxXXXo.', 'oXXXXXXXXXXXXXXXXXXXXXXXXXo', '.oo...oo....oo....oo...oo..'];
+const F_SHAFT = rows(24, j => j === 23 ? '..oo.' : j === 22 ? '.okko' : j === 21 ? '.oko.' : '.oKo.');
 const F_UMBRELLA = {
-  left: [L('body', 6, -11, 'cloth', F_SHAFT), L('body', -1, -18, 'over', F_CANOPY)],
-  front: [L('body', 6, -11, 'cloth', F_SHAFT), L('body', -1, -18, 'over', F_CANOPY)],
-  back: [L('body', 6, -11, 'back', F_SHAFT), L('body', -1, -18, 'over', F_CANOPY)],
+  left: [L('body', 6, -17, 'cloth', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
+  front: [L('body', 7, -17, 'cloth', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
+  back: [L('body', 6, -17, 'back', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
 };
 const F_BASKET = {
-  left: [
-    L('body', 2, -6, 'back', [
-      'oooooooooooo',
-      'oyxxxxxxxxXo',
-      'oXXXXXXXXXXo',
-      '.oxyxXxyxXo.',
-      '.oXxXxXxXXo.',
-      '.oxyxXxyxXo.',
-      '..oXxXxXXo..',
-      '..oxyxXxXo..',
-      '..oXxXxXXo..',
-      '...oxyxXo...',
-      '...oXxXXo...',
-      '....oxXo....',
-      '....oXXo....',
-      '.....oo.....']),
-    L('head', 0, 3, 'ears', ['.kkkkkkkkkk', '.........k.', '.........k.'])],
-  front: [
-    L('body', -2, -6, 'back', ['ooooooooooooooo', 'oyxxxxxxxxxxxXo', 'oXXXXXXXXXXXXXo', '.oxyxXxyxXxyxo.', '.oXxXxXxXxXxXo.', '..oxyxXxyxXxo..', '..oXxXxXxXxXo..', '...oxyxXxyxo...', '...oXxXxXxXo...', '....oxyxXxo....']),
-    L('head', 0, 3, 'ears', ['okkkkkkkkko', 'k.........k', 'k.........k', 'k.........k'])],
-  back: [L('body', -3, -7, 'over', [
-    'ooooooooooooooooo',
-    'oyxxxxxxxxxxxxxXo',
-    'oXXXXXXXXXXXXXXXo',
-    '.oxyxXxyxXxyxXxo.',
-    '.oXxXxXxXxXxXxXo.',
-    '..oxyxXxyxXxyXo..',
-    '..oXxXxXxXxXxXo..',
-    '...oxyxXxyxXxo...',
-    '...oXxXxXxXxXo...',
-    '....oxyxXxyxo....',
-    '....oXxXxXxXo....',
-    '.....oxyxXxo.....',
-    '.....oXxXxXo.....',
-    '......oxyxo......',
-    '......oXxXo......',
-    '.......oxo.......',
-    '........o........'])],
+  left: [L('body', 9, -8, 'back', ['oooooooooooooooooo', 'oyyxxxxxxxxxxxxxXo', 'oXXXXXXXXXXXXXXXXo', 'oyxXyyxXyyxXyyxXXo', '.oxXxXxXxXxXxXxXo.', '.oXxXxXxXxXxXxXXo.',
+    '..oyXxyyXxyyXxXo..', '..oXxXxXxXxXxXXo..', '..oxXxXxXxXxXxXo..', '...oyxXyyxXXXXo...', '...oxXxXxXxXxXo...', '....oXxXxXxXXo....', '....oyXxyyXxXo....', '.....oXxXxXXo.....',
+    '.....oxXxXxXo.....', '.....oyxXXXXo.....', '......oxXxXo......', '......oXxXXo......', '.......oXXo.......', '........oo........']),
+    L('head', 0, 6, 'ears', ['..kkkkkkkkkkkkkkk', '...............k.', '...............k.', '...............k.', '..............k..'])],
+  front: [L('body', -3, -12, 'back', ['ooooooooooooooooooooooo', 'oyyxxxxxxxxxxxxxxxxxxXo', 'oXXXXXXXXXXXXXXXXXXXXXo', '.oyxXyyxXyyxXyyxXyXxXo.', '..oxXxXxXxXxXxXxXxXXo..',
+    '...oXxXxXxXxXxXxXxXo...', '....oyXxyyXxyyXxXXo....', '.....oXxXxXxXxXxXo.....', '......oxXxXxXxXXo......', '.......oyxXyXxXo.......', '........oxXxXXo........']),
+    L('head', 0, 6, 'ears', ['okkkkkkkkkkkkkkko', 'k...............k', 'k...............k', 'k...............k', 'k...............k'])],
+  back: [L('body', -4, -10, 'over', ['ooooooooooooooooooooooooo', 'oyyxxxxxxxxxxxxxxxxxxxxXo', 'oXXXXXXXXXXXXXXXXXXXXXXXo', 'oyxXyyxXyyxXyyxXyyxXyXxXo', '.oxXxXxXxXxXxXxXxXxXxXXo.',
+    '..oXxXxXxXxXxXxXxXxXxXo..', '..oyXxyyXxyyXxyyXxyXXXo..', '..oXxXxXxXxXxXxXxXxXxXo..', '...oxXxXxXxXxXxXxXxXXo...', '....oyxXyyxXyyxXyXxXo....', '....oxXxXxXxXxXxXxXXo....',
+    '....oXxXxXxXxXxXxXxXo....', '.....oyXxyyXxyyXxXXo.....', '......oXxXxXxXxXxXo......', '......oxXxXxXxXxXXo......', '......oyxXyyxXyXxXo......', '.......oxXxXxXxXXo.......',
+    '........oXxXxXxXo........', '........oyXxyXXXo........', '........oXxXxXxXo........', '.........oxXxXXo.........', '..........oXxXo..........', '..........oxXXo..........', '...........oo............'])],
 };
-
-const FAR = {
-  W: 24, H: 34, cx: 11, x: 6, stride: 2,
-  front: {
-    head: { m: F_HEAD, f: F_HEAD }, body: { m: F_BODY, f: F_BODY }, arms: { ...F_ARMS, hold: F_HOLD, wave0: F_WAVE(0), wave1: F_WAVE(1) }, legs: F_LEGS,
-    off: { wave0: [-3, -4], wave1: [-3, -4] }, over: { wave0: 1, wave1: 1 },
-  },
-  left: { head: { m: F_HEAD_L, f: F_HEAD_L }, body: { m: F_BODY_L, f: F_BODY_L }, arms: F_ARMS_L, legs: F_LEGS_L, off: { wave0: [0, -4], wave1: [0, -4] }, over: { wave0: 1, wave1: 1 } },
-  back: { head: { m: faceless(F_HEAD), f: faceless(F_HEAD) }, body: { m: F_BODY_B, f: F_BODY_B }, arms: { ...F_ARMS, hold: F_ARMS.down }, legs: F_LEGS, off: {} },
-  hair: F_HAIR, tops: F_TOPS, extras: F_EXTRAS, face: F_FACE, props: { umbrella: F_UMBRELLA, basket: F_BASKET },
-};
+FAR.props = { umbrella: F_UMBRELLA, basket: F_BASKET };
 
 const SIZES = { near: NEAR, far: FAR };
 
@@ -1266,7 +1857,7 @@ export function compose(size, lookIn, view, f = {}) {
   if (look.prop === 'umbrella' && !f.arms?.startsWith('wave') && V.arms.hold) armsKey = 'hold';
   if (look.cig && armsKey === 'down' && V.arms.cig) armsKey = 'cig';
   const arms = V.arms[armsKey] || V.arms.down;
-  const body = V.body[look.build], head = look.ghost && view === 'back' && size === 'near' ? N_HEAD_GHOST : V.head[look.build], off = k => V.off[k] || [0, 0];
+  const body = V.body[look.build], head = look.ghost && view === 'back' && S.ghostHead ? S.ghostHead : V.head[look.build], off = k => V.off[k] || [0, 0];
   const tilt = view === 'back' ? Math.min(f.tilt || 0, size === 'far' ? 1 : 2) : 0;   // looking up: the head drops, the neck goes
   const legsTop = H - legs.length, bodyY = legsTop - body.length + (f.breath || 0), headY = bodyY - head.length + 1 + tilt;
   const hx = S.x + (f.headDx || 0), at = { head: [hx, headY], body: [S.x, bodyY] };
@@ -1329,10 +1920,10 @@ export const preview = look => frameCanvas(look, { size: 'near', view: 'front' }
 export function avatar(look, px = 48) {
   const S = NEAR, buf = compose('near', look, 'front', {}), cols = palette(normalise(look));   // (the ghost has no avatar)
   let top = S.H; for (let k = 0; k < buf.length; k++) if (buf[k]) { top = Math.floor(k / S.W); break; }
-  const cw = 26, ch = 26, src = render(buf, S.W, S.H, cols, 3), out = canvas(px, px), x = out.getContext('2d');
+  const cw = S.avatar, ch = S.avatar, src = render(buf, S.W, S.H, cols, 3), out = canvas(px, px), x = out.getContext('2d');
   const z = Math.max(1, Math.floor(px / cw));
   x.imageSmoothingEnabled = false;
-  x.drawImage(src, S.cx - 12, Math.max(0, top - 1), cw, ch, Math.round((px - cw * z) / 2), Math.round((px - ch * z) / 2), cw * z, ch * z);
+  x.drawImage(src, S.cx + 1 - cw / 2, Math.max(0, top - 1), cw, ch, Math.round((px - cw * z) / 2), Math.round((px - ch * z) / 2), cw * z, ch * z);
   return out;
 }
 export const sizes = Object.fromEntries(Object.entries(SIZES).map(([k, s]) => [k, { w: s.W, h: s.H, foot: [s.cx + .5, s.H], stride: s.stride }]));
@@ -1402,7 +1993,7 @@ export function person(who, { size = 'near' } = {}) {
     vertexShader: VERT, fragmentShader: FRAG,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
-  const sw = size === 'near' ? 17 : 11, sh = size === 'near' ? 5 : 3;
+  const [sw, sh] = S.shadow;
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshBasicMaterial({ map: shadowTex(sw, sh), transparent: true, opacity: .45, depthWrite: false }));
   shadow.position.set(0, 1, -.5); shadow.renderOrder = -1; shadow.visible = !look.ghost;
   // pixel art already: Ink draws these as they are (no smoothing, grade, palette or dither; kit.js Ink.PIXEL_ART_LAYER)

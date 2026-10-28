@@ -177,7 +177,7 @@ let gust = 0, gustTo = 0, windy = false;
 // is one frame pixel: placed at g painting px per sprite px (set in resize), and snapped to the grid every frame.
 const rider = passenger();
 const pair = [folk.person('you'), folk.person(rider || {})];
-const PAIR = { x: .585 * IW, y: RAIL * IH + 26, gap: 21 };   // gap: sprite px between the two
+const PAIR = { x: .585 * IW, y: RAIL * IH + 26, gap: 30 };   // gap: sprite px between the two
 for (const p of pair) { p.face('back'); p.play('sit'); p.obj.renderOrder = 3; p.mesh.renderOrder = 3; p.obj.traverse(o => { o.frustumCulled = false; }); scene.add(p.obj); }
 pair[1].update(.7);   // out of step with you: two heads don't sway as one
 let g = 3;            // painting px per frame pixel, at the rest framing
@@ -390,7 +390,7 @@ function frame(dt) {
   // the star, in frame pixels
   star.visible = starUp;
   if (starUp) {
-    const e = 1 - Math.pow(1 - starK, 1.3), len = (banked ? 70 : 42) * g;   // painting px
+    const e = 1 - Math.pow(1 - starK, 1.3), len = (banked ? 93 : 56) * g;   // painting px (93, 56 frame px)
     const hx = lerp(STAR.from[0], STAR.to[0], e), hy = lerp(STAR.from[1], STAR.to[1], e), dx = STAR.to[0] - STAR.from[0], dy = STAR.to[1] - STAR.from[1], L = Math.hypot(dx, dy);
     const [gx, gy] = toGrid(stage.toWorld(hx, hy, 0, _h)), [tx, ty] = toGrid(stage.toWorld(hx - dx / L * len, hy - dy / L * len, 0, _t));
     starMat.uniforms.uHead.value.set(Math.floor(gx) + .5, Math.floor(gy) + .5);

@@ -20,7 +20,7 @@ const lip = y => {   // the point on the edge at height y (a fraction of the pai
 };
 // where the two of you sit, side by side on the side lip below the taxi, backs to us: you on the edge, legs over the drop,
 // the passenger just in from you (painting px)
-const SEATS = [[-50, -3], [-4, 0]].map(([dx, dy]) => { const [x, y] = lip(.58); return [x + dx, y + dy]; });
+const SEATS = [[-58, -3], [-4, 0]].map(([dx, dy]) => { const [x, y] = lip(.58); return [x + dx, y + dy]; });
 
 export async function load(ctx) {
 const { input, layer, params: QS } = ctx;
@@ -140,7 +140,7 @@ const DEFAULT_LOOK = { build: 'f', skin: 2, hair: 'long', top: 'hoodie', extra: 
 const people = [passenger() || DEFAULT_LOOK, 'you'].map((look, i) => {
   const p = folk.person(look, { size: 'near' });
   p.obj.visible = false; scene.add(p.obj);
-  return { p, state: 'off', t: 0, x: 0, y: 0, seat: SEATS[i], ppx: 2.6 };
+  return { p, state: 'off', t: 0, x: 0, y: 0, seat: SEATS[i], ppx: 1.95 };
 });
 const seat = w => { Object.assign(w, { state: 'seated', x: w.seat[0], y: w.seat[1] }); w.p.face('back'); w.p.play('sit'); };
 // one step of a person: wait for the door, walk to the seat by exactly the stride the frames take, turn, sit
@@ -176,7 +176,7 @@ const EMBER_SLOTS = [39, 40];   // folk's G and Z (the ember and its second pixe
 const tipOf = f => { const b = folk.compose('near', folk.normalise('ghost'), 'back', f), i = Math.max(0, b.indexOf(EMBER_SLOTS[0])); return [i % ghost.w + .5 - ghost.foot[0], ghost.h - (i / ghost.w | 0) - .5]; };
 const TIPS = { sit: tipOf({ legs: 'seat' }), drag: tipOf({ legs: 'seat', arms: 'drag1' }) };
 const G = lip(.7), G_D = stage.depthAt(G[0] - 10, G[1] + 4), GX = G[0] + 4;   // the lip under him; his seat just in from it
-let gppx = 2.6, lastDrag = 0;   // painting px per sprite px where he sits; the last drag's cycle
+let gppx = 1.95, lastDrag = 0;   // painting px per sprite px where he sits; the last drag's cycle
 const tipAt = f => [GX + TIPS[f][0] * gppx, G[1] - TIPS[f][1] * gppx];
 // the flicked ember: 2 px, then 1, on the grid
 const rgb = h => new THREE.Vector3(...[1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255));
@@ -448,7 +448,7 @@ function frame(dt0) {
   // him and the ember
   const seated = phase === 'seated', flick = phase === 'flick';
   const appear = seated ? sstep(...T.ghost, since) : flick ? 1 - sstep(0, 1.5, since) : 0;
-  const ptr = ptrPx(), gh = 30 * gppx;   // he's about 30 px tall, sitting
+  const ptr = ptrPx(), gh = 44 * gppx;   // he's about 44 px tall, sitting
   const near = ptr ? sstep(gh * .5, gh * 2.2, Math.hypot(ptr[0] - GX, ptr[1] - (G[1] - gh * .5))) : 1;   // point at him and he goes
   const gm = ghost.mesh.material.uniforms;
   gm.uOp.value = Math.round(appear * near * 4) / 4;   // fades in steps, like everything on the grid

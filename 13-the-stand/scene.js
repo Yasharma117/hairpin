@@ -16,10 +16,10 @@ const IW = 1774, IH = 887;   // jorabat-dark.jpg in px; the painting lives in th
 const TAXI = [.2 * IW, .775 * IH];   // the taxi's foot on the road, painting px
 // Everything else is laid out in frame px (1 sprite px = 1 frame px), from the taxi's foot, so the taxi and the people
 // keep their sizes to each other on any screen. TAXI_K: frame px per taxi unit (the taxi is 3.4 long, 1.45 tall).
-const TAXI_K = 22;
+const TAXI_K = 32;
 // [right, down] of the taxi's foot, frame px: you at the tail by the stall; the rider in the beam, then up past the nose
 // to the far side and left to the door (opened OPEN_AT px before it). Phones: closer in, so all three fit the frame's width
-const SPOTS = { wide: { you: [-52, 6], rider: [80, 7], far: [80, -9], door: [6, -9] }, narrow: { you: [-47, 6], rider: [56, 8], far: [56, -9], door: [6, -9] } }, OPEN_AT = 14;
+const SPOTS = { wide: { you: [-76, 9], rider: [116, 10], far: [116, -13], door: [9, -13] }, narrow: { you: [-68, 9], rider: [81, 12], far: [81, -13], door: [9, -13] } }, OPEN_AT = 20;
 let SPOT = SPOTS.wide;
 const LABEL = { build: 'Who', hair: 'Hair', top: 'Top', extra: 'Extra' };
 
@@ -33,8 +33,8 @@ export async function load(ctx) {
   const skinGrp = `<fieldset class="grp"><legend class="label" id="k-skin">Skin</legend><div class="opts" data-g="skin" role="group" aria-labelledby="k-skin">${folk.OPTIONS.skin.map(([i, text]) => `<button type="button" class="btn pick sw" value="${i}" aria-label="${text} skin" style="--c:${FOLK.skin[i][1]};--d:${FOLK.skin[i][0]}"></button>`).join('')}</div></fieldset>`;
   layer.innerHTML = `
     <style>
-      .dress { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); top: calc(var(--top) + 56px * var(--u)); width: calc(360px * var(--u)); box-sizing: border-box;
-        padding: calc(18px * var(--u)) calc(18px * var(--u)) calc(16px * var(--u)); display: flex; flex-direction: column; gap: calc(12px * var(--u)); transition: transform 200ms steps(4), opacity 200ms steps(4); }
+      .dress { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); top: calc(var(--top) + 48px * var(--u)); width: calc(404px * var(--u)); box-sizing: border-box;
+        padding: calc(18px * var(--u)) calc(18px * var(--u)) calc(16px * var(--u)); display: flex; flex-direction: column; gap: calc(10px * var(--u)); transition: transform 200ms steps(4), opacity 200ms steps(4); }
       .dress.gone { transform: translateX(calc(100% + 40px)); opacity: 0; pointer-events: none; }
       .dress h2 { margin: 2px 0 0; font: 400 calc(26px * var(--u))/1.05 var(--display); color: var(--ui-ink); text-wrap: balance; }
       .dress .kick { display: block; margin-bottom: 6px; font-size: var(--t1); }
@@ -71,7 +71,7 @@ export async function load(ctx) {
         .dress h2 { font-size: 20px; }
         .namebox { margin-top: 12px; } .namebox input { font-size: 20px; padding: 6px 30px 5px 10px; }
         .grp { grid-template-columns: 48px 1fr; align-items: center; gap: 0 4px; }
-        .opts, .pair .opts[data-g="skin"] { gap: 8px; padding-bottom: 0; }
+        .opts, .pair .opts[data-g="skin"] { gap: 6px; padding-bottom: 0; }
         .av span { display: none; }
         .sw { width: 34px; height: 28px; }
       }
@@ -188,17 +188,22 @@ export async function load(ctx) {
       const cv = b.querySelector('canvas');
       if (!cv) continue;
       if (cv.width !== avPx) cv.width = cv.height = avPx;
-      const x = cv.getContext('2d'), L = { ...look, [k]: v }, z = Math.max(1, Math.round(avPx / 52)); x.clearRect(0, 0, avPx, avPx); x.imageSmoothingEnabled = false;
-      if (k === 'build') x.drawImage(folk.preview(L), Math.round(avPx / 2 - 16 * z), z > 1 ? -2 * z : avPx - 50, 32 * z, 48 * z);   // the build shows in the body: the figure, whole-pixel scale (cut at the knees when it's big)
-      else x.drawImage(folk.avatar(L, avPx), 0, 0);
+      const x = cv.getContext('2d'), L = { ...look, [k]: v }; x.clearRect(0, 0, avPx, avPx); x.imageSmoothingEnabled = false;
+      // the build shows in the body: the 48x72 figure, whole-pixel scale, centred (cut at the shins, or the hips, when it doesn't fit)
+      if (k === 'build') { const z = Math.max(1, Math.round(avPx / 60)); x.drawImage(folk.preview(L), Math.round(avPx / 2 - 24 * z), Math.round((avPx - 72 * z) / 2), 48 * z, 72 * z); }
+      else {   // the rest: folk's 36 px head-and-shoulders crop, about 32 px of it across the frame, so the heads read big;
+        // a tight frame keeps the hair whole (tops: centred, a little more chest for a row of hair)
+        const z = Math.max(1, Math.round(avPx / 32)), o = Math.round((avPx - 36 * z) / 2);
+        x.drawImage(folk.avatar(L, 36), o, k === 'top' ? o : Math.max(0, o), 36 * z, 36 * z);
+      }
     }
     $('.namebox').classList.toggle('ready', !!name.trim());
   }
-  // the frames' size: 52 CSS px (x --u) on a desktop, 44 on a phone; drawn at device pixels, so the faces stay whole-pixel
+  // the frames' size: 64 CSS px (x --u) on a desktop, 50 on a phone; drawn at device pixels, so the faces stay whole-pixel
   let avPx = 0;
   function sizeAvatars() {
-    const css = narrow ? 44 : Math.round(52 * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 1));
-    const px = Math.max(52, Math.round(css * (devicePixelRatio || 1)));   // (a 1x phone: 52 shown at 44, as before)
+    const css = narrow ? 50 : Math.round(64 * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--u')) || 1));
+    const px = Math.round(css * (devicePixelRatio || 1));
     sheet.style.setProperty('--av', `${css}px`);
     if (px !== avPx) { avPx = px; refresh(); }
   }
@@ -227,10 +232,10 @@ export async function load(ctx) {
     const viewH = Math.min(IH, IW / aspect), viewW = viewH * aspect;   // the whole painting's height: the people read at their size
     ppf = viewH / ctx.ink.size.y;
     stage.place(taxi.jeep, TAXI[0], TAXI[1], TAXI_K * ppf, stage.depthAt(TAXI[0], TAXI[1] + 14));
-    U.uHead.value.set(TAXI[0] + 1.69 * TAXI_K * ppf, TAXI[1] - 14 * ppf);
+    U.uHead.value.set(TAXI[0] + 1.69 * TAXI_K * ppf, TAXI[1] - 20 * ppf);
     // the group: the taxi's tail to the rider; put its middle where there's room, its feet clear of the sheet and the button
-    const r = sheet.getBoundingClientRect(), left = P(SPOT.you)[0] - (narrow ? 10 : 22) * ppf, right = P(SPOT.rider)[0] + (narrow ? 10 : 16) * ppf, feet = TAXI[1] + 8 * ppf;
-    const figH = 44 * h / ctx.ink.size.y, sx = narrow ? w / 2 : r.left / 2, sy = narrow ? (r.bottom + h - 84) / 2 + figH / 2 : h * .68;
+    const r = sheet.getBoundingClientRect(), left = P(SPOT.you)[0] - (narrow ? 15 : 32) * ppf, right = P(SPOT.rider)[0] + (narrow ? 15 : 23) * ppf, feet = TAXI[1] + 12 * ppf;
+    const figH = 64 * h / ctx.ink.size.y, sx = narrow ? w / 2 : r.left / 2, sy = narrow ? (r.bottom + h - 84) / 2 + figH / 2 : h * .68;
     const cx = clamp((left + right) / 2 - (sx / w - .5) * viewW, viewW / 2, IW - viewW / 2);
     const cy = clamp(feet - (sy / h - .5) * viewH, viewH / 2, IH - viewH / 2);
     stage.view(cx, cy, viewH, aspect);
@@ -279,8 +284,8 @@ export async function load(ctx) {
       stage.update(dt, 4);
       const [yx, yy] = P(SPOT.you);
       pin(me, yx, yy); pin(rider, walker.x, walker.y, behind ? 3 : 1);
-      me.setLight(Math.max(.8, lightAt(yx, yy - 20 * ppf) * .9), 1);   // the stall's bulb, behind you on the right
-      rider.setLight(lightAt(walker.x, walker.y - 20 * ppf) * (behind ? .7 : 1), -1);
+      me.setLight(Math.max(.8, lightAt(yx, yy - 29 * ppf) * .9), 1);   // the stall's bulb, behind you on the right
+      rider.setLight(lightAt(walker.x, walker.y - 29 * ppf) * (behind ? .7 : 1), -1);
       ctx.ink.render(scene, camera, taxi.jeep);
     },
     dispose() { me.dispose(); rider.dispose(); disposeScene(scene); delete window.__stand; },

@@ -173,3 +173,12 @@ post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) nee
 - 2026-10-28: external SSD **HOARDE** (exFAT, ~880 GB free) attached. Work dir `/Volumes/HOARDE/hairpin-work/`:
   `captures/` (tools/shot.mjs puts relative outputs here), `chrome-profiles/`, `archive/` (old session scratch frames
   moved there, nothing deleted). shot.mjs falls back to /tmp when the SSD isn't mounted. Internal disk ~750 MB free.
+- H1 (hi-res) **done** (uncommitted): pixelGrid 360/400 rows; near redrawn 48x72 (~64 px, foot [23.5,72], stride 4);
+  far 32x48 (~39 px, built from the old near art, stride 3); API unchanged, ghost slots 39/40 kept. Frames on the SSD
+  captures/hires/. H2 (re-fit every scene: stand preview/avatars, edge ppx/gppx + seats + ghost, Shillong pair, climb
+  walker/basket, STYLE.md numbers) running. Follow-ups: heads a bit boxy; far not fully redrawn; ghost back view reads
+  as an outline; far basket from the front looks like a funnel.
+- H2 (re-fit) **done**: stand (×64/44 layout, 48x72 previews, 2x avatars, wider sheet), edge (ppx/gppx 1.95 measured
+  by pin(), seats spaced, ghost reach), Shillong (pair gap 30), STYLE.md 360/400. **Hi-res committed.** Follow-ups:
+  the climb's umbrella hovers 1-2 px over the walker with no handle (folk.js); both edge walks out of the doors are very
+  short (passenger seated by ~0.75 s); ghost back view reads as an outline; heads a bit boxy; far not fully redrawn.

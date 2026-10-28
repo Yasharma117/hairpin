@@ -203,7 +203,8 @@ export function makeTruck(uMode) {
 }
 
 /* ---------- the final pass: one pixel grid for the whole frame (PIXEL.md 1) ---------- */
-// The scene renders at a low internal resolution (an integer pixel scale, about 270 px tall in landscape, 300 in portrait),
+// The scene renders at a low internal resolution (an integer pixel scale, about 360 px tall in landscape, 400 in portrait:
+// 1280x720 is x2, 1920x1080 x3, a retina 1440 x4),
 // at 2x that grid and box-filtered down so the paintings don't shimmer. The pixel pass then draws a 1 px line round the
 // vehicles (from a normals pass of layer 1), grades, quantizes to the scene's palette (Oklab, shared/style.js
 // PIXEL_PALETTES) with a light 4x4 ordered dither only in smooth gradients, and the upscale blows it up with nearest
@@ -214,7 +215,7 @@ export function makeTruck(uMode) {
 // no smoothing, grade, palette, dither or Ink line (a sprite brings its own). Only vehicles (layer 1) hide them there.
 export const PIX = { scale: 0, w: 0, h: 0 };   // the current pixel grid, for Stage's snapping
 const SS = 2;   // scene supersampling over the pixel grid
-const pixelGrid = (pw, ph) => { const s = Math.max(2, Math.round(ph / (ph > pw ? 300 : 270))); return [s, Math.ceil(pw / s), Math.ceil(ph / s)]; };
+const pixelGrid = (pw, ph) => { const s = Math.max(2, Math.round(ph / (ph > pw ? 400 : 360))); return [s, Math.ceil(pw / s), Math.ceil(ph / s)]; };
 const DITHER = .45;   // how far from a palette colour the dither reaches (1 = full ordered dither, 0 = none)
 const CHROMA = 2;   // Oklab a, b weighed double in the nearest-colour match, as in tools/fit_palette.py: keeps hues apart
 const okLab = hex => {

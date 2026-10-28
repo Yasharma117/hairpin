@@ -55,7 +55,7 @@ Object colours (the taxi's parts, placeholder figures, the Shillong placeholder)
 
 Every scene goes through one final pass, `Ink` in `shared/kit.js` (PIXEL.md section 1):
 
-1. The scene renders at twice a low pixel grid (an integer scale, the frame about 270 px tall in landscape, 300 in
+1. The scene renders at twice a low pixel grid (an integer scale, the frame about 360 px tall in landscape, 400 in
    portrait) and is box-filtered down to it.
 2. The 1 px outline on things that move, an edge-keeping smoothing, then the per-scene grade (below).
 3. Quantized to the scene's palette (`PIXEL_PALETTES`) in Oklab, with a light 4x4 ordered dither only in gradients.

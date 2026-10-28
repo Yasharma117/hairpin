@@ -13,13 +13,13 @@
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 <body></body>
 <script type="module">
-// Every Folk character, size, view and animation, at 4x with nearest, on cream and on night. ?still freezes the clock.
+// Every Folk character, size, view and animation (near 48 x 72 cells, far 32 x 48), at 3x with nearest, on cream and on night. ?still freezes the clock.
 import * as THREE from 'three';
 import * as folk from '../shared/folk.js';
 import { FOLK } from '../shared/style.js';
 const R = document.documentElement.style;
 R.setProperty('--cream', FOLK.sheet.cream); R.setProperty('--night', FOLK.sheet.night); R.setProperty('--ink', FOLK.sheet.ink);
-const Z = 4, live = [], memo = new Map(), still = location.search.includes('still');
+const Z = 3, live = [], memo = new Map(), still = location.search.includes('still');
 const fc = (who, o) => { const k = JSON.stringify([who, o]); if (!memo.has(k)) memo.set(k, folk.frameCanvas(who, o)); return memo.get(k); };
 function cell(parent, label, draw, z = Z) {   // draw(ms) -> canvas
   const f = document.createElement('figure'), cv = document.createElement('canvas'), cap = document.createElement('figcaption');
@@ -72,17 +72,17 @@ block('night, from behind: the lit-side rim (cool at L .3, warm at L .95), light
   for (const [L, rim] of [[.3, 'cool'], [.95, 'warm']]) for (const who of ['you', PASSENGER]) cell(r, `far ${rim}`, anim(who, 'far', 'back', 'sit', { light: L, rim: true }), 3);
   for (const who of ['you', PASSENGER]) for (const size of ['near', 'far']) {
     cell(r, `${size} sit`, () => fc(who, { size, view: 'back', anim: 'sit', light: .95, rim: true }), 3);
-    folk.ANIMS.lookup.frames.all.forEach((_, i) => cell(r, `${size} lookup ${i}`, () => fc(who, { size, view: 'back', anim: 'lookup', i, light: .95, rim: true }), 3));
+    folk.ANIMS.lookup.frames.all.forEach((_, i) => cell(r, `${size} lookup ${i}`, () => fc(who, { size, view: 'back', anim: 'lookup', i, light: .95, rim: true }), size === 'near' ? 2 : 3));
   }
   for (const who of ['you', PASSENGER]) cell(r, 'lookup, playing', ms => fc(who, { size: 'near', view: 'back', anim: ms % 2400 < 1200 ? 'sit' : 'lookup', i: ms % 2400 < 1360 ? 0 : 1, light: .95, rim: true }), 3);
 });
 // him in ink: line only, sitting from behind; the drag lifts the cigarette and the ember swells
 block('the ghost (near, line only: a paper line, so night only): sit, drag (playing), every frame; the ember at 0 / .4 / 1', true, r => {
-  cell(r, 'sit + drag', ms => { const t = ms % 4000, d = t > 1800 ? t - 1800 : -1, i = d < 0 ? 0 : d < 220 ? 0 : d < 1720 ? 1 : 2; return d < 0 ? fc('ghost', { view: 'back', anim: 'sit', i: t < 1100 ? 0 : 1, ember: .2 }) : fc('ghost', { view: 'back', anim: 'drag', i, ember: i === 1 ? 1 : .2 }); }, 4);
-  folk.ANIMS.sit.frames.all.forEach((_, i) => cell(r, `sit ${i}`, () => fc('ghost', { view: 'back', anim: 'sit', i, ember: .2 }), 4));
-  folk.ANIMS.drag.frames.all.slice(0, 2).forEach((_, i) => cell(r, `drag ${i}`, () => fc('ghost', { view: 'back', anim: 'drag', i, ember: i ? 1 : .2 }), 4));
-  for (const e of [0, .4, 1]) cell(r, `ember ${e}`, () => fc('ghost', { view: 'back', anim: 'drag', i: 1, ember: e }), 4);
-  cell(r, 'lookup', () => fc('ghost', { view: 'back', anim: 'lookup', i: 1 }), 4);
+  cell(r, 'sit + drag', ms => { const t = ms % 4000, d = t > 1800 ? t - 1800 : -1, i = d < 0 ? 0 : d < 220 ? 0 : d < 1720 ? 1 : 2; return d < 0 ? fc('ghost', { view: 'back', anim: 'sit', i: t < 1100 ? 0 : 1, ember: .2 }) : fc('ghost', { view: 'back', anim: 'drag', i, ember: i === 1 ? 1 : .2 }); }, 3);
+  folk.ANIMS.sit.frames.all.forEach((_, i) => cell(r, `sit ${i}`, () => fc('ghost', { view: 'back', anim: 'sit', i, ember: .2 }), 3));
+  folk.ANIMS.drag.frames.all.slice(0, 2).forEach((_, i) => cell(r, `drag ${i}`, () => fc('ghost', { view: 'back', anim: 'drag', i, ember: i ? 1 : .2 }), 3));
+  for (const e of [0, .4, 1]) cell(r, `ember ${e}`, () => fc('ghost', { view: 'back', anim: 'drag', i: 1, ember: e }), 3);
+  cell(r, 'lookup', () => fc('ghost', { view: 'back', anim: 'lookup', i: 1 }), 3);
 });
 // then: the flashback pair in sepia, now and then side by side, with the catch-light in the eyes
 for (const night of [false, true]) block(`then (setThen): grandpa and friend, now / then${night ? ' — night, light .95' : ''}`, night, r => {
@@ -116,13 +116,13 @@ for (const size of ['near', 'far']) block(`${size}: customising (build x hair x 
 
 block('light: the five steps (night .. warm), rim from the left and from the right; avatars and preview', true, r => {
   for (const L of [0, .3, .6, .95, 1.2]) for (const side of [-1, 1]) cell(r, `L ${L} ${side < 0 ? 'from left' : 'from right'}`, () => fc('you', { size: 'near', view: 'left', light: L, rim: true, side }), 3);
-  for (const who of [...WHO, PASSENGER, { build: 'm', skin: 4, hair: 'cap', top: 'tee', extra: 'glasses' }]) cell(r, 'avatar 52', () => folk.avatar(who, 52), 1);
+  for (const who of [...WHO, PASSENGER, { build: 'm', skin: 4, hair: 'cap', top: 'tee', extra: 'glasses' }]) { cell(r, 'avatar 52', () => folk.avatar(who, 52), 1); cell(r, 'avatar 72', () => folk.avatar(who, 72), 1); }
   cell(r, 'preview', () => folk.preview(PASSENGER), 2);
 });
 
 // three.js: the real shader. Walkers move by p.update(dt) * stride, so their feet stay planted.
 block('three.js: person() on the GPU (orthographic, 1 sprite px = 3 screen px), night with a moving light', true, (r, s) => {
-  const W = 960, H = 260, PX = 3, renderer = new THREE.WebGLRenderer({ antialias: false });
+  const W = 1200, H = 400, PX = 3, renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setSize(W, H); renderer.setPixelRatio(1); renderer.setClearColor(new THREE.Color(FOLK.sheet.night)); r.append(renderer.domElement);
   const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(0, W / PX, H / PX, 0, -10, 10);
   const people = [
