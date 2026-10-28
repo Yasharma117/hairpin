@@ -137,3 +137,32 @@ only; wave has no back view; no line-only ghost style.
 - 2026-10-28: the disk filled up. Our killed headless Chrome runs had left 335 code-sign clones (deleted; only ~2.3 GB
   real, they share blocks). tools/shot.mjs now quits Chrome with Browser.close (tested: no clone left); PIXEL.md §5 says
   every CDP script must. The rest of the disk is Yash's: iOS simulators ~50 GB, Claude vm_bundles 11 GB, caches 12 GB.
+
+## Study: the resolution (2026-10-28, not started; Yash to decide)
+
+**Problem.** Yash: "still looks pretty low resolution". The grid targets ~270 rows (`pixelGrid` in shared/kit.js:
+`Math.round(ph / (ph > pw ? 300 : 270))`), so 1280x720 renders at 427x240 (each pixel 3 screen px). The paintings are
+887 px tall, so they lose ~3.7x detail; pocket.design can be chunky because it's a close interior, Hairpin is wide
+landscapes.
+
+**What a finer grid does.** Integer scales only: at 1280x720 the choices are 240 rows (x3) or 360 rows (x2): 360 and 480
+render the same. At 1920x1080: 270 (x4) or 360 (x3). On a retina 1440-px-tall canvas: 288 (x5) or 360 (x4). Tested
+with a temporary `?rows=` switch (since removed): 360 rows keeps much more of the paintings (Nongpoh's stall, the
+bananas, the rocks read clearly). Comparison frames: session scratchpad `rows/compare.png`, `rows/crop-*.png`.
+
+**The catch: people.** folk.js sprites are hand-authored at fixed sizes (near 44 px in a 32x48 cell, far 26 px in
+24x34) and always drawn 1 sprite px = 1 frame px. On a 360-row grid they appear ~2/3 their current size; the seated
+pair at the edge become hard to read (already a critic complaint).
+
+**Options.**
+1. **Finer grid + bigger people (recommended):** target ~360 rows, and redraw the folk sprites at a larger size (near
+   ~64 px tall, far ~38 px) so they keep their on-screen size with more detail in faces, hair and clothes. One agent
+   owning shared/folk.js (+ the sheet), then re-check each scene's placement (they use `p.w/p.h/p.foot`, so mostly
+   automatic) and the stand's avatars. ~1 h of agent work.
+2. Finer grid, people as drawn (smaller): change the 270/300 targets to ~360/400. Instant; people harder to read.
+3. Finer grid, people at 2x: sprite pixels twice the world's; same size as now; mixed pixel sizes (breaks PIXEL.md §1).
+4. Keep 270: chunkier, closer to pocket.design.
+
+**Also to re-check if the grid changes:** palettes/dither are per pixel (fine); the UI's `--px` follows the scale
+automatically; Shillong's tree is repainted onto the grid on resize (fine); performance cost ~2.2x more pixels in the
+post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) need updating.
