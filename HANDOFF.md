@@ -182,3 +182,22 @@ post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) nee
   by pin(), seats spaced, ghost reach), Shillong (pair gap 30), STYLE.md 360/400. **Hi-res committed.** Follow-ups:
   the climb's umbrella hovers 1-2 px over the walker with no handle (folk.js); both edge walks out of the doors are very
   short (passenger seated by ~0.75 s); ghost back view reads as an outline; heads a bit boxy; far not fully redrawn.
+- 2026-10-29: Yash asked for (1) story dialogue in a corner/side window with a progress bar, (2) a project window when
+  you pick a dashboard object, with the blanks filled (real info from ~/Portfolio-Site where it exists, else DRAFT),
+  (3) a look at the GitHub "diorama" skill (sloemo01/diorama: pixel-art diorama playbook + three.js kit, toy-scale 3D
+  cast, palette snap, dither, inked contour, frame QA) because quality is "still not at par" with pocket.design.
+  Running: story window + progress (index.html), project window (10-jorabat-intro), diorama study (read-only →
+  reviews/diorama-study-2026-10-29.md). Then: decide the quality plan from the study.
+- Story window **done** (uncommitted): bottom-left corner card, ink title bar = chapter + n/7 + 7 pixel segments
+  (current fills red), up to 3 earlier lines; phone = full-width strip above the advance/HORN buttons. `ctx.progress(k)`
+  0..1 (time guess per scene from `EST` if never called); `ctx.subAt` is a no-op; scene `.tag` hidden. Scenes to adjust:
+  01/11/12 call ctx.progress(u); 08 progress by phase + drop subAt (~337); 09 progress by phase; 11 phone framing (taxi
+  under the window: lift ~230 px); 01/08 phone hints at bottom:32px sit behind the window; README still documents subAt.
+- Diorama study **done** → reviews/diorama-study-2026-10-29.md. Plan A (bigger "close" folk size for dialogue + framing
+  built around people + night rules), B (deterministic freeze(t) + per-entity frame QA, vehicle detail, secondary
+  motion), C (3D toy-cast spike for far figures, go/no-go). Waiting on Yash to approve A.
+- Project window **done**: 10-jorabat-intro `PROJECTS` (each copy `[text, 'PORTFOLIO'|'DRAFT']` + source). Real from
+  ~/Portfolio-Site: TopNotch (the teleprompter, link), Warden (facts, GitHub + walkthrough), the 1mg banner pipeline
+  (internal, no link). Dodo billingSDK and Markon are NOT in the portfolio: all their copy is DRAFT guesses; Rookie (iOS)
+  and Dopamine 2.0 (1mg design system) are real candidates to swap in. Years are DRAFT guesses. Ask Yash.
+  Committed with the story window.

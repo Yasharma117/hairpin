@@ -8,8 +8,8 @@
 <link rel="icon" href="data:,">
 <style>
 /* Layout: one page. A title card, then every scene swapped in place on one canvas, with a pixel sheet between them.
-   Shared overlay: scene tag top-left, mute top-right, the dialogue box (top, or bottom with ctx.subAt), one advance
-   button at the bottom, HORN bottom-right on touch while the scene says so (ctx.hornable). PIXEL.md section 3.
+   Shared overlay: mute top-right, the story window bottom-left (chapter, the drive's progress, the dialogue and the
+   last few lines; full width above the advance button on phones), one advance button at the bottom, HORN bottom-right on touch while the scene says so (ctx.hornable). PIXEL.md section 3.
 
    Shared classes, for scenes to put in their own layer (no need to restyle them):
      .panel          cream sheet, a world-pixel warm-ink border, hard shadow. Square corners.
@@ -17,9 +17,10 @@
      .btn.sm         a 44px button for dense groups (option pickers).
      .pick           anything choosable (a .btn, an avatar frame): with aria-pressed="true" (or .on) it is the chosen
                      one: a 2px red ring and a red ▼ inside its top-right corner. The one selected state.
-     .tag            the scene tag, fixed top-left ("HAIRPIN · THE EDGE").
+     .tag            the scene tag: hidden now, the story window's title bar names the chapter.
      .label          a VT323 rust caps label (form keys, group names).
-     .box            the dialogue box: put a .who (speaker tab) and a .line (serif) inside. Add .done for the red ▼.
+     .box            a dialogue box: put a .who (speaker tab) and a .line (serif) inside. Add .done for the red ▼.
+                     (The story window's #sub is one, flattened.)
      .hint           an instruction over the world ("HOLD TO WISH"): cream words on a see-through ink strip, dashed
                      edge, no shadow (it is not a button), clicks pass through. Shown with .on.
      .cue            an urgent red stamp ("BRAKE").
@@ -64,9 +65,6 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 /* the one selected state: a 2px red ring outside the ink edge, rust words, a red ▼ inside the top-right corner */
 .btn.on, .pick.on, .pick[aria-pressed="true"] { position: relative; color: var(--ui-rust); box-shadow: 0 0 0 2px var(--ui-signal), var(--drop); }
 .btn.on::after, .pick.on::after, .pick[aria-pressed="true"]::after { content: "▼"; position: absolute; top: 2px; right: 3px; font: 400 var(--t1)/1 var(--pixel); color: var(--ui-signal); pointer-events: none; }
-.tag { position: fixed; top: var(--top); left: calc(env(safe-area-inset-left, 0px) + var(--gutter)); z-index: 11; pointer-events: none;
-  background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); padding: 5px 10px 3px;
-  font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .cue { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 10; pointer-events: none;
   background: var(--ui-signal); color: var(--ui-cream); border: var(--edge); box-shadow: var(--drop); padding: 8px 16px 5px;
   font: 400 var(--t-cue)/1 var(--pixel); letter-spacing: .16em; animation: blink 1s steps(1) infinite; }
@@ -85,11 +83,47 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 .box::after { content: "▼"; position: absolute; right: 12px; bottom: 9px; font: 400 var(--t1)/1 var(--pixel); color: var(--ui-signal); opacity: 0; }
 .box.done::after { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
-.sub { position: fixed; left: 50%; top: calc(var(--top) + 64px * var(--u)); transform: translateX(-50%); width: max-content; max-width: min(calc(620px * var(--u)), calc(100% - 2 * var(--gutter))); z-index: 10; pointer-events: none; }
-.sub.bottom { top: auto; bottom: calc(var(--bottom) + 48px * var(--u) + 28px); }   /* ctx.subAt('bottom'): above the advance button */
+/* the story window, bottom-left, out of the picture's middle: an ink title bar with the chapter and the whole drive's
+   progress (seven pixel segments: done cream, this one filling red, the rest dark), and under it the line being said
+   (.box.sub, typed out, ▼ when complete) with the last few lines above it in quiet ink, so a missed one can be read.
+   Silent, it is just the title bar. Phones: full width, above the advance button. */
+.story { position: fixed; left: calc(env(safe-area-inset-left, 0px) + var(--gutter)); bottom: var(--bottom); z-index: 10; pointer-events: none;
+  width: calc(372px * var(--u)); max-width: calc(100% - 2 * var(--gutter)); box-sizing: border-box; display: flex; flex-direction: column; }
+.story .head { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: calc(7px * var(--u)) 12px; padding: calc(8px * var(--u)) 12px calc(10px * var(--u));
+  background: var(--ui-ink); color: var(--ui-cream); font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; }
+.story .ch { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story .no { font-size: var(--t1); color: var(--ui-wood); font-variant-numeric: tabular-nums; }
+.story .segs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--line); margin: 0; padding: 0; list-style: none; }
+.story .segs li { height: calc(var(--line) * 2); background: var(--ui-ink-lift); overflow: hidden; }
+.story .segs li.done { background: var(--ui-cream); }
+.story .segs li b { display: block; height: 100%; background: var(--ui-signal); transform-origin: left; transform: scaleX(0); }
+.story .segs li:not(.now) b { display: none; }
+.story .body { display: flex; flex-direction: column; gap: calc(10px * var(--u)); padding: calc(12px * var(--u)) 16px calc(14px * var(--u)); border-top: var(--edge); }
+.story.quiet .body { display: none; }
+.story .log { display: flex; flex-direction: column; gap: calc(6px * var(--u)); margin: 0; padding: 0; list-style: none; }
+.story .log:empty { display: none; }
+.story .log li { font: 400 var(--t1)/1.35 var(--serif); color: var(--ui-ink-soft); text-wrap: pretty; transition: opacity 300ms ease-out; }
+.story .log li.gone { opacity: 0; }
+.story .log b { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; margin-right: .5em; }
+.story .log:not(:empty) + .sub:not(.off) { border-top: 2px dashed var(--ui-wood); padding-top: calc(10px * var(--u)); }
+/* the line being said: the shared .box, flattened into the window; the speaker tab sits inline above the words */
+.story .box { background: none; border: 0; box-shadow: none; padding: 0 18px 0 0; }
+.story .box .who { position: static; display: inline-block; margin-bottom: calc(7px * var(--u)); padding: 3px 7px 1px; border: var(--edge); background: var(--ui-cream-deep); }
+.story .box::after { right: -4px; bottom: 2px; }
+.sub.off { display: none; }
 .sub:not(.off) { animation: pop 160ms steps(2) both; }
-.sub.off { visibility: hidden; }
-@keyframes pop { from { opacity: 0; transform: translate(-50%, 6px); } }
+@keyframes pop { from { opacity: 0; transform: translateY(4px); } }
+/* the scene's own tag would say the chapter twice: the window's title bar says it */
+.tag { display: none; }
+/* narrower than the window plus a centred button: it steps up over the advance button and HORN while they show */
+@media (max-width: 1099px) { .chip-up .story, .horn-up .story { bottom: calc(var(--bottom) + 48px * var(--u) + 14px); } }
+@media (max-width: 600px) {
+  .story { right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); width: auto; }
+  .story .head { grid-template-columns: auto 1fr auto; padding: 8px 10px 7px; }
+  .story .segs { grid-column: 2; grid-row: 1; align-self: center; }
+  .story .body { padding: 10px 12px 12px; }
+  .story .log li:not(:last-child) { display: none; }   /* one line back on a phone */
+}
 
 /* the one advance button; with HORN up it centres in the space left of it, and may wrap */
 .chip { position: fixed; left: 50%; bottom: var(--bottom); z-index: 10; max-width: calc(100% - 2 * var(--gutter)); transform: translateX(-50%); }
@@ -167,7 +201,11 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 
 <canvas id="c" aria-label="Hairpin: a night drive by taxi from Jorabat to Shillong"></canvas>
 <div id="layer"></div>
-<div class="box sub off" id="sub" aria-hidden="true"><div class="who" id="who"></div><p class="line" id="line"></p></div>
+<aside class="panel story quiet" id="story" hidden>
+  <div class="head"><span class="ch" id="ch"></span><span class="no" id="chno" aria-hidden="true"></span>
+    <ol class="segs" id="segs" role="progressbar" aria-label="The drive" aria-valuemin="1" aria-valuemax="7"><li><b></b></li><li><b></b></li><li><b></b></li><li><b></b></li><li><b></b></li><li><b></b></li><li><b></b></li></ol></div>
+  <div class="body" aria-hidden="true"><ol class="log" id="log"></ol><div class="box sub off" id="sub"><div class="who" id="who"></div><p class="line" id="line"></p></div></div>
+</aside>
 <div class="visually-hidden" id="said" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
 <button class="btn chip" id="chip" type="button" hidden></button>
 <button class="btn sm horn" id="horn" type="button" hidden>Horn</button>
@@ -384,17 +422,27 @@ function honk(secs = .45) {   // the two-tone Maruti horn: both tones at once, 5
 // sized once and never reflows. A line stays up for its typing plus a reading time, or `secs`, whichever is longer.
 const sub = $('#sub'), typedEl = document.createElement('span'), restEl = document.createElement('span');
 restEl.className = 'rest'; $('#line').append(typedEl, restEl);
-let full = '', typed = 0, lineEnd = 0, now = 0;
+let full = '', typed = 0, lineEnd = 0, now = 0, saidWho = '';
+const story = $('#story'), logEl = $('#log'), LOG_KEEP = 3, LOG_SECS = 14;   // the last 3 lines, each kept 14 s after it ends
+function retire() {   // the line being said goes up into the log
+  if (!saidWho) return;
+  const li = document.createElement('li'), b = document.createElement('b');
+  b.textContent = saidWho; li.append(b, full); li.until = now + LOG_SECS;
+  logEl.append(li); while (logEl.children.length > LOG_KEEP) logEl.firstChild.remove();
+  saidWho = '';
+}
 function say(label, text, secs = 4, expr) {
   duck(!!label);   // the bed dips under a line (sound: duck/duckFor)
-  if (!label) { sub.classList.add('off'); full = ''; lineEnd = 0; return; }
+  retire();
+  if (!label) { sub.classList.add('off'); full = ''; lineEnd = 0; quiet(); return; }
   const w = who(label);
+  saidWho = w; sub.classList.add('off'); sub.offsetWidth;   // restart the pop for every line
   $('#who').textContent = w + (expr ? ` · ${expr}` : '');
   full = text || ''; typed = expr ? -22 : 0;
   const words = full.split(/\s+/).filter(Boolean).length;
   lineEnd = now + Math.max(secs, (full.length - typed) / 32 + Math.max(1.6, .28 * words));
   typedEl.textContent = ''; restEl.textContent = full; sub.classList.toggle('done', !full);
-  sub.classList.remove('off');   // the box pops in only when it was hidden (CSS)
+  sub.classList.remove('off'); quiet();
   $('#said').textContent = `${w}${expr ? `, ${expr}` : ''}: ${full}`;   // screen readers get the whole line at once
 }
 function typeTick(dt) {   // 32 characters a second
@@ -407,11 +455,39 @@ function typeTick(dt) {   // 32 characters a second
 let tapHandler = null;
 function prompt(label) {   // the one advance affordance: a chip, or nothing
   const c = $('#chip');
+  document.body.classList.toggle('chip-up', !!label);
   if (!label) { c.hidden = true; return; }
   if (c.textContent !== label) c.textContent = label;
   c.hidden = false;
 }
-function subAt(where = 'top') { sub.classList.toggle('bottom', where === 'bottom'); }   // where the dialogue box sits
+function subAt() {}   // the old top/bottom box; the story window sits out of the picture's middle in every scene
+const quiet = () => story.classList.toggle('quiet', !saidWho && !logEl.children.length);   // silent: just the title bar
+function logTick() {   // log lines fade once they've sat LOG_SECS
+  for (const li of [...logEl.children]) {
+    if (now > li.until + .3) li.remove(); else if (now > li.until) li.classList.add('gone');
+  }
+  quiet();
+}
+
+/* the drive's progress: seven chapters, the current one filled by ctx.progress(k), or else a guess from the time spent */
+const EST = { stand: 45, jorabat: 25, climb: 60, nongpoh: 40, cloud: 30, edge: 120, shillong: 45 };   // ponytail: rough seconds per scene, only for scenes that never call ctx.progress
+const segs = [...$('#segs').children];
+let prog = 0, progShown = -1, reported = false, sceneT = 0;
+function setProgress(k) { prog = Math.max(prog, clamp(k, 0, 1)); }   // never runs backwards within a chapter
+function progress(k) { reported = true; setProgress(k); }
+function chapter(name) {
+  const i = ORDER.indexOf(name), title = $(`#card a[href="?scene=${name}"]`).textContent;
+  segs.forEach((s, j) => { s.className = j < i ? 'done' : j === i ? 'now' : ''; });
+  $('#ch').textContent = title; $('#chno').textContent = `${i + 1}/${ORDER.length}`;
+  $('#segs').setAttribute('aria-valuenow', i + 1); $('#segs').setAttribute('aria-valuetext', `Chapter ${i + 1} of ${ORDER.length}: ${title}`);
+  prog = 0; progShown = -1; reported = false; sceneT = 0; logEl.replaceChildren(); story.hidden = false;
+}
+function progressTick(dt) {
+  sceneT += dt;
+  if (!reported && sceneName) setProgress(Math.min(.9, sceneT / EST[sceneName]));
+  const q = Math.floor(prog * 12) / 12;   // whole steps, like everything else on the grid
+  if (q !== progShown) { progShown = q; segs[ORDER.indexOf(sceneName)]?.firstChild.style.setProperty('transform', `scaleX(${q})`); }
+}
 function hornable(on) {   // the scene says whether a honk would be answered now; the HORN button shows on touch only
   const up = isTouch && !!on;
   $('#horn').hidden = !up; document.body.classList.toggle('horn-up', up);
@@ -468,7 +544,7 @@ function makeCtx(name) {
     get ac() { return ac; }, get out() { return out; }, get verb() { return verb; }, get voice() { return voice; },
     rpm, engineOff, duck, duckFor, sfx,
     on: (target, type, fn, opts) => target.addEventListener(type, fn, { ...opts, signal: ctrl.signal }),
-    bed, say, prompt, honk, subAt, hornable,
+    bed, say, prompt, honk, subAt, hornable, progress,
     next: () => go(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length]),
     go,
     dispose() { ctrl.abort(); layer.remove(); },
@@ -484,8 +560,8 @@ async function go(name) {
   busy = true;
   const [mod] = await Promise.all([load(name), sheetDown(name)]);   // the first time too: the sheet covers the title
   if (current) { current.dispose?.(); scope.dispose(); current = null; }   // the outgoing scene ran under the sheet until here
-  say(null); prompt(null); hornable(false); subAt('top');
-  scope = makeCtx(name); sceneName = name;
+  say(null); prompt(null); hornable(false);
+  scope = makeCtx(name); sceneName = name; chapter(name);
   ink.setGrade(GRADES[name], name);   // every scene graded toward the edge painting, and quantized to its own palette
   try { current = await mod.load(scope); }
   catch (e) { console.error(e); current = null; }
@@ -525,6 +601,7 @@ function frame() {
   current?.frame?.(dt, now);   // busy only gates input: the outgoing scene keeps moving while the sheet comes down
   typeTick(dt);
   if (lineEnd && now > lineEnd) say(null);
+  logTick(); progressTick(dt);
   if (fps) {   // real time, not the capped step: a slow phone must read as slow
     const t = performance.now(), real = (t - (fps.last || t)) / 1000; fps.last = t;
     fN++; fT += real; fWorst = Math.max(fWorst, real);

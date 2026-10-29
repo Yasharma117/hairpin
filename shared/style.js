@@ -96,6 +96,7 @@ export const UI = {
   creamDeep: '#f4e8c4',  // hover and pressed fills, the speaker tab, inset rows
   ink: '#3a2a1c',        // warm ink: borders, text, hard shadows
   inkSoft: '#7a6248',    // quiet text on cream (hints, small print)
+  inkLift: '#5c4632',    // a step up from ink: the chapters still ahead on the story window's progress bar
   signal: '#fd1500',     // the red accent: the next arrow, the speaker's name, focus
   wood: '#dfac76',       // the wood trim, the title card's frame
   olive: '#3d422b',      // the chalkboard green
