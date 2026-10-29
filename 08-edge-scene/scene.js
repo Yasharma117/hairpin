@@ -336,6 +336,7 @@ function go(next) {
   }
   ctx.subAt(next === 'seated' || next === 'flick' ? 'bottom' : 'top');   // seated, the box sits below the two of you
   if (next === 'flick') emb.vel.set(120, -80);
+  ctx.score?.({ drive: 'edge', seated: 'edge-story', truck: 'relief' }[next]);   // the music: broken on the hang, his story, relief at the truck
   if (next === 'truck') { if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); dieselOn(); ctx.bed({ wind: .5 }); }   // far off, round the bend
   if (next === 'lift') horn(.09, .45);                                                                                    // it stops for you
 }
@@ -400,6 +401,7 @@ function frame(dt0) {
       go('car');
     }
   } else U.uFog.value = phase === 'car' ? .85 * (1 - sstep(.5, 4, since)) : 0;
+  if (phase === 'flick' && since > 3.5 && fallT < 0) ctx.score?.('silence', { now: true });   // the music goes with the car
   if (phase === 'flick' && since > 3.5 && fallT < 0) { fallT = 0; creak(1.4); quiet = true; ctx.bed({}); }   // over it goes; then nothing
   if (phase === 'flick' && since > 8) go('truck');
   if (fallT >= 0) {

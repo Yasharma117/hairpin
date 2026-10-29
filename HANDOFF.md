@@ -201,3 +201,16 @@ post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) nee
   (internal, no link). Dodo billingSDK and Markon are NOT in the portfolio: all their copy is DRAFT guesses; Rookie (iOS)
   and Dopamine 2.0 (1mg design system) are real candidates to swap in. Years are DRAFT guesses. Ask Yash.
   Committed with the story window.
+- 2026-10-29: Yash: "make the bg music better and the first splash page too, looks pretty bad". Running: a generative
+  score in Web Audio (shared/score.js + index.html audio hooks, `ctx.score(mood)`, per-scene moods, one returning theme,
+  WAV renders on the SSD captures/score/), and a living splash (a pixel title scene behind the card, e.g. 00-title/,
+  compact chapters, Play first). Phase A of the quality plan still waits on Yash's go.
+- Splash **done** (uncommitted): 00-title/scene.js (the Jorabat stall at night through the pixel pipeline: idling taxi,
+  Yash waving, stars, fireflies, falling star, pointer parallax), Young Serif wordmark, PLAY + a CHAPTERS <details>
+  drawer (go(name), no reload), keycaps, "by Yash Sharma"; showTitle() in index.html; Play lifts onto the same place.
+  Waiting on the score agent before committing.
+- Score **done**: shared/score.js (A, 72 BPM, pentatonic theme that comes home in Shillong; nylon KS pluck, felt piano,
+  bells, pad, sub, tape), `ctx.score(mood, {now})`, default mood per scene in go(), cues in 08 (edge / edge-story /
+  silence at the fall / relief) and 09 (bloom), ducks under dialogue, hold lifts it. Level knob: `level` in makeScore
+  (.042). WAVs for Yash: /Volumes/HOARDE/hairpin-work/captures/score/ (journey.wav = the whole drive). Committed with
+  the splash.

@@ -351,6 +351,7 @@ function frame(dt) {
     if (ctx.ac && since > nextTick) { tick(); tickGap *= 1.18; nextTick = since + tickGap * (.7 + Math.random() * .6); }
     // the star comes in on a gust; the hint a second before it
     if (since > T.star - .9 && since < T.star) gustTo = Math.max(gustTo, .75);
+    if (since > T.star - .9) ctx.score?.('bloom');   // the star: the theme blooms and comes home (the wish chime is in its key)
     const asking = !banked && starEnd === Infinity && since > T.star - T.hint;
     if (since > T.star && starK < 1) {
       starUp = true;
