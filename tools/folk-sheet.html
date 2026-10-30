@@ -36,7 +36,7 @@ function block(title, night, fill) {
   s.innerHTML = `<h2>${title}</h2>`; const r = document.createElement('div'); r.className = 'row'; s.append(r); document.body.append(s); fill(r, s);
 }
 const PASSENGER = { name: 'passenger', build: 'f', skin: 1, hair: 'long', top: 'hoodie', extra: 'headphones' };
-const WHO = ['you', 'grandpa', 'friend', 'walker', 'basket'];
+const WHO = ['you', 'grandpa', 'friend', 'walker', 'basket', 'driver'];
 
 for (const night of [false, true]) {
   const L = night ? .6 : 1;
@@ -102,6 +102,10 @@ block('far: every frame, still (walker, basket)', false, r => {
   for (const who of ['walker', 'basket']) for (const [a, A] of Object.entries(folk.ANIMS)) for (const v of A.views) (A.frames[v] || A.frames.all).forEach((_, i) => cell(r, `${a} ${v} ${i}`, () => fc(who, { size: 'far', view: v, anim: a, i }), 3));
 });
 
+block('the driver (the edge): every frame, near and far, lit and at night', false, r => {
+  for (const size of ['near', 'far']) for (const light of [1, .6]) for (const [a, A] of Object.entries(folk.ANIMS)) if (['idle', 'wave', 'lean', 'leanwave', 'flag'].includes(a)) for (const v of A.views) (A.frames[v] || A.frames.all).forEach((_, i) => cell(r, `${size} ${a} ${v} ${i}`, () => fc('driver', { size, view: v, anim: a, i, light, rim: light < 1 }), size === 'near' ? 3 : 4));
+  for (const v of ['front', 'left', 'back']) cell(r, `near ${v}`, anim('driver', 'near', v, 'idle', {}));
+});
 // customising: every option, by construction
 for (const size of ['near', 'far']) block(`${size}: customising (build x hair x top, then skins, then extras)`, false, r => {
   for (const build of ['f', 'm']) for (const [hair] of folk.OPTIONS.hair) for (const [top] of folk.OPTIONS.top) {

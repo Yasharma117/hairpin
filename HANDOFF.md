@@ -214,3 +214,25 @@ post pass at 360 rows (still small); STYLE.md/PIXEL.md §1 numbers (270/300) nee
   silence at the fall / relief) and 09 (bloom), ducks under dialogue, hold lifts it. Level knob: `level` in makeScore
   (.042). WAVs for Yash: /Volumes/HOARDE/hairpin-work/captures/score/ (journey.wav = the whole drive). Committed with
   the splash.
+- 2026-10-29: Yash: the synth score is "still not good at all". Chose **curated real tracks** (royalty-free / CC) with a
+  **Northeast folk colour** (duitara-like plucks, bamboo flute, ambient bed). A search-only agent is building
+  reviews/music-shortlist-2026-10-29.md (2-3 candidates per chapter, licence verified, listening links, CC0 ambience).
+  Nothing downloaded until Yash picks; then download to the repo (small, compressed), wire per chapter with crossfades +
+  dialogue duck, and keep shared/score.js only as a fallback (or remove it).
+- 2026-10-29: Yash approved the music shortlist ("use them"): the 8 Blue Dot Sessions tracks (CC BY-NC 4.0) → agent
+  downloading to the SSD (music-src/), transcoding to audio/*.m4a (~-18 LUFS, small), replacing the synth behind the
+  same ctx.score(mood) API, attribution in README + audio/CREDITS.md + title card. Licence note for Yash: BY-NC is free
+  only for non-monetized personal work; a paid Pocket FM assignment would need Blue Dot's paid licence.
+  Also running: a full truck rebuild (kit.js makeTruck: painted truck-art textures, HORN OK PLEASE, cab interior,
+  `driver` anchor, `cabDoor`) and the flag-down beat (08: hold to flag it down by waving in its lights — the horn was a
+  plot hole after the fall; a new folk 'driver' leans out, DRAFT exchange, you climb in, the truck pulls away).
+- Flag-down beat **done** (uncommitted): 08 truck phase = approach → HOLD TO FLAG IT DOWN (wave, fill) → air brake →
+  folk 'driver' leans out (maroon cap, moustache, gamosa) → 4 DRAFT lines → "Climb in" → round the nose to the far
+  door (sfx.door, cab rocks) → pulls away into the cloud (score 'relief') → Shillong. ~21 s. folk.js: driver + flag,
+  standup, bustRow(). The driver isn't in Shillong yet (needs a sprite in 09). Waiting on the truck rebuild + music.
+- 2026-10-30: truck rebuild **done** (painted truck-art texture, HORN OK PLEASE tailgate, cab interior, grille,
+  chrome, tassels, nazar doll; `driver` + `cabDoor`; paintMat takes a texture, NoColorSpace). Real music **done**
+  (shared/score.js = track player behind ctx.score; audio/*.m4a 16 MB; Roundpine from the first tap on the title;
+  credits on title, end card, README, audio/CREDITS.md). Licence flag: the end card says "Made for Pocket FM Design";
+  Blue Dot's free BY-NC terms exclude work done as part of a job. Committed and pushed as branch `pixel` (main/live
+  untouched).

@@ -34,19 +34,24 @@ export function colorize(g, hex, emit = 0) {
   for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.setAttribute('emit', new THREE.BufferAttribute(e, 1)); return g;
 }
-export function paintMat(uMode) {
+export function paintMat(uMode, map) {
   // Pixel-art shading (PIXEL.md 1): three hard tones (shadow, mid, lit) from a warm key toward the nearest real light (uKey:
   // its direction in view space; uL: how strong), cool navy ambient, a hard moonlit rim along the top edges. No texture
-  // and no smooth falloff: those turn into dither noise in the final pass.
+  // and no smooth falloff: those turn into dither noise in the final pass. With a map (the truck's painted art, drawn on
+  // the pixel grid, nearest filtering) the texel is the colour (times the vertex colour), and it shades the same way.
   return new THREE.ShaderMaterial({
-    uniforms: { uL: { value: .3 }, uKey: { value: new THREE.Vector3(-.4, .7, .6).normalize() }, uMode, uLamp: { value: 1 }, uExposure: { value: 1 } },
+    uniforms: { uL: { value: .3 }, uKey: { value: new THREE.Vector3(-.4, .7, .6).normalize() }, uMode, uLamp: { value: 1 }, uExposure: { value: 1 }, uMap: { value: map || null } },
+    defines: map ? { USE_MAP: '' } : {},
     vertexShader: /* glsl */`
-      attribute vec3 color; attribute float emit; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
-      void main(){ vC = color; vE = emit; vP = position; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+      attribute vec3 color; attribute float emit; varying vec3 vCol; varying vec3 vN; varying float vE; varying vec3 vP; varying vec2 vUv;
+      void main(){ vCol = color; vE = emit; vP = position; vUv = uv; vN = normalize(mat3(modelViewMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
     fragmentShader: GLSL_PALETTE + /* glsl */`
-      uniform float uL, uMode, uLamp, uExposure; uniform vec3 uKey; varying vec3 vC; varying vec3 vN; varying float vE; varying vec3 vP;
+      uniform float uL, uMode, uLamp, uExposure; uniform vec3 uKey; uniform sampler2D uMap; varying vec3 vN; varying float vE; varying vec3 vP; varying vec2 vUv; varying vec3 vCol;
       void main(){
-        vec3 n = normalize(vN);
+        vec3 n = normalize(vN), vC = vCol;
+        #ifdef USE_MAP
+        vC *= texture2D(uMap, vUv).rgb;
+        #endif
         if (vE > .5 && vE < 1.5) { gl_FragColor = vec4(vC * mix(.22, 1.08, uLamp), 1.); return; }   // its own lamps (uLamp: 0 = off)
         float k = dot(n, normalize(uKey)), key = clamp(uL, .2, 1.2);
         // three hard tones: shadow, mid, lit
@@ -69,9 +74,9 @@ export function paintMat(uMode) {
 // a vehicle's parts: geometry coloured per vertex, all on one painted material, all on layer 1 for the ink pass
 function builder(mat, root) {
   const parts = [];
-  const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0 } = {}, parent = root) => {
+  const put = (geo, hex, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, emit = 0, m: pm = mat } = {}, parent = root) => {
     geo.rotateX(rx); geo.rotateY(ry); geo.rotateZ(rz); geo.translate(x, y, z);
-    const m = new THREE.Mesh(colorize(geo, hex, emit), mat); parent.add(m); parts.push(m); return m;
+    const m = new THREE.Mesh(colorize(geo, hex, emit), pm); parent.add(m); parts.push(m); return m;
   };
   const extrude = (pts, depth, bevel) => {
     const sh = new THREE.Shape(); sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
@@ -135,71 +140,247 @@ export function makeTaxi(uMode) {
 }
 
 // The truck, built like the taxi so the two belong together: same painted material, same line. Nose toward +x, wheels on
-// y = 0, about 7.6 long and 3.3 tall (the taxi is 3.4 long). The truck-art bands, posts, eyes and flowers are painted shapes.
+// y = 0, about 7.9 long and 3.4 tall (the taxi is 3.4 long). Its truck art is painted on canvas in pixels (truckArt) and
+// laid on the cargo sides, the tailgate, the doors, the bonnet, the crown board, the bumper, the plate and the mud flaps.
+// Returns { truck, mat, parts, driver, cabDoor }: driver is an Object3D at the driver's window (right-hand drive: the +z
+// side, the one the scenes look at), for a sprite; cabDoor is the passenger's door (the -z side), hinged at its front
+// edge: rotation.y from 0 (shut) to about -1.3 (swung wide open).
+const FONT = {   // 3x5 hand-painted capitals, row by row
+  A: '010101111101101', B: '110101110101110', D: '110101101101110', E: '111100110100111', G: '011100101101011', H: '101101111101101',
+  I: '111010010010111', K: '101101110101101', L: '100100100100111', M: '111111101101101', N: '111101101101101', O: '010101101101010',
+  P: '110101110100100', R: '110101110101101', S: '011100010001110', T: '111010010010010', U: '101101101101111', Y: '101101010010010',
+  0: '111101101101111', 5: '111100110001110', ' ': '000000000000000',
+};
+const SPR = {   // keys: TRUCK.art; X is the petal colour, given when drawn
+  eye: ['....kkkkk....', '..kkwwwwwkk..', '.kwwwbbbwwwk.', 'kwwwbBkBbwwwk', '.kwwwbbbwwwk.', '..kkwwwwwkk..', '....kkkkk....'],
+  brow: ['..kkkkkkkkk..', '.k.........k.'],
+  flower: ['..X..', '.XXX.', 'XXyXX', '.XXX.', '..X..'],
+  bud: ['.X.', 'XyX', '.X.'],
+  leaves: ['g...g', '.g.g.', '..G..'],
+  sprig: ['gg...gg', '.gg.gg.', '...G...'],
+  lotus: ['......r......', '.....rpr.....', '..r..rpr..r..', '.rp..rpr..pr.', '.rpp.rpr.ppr.', '..rpprprppr..', '...rrrrrrr...',
+    '....yyyyy....', 'gg....G....gg', 'gggg..G..gggg', '.ggggGGGgggg.'],
+  lotusS: ['...r...', '.r.r.r.', '.rprpr.', '..rrr..', 'ggg.ggg'],
+  hill: ['...gggggg...', '..gggggggg..', '.gggggggggg.', 'gggggggggggg'],
+  bird: ['..........bbb..', '.........bkbbo.', '.........bbbbo.', '........bbbb...', '..B....bbbbb...', '.BbB..bbbbbb...', 'BbbbBbbrrybbb..',
+    '.BbbbBbryyrbb..', '..BbbbbbrrbbB..', '....BBbbbbbB...', '........o.o....', '.......oo.oo...'],
+  paisley: ['.....g.....', '....gGg....', '...gbbbg...', '..gbBrBbg..', '.gbBryrBbg.', '.gbBryrBbg.', '.gbBrrrBbg.', '..gbBBBbg..',
+    '...gbbbg...', '....ggg....', '.....g.....', '....g......', '...gg......'],
+};
+// the art atlas: [x, y, w, h] in pixels, about 32 px to the metre (the 360-row grid sees about 25)
+const ART = { W: 256, H: 128, side: [0, 0, 176, 58], back: [176, 0, 80, 58], crown: [0, 60, 74, 11], crownSide: [0, 60, 32, 11], door: [76, 60, 29, 24],
+  bonnet: [107, 60, 32, 22], plate: [141, 60, 34, 9], flap: [177, 60, 18, 20], bumper: [0, 86, 74, 10] };
+function truckArt() {
+  const A = TRUCK.art, c = mkCanvas(ART.W, ART.H), g = c.getContext('2d');
+  const box = (x, y, w, h, k) => { g.fillStyle = A[k]; g.fillRect(x, y, w, h); };
+  const spr = (rows, x, y, X = 'r', flip = false) => rows.forEach((r, j) => [...r].forEach((k, i) => {
+    if (k !== '.') box(flip ? x + r.length - 1 - i : x + i, y + j, 1, 1, k === 'X' ? X : k);
+  }));
+  const sprC = (rows, cx, y, X, flip) => spr(rows, cx - (rows[0].length >> 1), y, X, flip);
+  const textW = (s, sc = 1) => (s.length * 4 - 1) * sc;
+  // lettering with a dark drop shadow; bob nudges letters up and down, as a brush does
+  const text = (s, cx, y, k, sc = 1, shadow = null, bob = [0]) => {
+    const x0 = cx - (textW(s, sc) >> 1);
+    for (const [dx, kk] of shadow ? [[1, shadow], [0, k]] : [[0, k]]) [...s].forEach((ch, n) => {
+      for (let i = 0; i < 15; i++) if (FONT[ch][i] === '1') box(x0 + (n * 4 + i % 3) * sc + dx, y + bob[n % bob.length] + ((i / 3) | 0) * sc + dx, sc, sc, kk);
+    });
+  };
+  const cups = (x, y, w, k) => { for (let i = 0; i < w; i++) box(x + i, y + (i % 4 === 1 || i % 4 === 2 ? 1 : 0), 1, 1, k); };   // a scalloped edge
+  const flowerBand = (x, y, w) => {   // 9 rows: blue, white edges, red flowers and leaves
+    box(x, y, w, 9, 'b'); box(x, y, w, 1, 'w'); box(x, y + 8, w, 1, 'w');
+    for (let i = (w % 12) >> 1; i + 11 <= w; i += 12) { spr(SPR.flower, x + i, y + 2, i % 24 ? 'r' : 'w'); spr(SPR.leaves, x + i + 6, y + 3); }
+  };
+  const lotusBand = (x, y, w) => {   // 12 rows: blue with a scalloped top, green hills, a lotus on each
+    box(x, y, w, 12, 'b'); cups(x, y, w, 'w');
+    for (let i = (w % 12) >> 1; i + 12 <= w; i += 12) { spr(SPR.hill, x + i, y + 8); spr(SPR.lotusS, x + i + 3, y + 4); }
+  };
+  { // the cargo side: rails and posts in red, a flower band, seven framed yellow panels, a lotus band
+    const [X, Y] = ART.side;
+    box(X, Y, 176, 58, 'R'); flowerBand(X, Y + 2, 176); lotusBand(X, Y + 40, 176); box(X, Y + 52, 176, 1, 'y');
+    const motifs = ['eye', 'paisley', 'bird', 'lotus', 'bird', 'paisley', 'eye'];
+    for (let i = 0; i < 7; i++) {
+      const x0 = X + Math.round(i * 173 / 7) + 3, w = X + Math.round((i + 1) * 173 / 7) - x0, cx = x0 + (w >> 1), y = Y + 13;
+      box(x0, y, w, 25, 'y'); box(x0 + 1, y + 1, w - 2, 1, 'o'); box(x0 + 1, y + 23, w - 2, 1, 'o'); box(x0 + 1, y + 1, 1, 23, 'o'); box(x0 + w - 2, y + 1, 1, 23, 'o');
+      const m = motifs[i], flip = i > 3;
+      if (m === 'eye') { sprC(SPR.brow, cx, y + 3); sprC(SPR.eye, cx, y + 6); sprC(SPR.flower, cx, y + 15); sprC(SPR.leaves, cx - 6, y + 17); sprC(SPR.leaves, cx + 6, y + 17); }
+      if (m === 'paisley') { sprC(SPR.paisley, cx, y + 4, 'r', flip); sprC(SPR.bud, cx + (flip ? -6 : 6), y + 17, 'r'); }
+      if (m === 'bird') { sprC(SPR.bird, cx, y + 5, 'r', flip); sprC(SPR.sprig, cx, y + 18); sprC(SPR.bud, cx + (flip ? 6 : -6), y + 3, 'r'); }
+      if (m === 'lotus') { sprC(SPR.lotus, cx, y + 7); sprC(SPR.bud, cx - 7, y + 3, 'b'); sprC(SPR.bud, cx + 7, y + 3, 'b'); }
+    }
+  }
+  { // the tailgate: HORN OK PLEASE, and USE DIPPER AT NIGHT on the blue band under it
+    const [X, Y] = ART.back, cx = X + 40;
+    box(X, Y, 80, 58, 'R'); flowerBand(X, Y + 2, 80); box(X + 2, Y + 13, 76, 35, 'y');
+    box(X + 3, Y + 14, 74, 1, 'o'); box(X + 3, Y + 46, 74, 1, 'o');
+    text('HORN', cx, Y + 16, 'r', 2, 'k', [0, 1, 0, 0]);
+    text('OK', cx, Y + 27, 'b', 2, 'k'); spr(SPR.lotusS, X + 14, Y + 30); spr(SPR.lotusS, X + 59, Y + 30);
+    text('PLEASE', cx, Y + 36, 'r', 2, 'k', [0, 0, 1, 0, 1, 0]);
+    box(X, Y + 50, 80, 8, 'b'); text('USE DIPPER AT NIGHT', cx, Y + 51, 'w');
+  }
+  { // the crown board over the windscreen: flowers on yellow, a scalloped blue fringe
+    const [X, Y] = ART.crown;
+    box(X, Y, 74, 11, 'y'); box(X, Y, 74, 1, 'R'); box(X, Y + 7, 74, 1, 'R'); box(X, Y + 8, 74, 3, 'b'); cups(X, Y + 9, 74, 'w');
+    for (let i = 2; i + 5 <= 74; i += 9) spr(i % 18 === 2 ? SPR.flower : SPR.leaves, X + i, Y + (i % 18 === 2 ? 2 : 3), i % 36 === 2 ? 'r' : 'b');
+  }
+  { // a door: blue frame, orange line, an eye over flowers
+    const [X, Y] = ART.door, cx = X + 14;
+    box(X, Y, 29, 24, 'b'); box(X + 1, Y + 1, 27, 22, 'y'); box(X + 2, Y + 2, 25, 1, 'o'); box(X + 2, Y + 21, 25, 1, 'o');
+    sprC(SPR.brow, cx, Y + 3); sprC(SPR.eye, cx, Y + 6); sprC(SPR.flower, cx, Y + 15); sprC(SPR.bud, cx - 7, Y + 16, 'b'); sprC(SPR.bud, cx + 7, Y + 16, 'b');
+    sprC(SPR.leaves, cx - 4, Y + 19); sprC(SPR.leaves, cx + 4, Y + 19);
+  }
+  { // the bonnet's side: a lotus and blue flowers on the cab's orange
+    const [X, Y] = ART.bonnet, cx = X + 16;
+    box(X, Y, 32, 22, 'o'); sprC(SPR.lotus, cx, Y + 6); sprC(SPR.flower, cx - 11, Y + 10, 'b'); sprC(SPR.flower, cx + 11, Y + 10, 'b');
+    sprC(SPR.bud, cx - 9, Y + 3, 'r'); sprC(SPR.bud, cx + 9, Y + 3, 'r');
+  }
+  { // the plate (made up: no real number)
+    const [X, Y] = ART.plate;
+    box(X, Y, 34, 9, 'k'); box(X + 1, Y + 1, 32, 7, 'P'); text('ML 05 HP', X + 17, Y + 2, 'k');
+  }
+  { // a mud flap: OK TATA
+    const [X, Y] = ART.flap;
+    box(X, Y, 18, 20, 'R'); box(X + 1, Y + 1, 16, 18, 'k'); text('OK', X + 9, Y + 2, 'w', 2); text('TATA', X + 9, Y + 13, 'y');
+  }
+  { // the front bumper: blue, yellow edges, flowers
+    const [X, Y] = ART.bumper;
+    box(X, Y, 74, 10, 'b'); box(X, Y, 74, 1, 'y'); box(X, Y + 9, 74, 1, 'y');
+    for (let i = 3; i + 5 <= 74; i += 10) { spr(SPR.flower, X + i, Y + 2, i % 20 === 3 ? 'r' : 'w'); spr(SPR.bud, X + i + 6, Y + 3, 'y'); }
+  }
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.NoColorSpace; map.magFilter = map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
+  return map;
+}
 export function makeTruck(uMode) {
   const mat = paintMat(uMode), truck = new THREE.Group();
   mat.uniforms.uExposure.value = .72;   // its colours are loud; at night they sit back
+  const art = paintMat(uMode, truckArt());   // the painted panels: same light, shared uniforms (keyLight, uLamp, uExposure)
+  for (const k in mat.uniforms) if (k !== 'uMap') art.uniforms[k] = mat.uniforms[k];
   const { parts, put, extrude } = builder(mat, truck);
-  const T = TRUCK;
-  // chassis, tank, the cab: short rounded bonnet, upright windscreen, a painted crown board over the visor
+  const T = TRUCK, PI = Math.PI;
+  // a painted panel: a plane showing rect r of the art, facing +z (ry turns it: PI for -z, PI / 2 for +x, -PI / 2 for -x)
+  const decal = (w, h, r, at, parent) => {
+    const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (r[0] + uv.getX(i) * r[2]) / ART.W, 1 - (r[1] + (1 - uv.getY(i)) * r[3]) / ART.H);
+    return put(g, UTIL.white, { ...at, m: art }, parent);
+  };
+  const face = s => (s < 0 ? PI : 0);
+
+  // chassis, the fuel tank with chrome straps, the side steps, the under-run rail
   put(new THREE.BoxGeometry(7.2, .22, 1.1), T.chassis, { x: -.1, y: .82 });
-  put(new THREE.BoxGeometry(1.1, .42, .5), T.tank, { x: .4, y: .7, z: .85 });
-  put(extrude([[1.85, .95], [1.85, 3.0], [2.72, 3.0], [2.98, 2.12], [3.6, 2.0], [3.86, 1.75], [3.86, 1.02], [3.74, .92]], 2.16, .08), T.cab);
-  put(new THREE.BoxGeometry(1.0, .34, 2.3), T.crown, { x: 2.3, y: 3.22 });
-  put(new THREE.BoxGeometry(.95, .08, 2.34), T.band, { x: 2.3, y: 3.05 });
-  put(new THREE.BoxGeometry(.42, .08, 2.36), T.crown, { x: 2.86, y: 3.06, rz: -.18 });   // the visor
-  put(new THREE.BoxGeometry(.02, .78, 1.9), T.glass, { x: 2.86, y: 2.56, rz: .27, emit: 2 });
-  put(new THREE.BoxGeometry(.04, .66, .86), T.green, { x: 3.9, y: 1.42 });            // the painted grille
-  for (let i = -3; i <= 3; i++) put(new THREE.BoxGeometry(.05, .6, .025), T.crown, { x: 3.92, y: 1.42, z: i * .11 });
-  put(new THREE.BoxGeometry(.2, .3, 2.3), T.band, { x: 3.92, y: .8 });                // bumper, with tassels under it
-  T.tassels.forEach((c, i) => [-1, 1].forEach(sgn => put(new THREE.ConeGeometry(.055, .3, 6), c, { x: 3.95, y: .5, z: sgn * (.15 + i * .2) })));
-  for (const sgn of [-1, 1]) {
-    put(new THREE.CylinderGeometry(.15, .15, .06, 16), T.lamp, { x: 3.88, y: 1.28, z: sgn * .72, rz: Math.PI / 2, emit: 1 });
-    put(new THREE.CylinderGeometry(.06, .06, .05, 10), T.crown, { x: 3.86, y: 1.62, z: sgn * .9, rz: Math.PI / 2, emit: 1 });
-    put(new THREE.BoxGeometry(.62, .56, .02), T.glass, { x: 2.32, y: 2.5, z: sgn * 1.12, emit: 2 });
-    put(new THREE.BoxGeometry(.05, .5, .05), T.mirror, { x: 3.1, y: 2.35, z: sgn * 1.22 });
-    put(new THREE.BoxGeometry(.06, .34, .16), T.mirror, { x: 3.1, y: 2.5, z: sgn * 1.3 });
-    put(new THREE.TorusGeometry(.66, .09, 6, 18, Math.PI), T.green, { x: 2.65, y: .62, z: sgn * 1.06 });   // front arch
-    // an eye on each door
-    const eye = (x, y, z) => {
-      put(new THREE.CylinderGeometry(.17, .17, .02, 18).scale(1.7, 1, 1), T.eye, { x, y, z, rx: Math.PI / 2 });
-      put(new THREE.CylinderGeometry(.09, .09, .02, 14), T.iris, { x, y, z: z + sgn * .01, rx: Math.PI / 2 });
-      put(new THREE.CylinderGeometry(.04, .04, .02, 10), T.pupil, { x, y, z: z + sgn * .02, rx: Math.PI / 2 });
-    };
-    eye(2.32, 1.6, sgn * 1.13);
-    // the cargo body's side: painted bands, red posts, a flower or an eye in each yellow panel, the top rail
-    const z = sgn * 1.2;
-    for (const [y0, y1, c] of [[1.1, 1.45, T.band], [1.45, 1.58, T.post], [1.58, 2.36, T.panel], [2.36, 2.48, T.post], [2.48, 2.8, T.green], [2.8, 2.92, T.post]])
-      put(new THREE.BoxGeometry(5.5, y1 - y0, .05), c, { x: -.98, y: (y0 + y1) / 2, z });
-    for (let i = 0; i <= 7; i++) put(new THREE.BoxGeometry(.1, 1.86, .08), T.post, { x: -3.7 + i * .78, y: 2.0, z: z + sgn * .02 });
-    for (let i = 0; i < 7; i++) {
-      const x = -3.31 + i * .78;
-      if (i === 0 || i === 6) eye(x, 1.97, z + sgn * .03);
-      else {
-        put(new THREE.CylinderGeometry(.2, .2, .02, 6), T.flower, { x, y: 1.97, z: z + sgn * .03, rx: Math.PI / 2 });
-        put(new THREE.CylinderGeometry(.07, .07, .02, 8), T.crown, { x, y: 1.97, z: z + sgn * .045, rx: Math.PI / 2 });
-      }
-      put(new THREE.CylinderGeometry(.08, .08, .02, 5), T.flower, { x, y: 1.27, z: z + sgn * .03, rx: Math.PI / 2 });
-    }
-    // the tarp's ropes, down from the top to the rail
-    for (let i = 0; i <= 7; i++) put(new THREE.CylinderGeometry(.018, .018, .5, 4), T.rope, { x: -3.7 + i * .78, y: 2.95, z: z + sgn * .06 });
-    put(new THREE.BoxGeometry(.06, .6, .5), T.chassis, { x: -2.95, y: .7, z: sgn * 1.0 });   // mud flap
-    put(new THREE.BoxGeometry(.04, .14, .16), T.tail, { x: -3.78, y: 1.0, z: sgn * .95, emit: 1 });
+  put(new THREE.CylinderGeometry(.22, .22, 1.0, 14), T.tank, { x: .4, y: .66, z: .86, rz: PI / 2 });
+  for (const dx of [-.3, .3]) put(new THREE.CylinderGeometry(.23, .23, .04, 14), T.chrome, { x: .4 + dx, y: .66, z: .86, rz: PI / 2 });
+  put(new THREE.CylinderGeometry(.05, .05, .06, 8), T.chrome, { x: .72, y: .9, z: .86 });
+  for (const s of [-1, 1]) {
+    put(new THREE.BoxGeometry(3.3, .07, .05), T.post, { x: .25, y: .6, z: s * 1.17 });
+    for (const x of [-1.2, .25, 1.7]) put(new THREE.BoxGeometry(.05, .28, .05), T.post, { x, y: .72, z: s * 1.15 });
+    for (const y of [.42, .72]) put(new THREE.BoxGeometry(.3, .04, .2), T.chrome, { x: 1.95, y, z: s * 1.1 });
+    put(new THREE.BoxGeometry(.04, .4, .04), T.chassis, { x: 1.82, y: .6, z: s * 1.1 });
   }
-  put(new THREE.BoxGeometry(5.5, .15, 2.45), T.post, { x: -.98, y: 1.03 });   // the bed
-  for (const [x, c] of [[-3.73, T.band], [1.76, T.cab]]) put(new THREE.BoxGeometry(.06, 1.82, 2.36), c, { x, y: 2.0 });
-  // the tarp: a slack, rounded hump over the load
-  put(extrude([[-1.25, 0], [-1.2, .2], [-.9, .34], [0, .38], [.9, .34], [1.2, .2], [1.25, 0]], 5.6, .06), T.tarp, { x: -.98, y: 2.9, ry: Math.PI / 2 });
-  // wheels: single at the front, doubled at the back
-  for (const [x, zs] of [[2.65, [1.0]], [-2.2, [1.0, .62]]]) for (const sgn of [-1, 1]) for (const zz of zs) {
-    put(new THREE.CylinderGeometry(.55, .55, .34, 20), T.tyre, { x, y: .55, z: sgn * zz, rx: Math.PI / 2 });
-    if (zz === zs[0]) {
-      put(new THREE.CylinderGeometry(.3, .3, .02, 16), T.rim, { x, y: .55, z: sgn * (zz + .18), rx: Math.PI / 2 });
-      put(new THREE.CylinderGeometry(.1, .1, .03, 8), T.hub, { x, y: .55, z: sgn * (zz + .19), rx: Math.PI / 2 });
+
+  // the cab: rounded bonnet and nose, a roof on pillars, open side windows you can see in through
+  put(extrude([[1.85, .95], [1.85, 2.12], [2.98, 2.12], [3.6, 2.0], [3.86, 1.75], [3.86, 1.02], [3.74, .92]], 2.16, .08), T.cab);
+  put(extrude([[1.85, 2.84], [1.85, 3.0], [2.72, 3.0], [2.78, 2.84]], 2.16, .04), T.cab);
+  put(new THREE.BoxGeometry(.08, .64, 2.2), T.interior, { x: 1.9, y: 2.5 });
+  put(new THREE.BoxGeometry(.1, .5, 1.9), T.seat, { x: 2.04, y: 2.42 });                   // the bench's back
+  put(new THREE.BoxGeometry(.26, .1, 2.1), T.interior, { x: 2.86, y: 2.24 });              // the dash
+  put(new THREE.TorusGeometry(.17, .028, 6, 16), T.chassis, { x: 2.6, y: 2.44, z: .5, rx: PI / 2, rz: .6 });   // the wheel
+  put(new THREE.CylinderGeometry(.025, .025, .3, 6), T.chassis, { x: 2.69, y: 2.32, z: .5, rz: .6 });
+  for (const s of [-1, 1]) put(new THREE.BoxGeometry(.1, .66, .1), T.cab, { x: 2.9, y: 2.5, z: s * 1.08, rz: .32 });   // A-pillars
+  put(new THREE.BoxGeometry(.02, .64, 2.0), T.glass, { x: 2.9, y: 2.5, rz: .32, emit: 2 });   // the windscreen, split down the middle
+  put(new THREE.BoxGeometry(.05, .64, .06), T.cab, { x: 2.91, y: 2.5, rz: .32 });
+  put(new THREE.BoxGeometry(.1, .05, 2.2), T.band, { x: 3.0, y: 2.21 });
+  // the doors: the driver's is shut; the passenger's (cabDoor) swings on its front edge
+  const door = (parent, X, Z, s) => {   // X: the hinge's x; Z: the cab's side; s: +1 the driver's side, -1 the passenger's
+    put(new THREE.BoxGeometry(.92, .8, .04), T.cab, { x: X - .47, y: 1.8, z: Z + s * .02 }, parent);
+    decal(.84, .7, ART.door, { x: X - .47, y: 1.8, z: Z + s * .05, ry: face(s) }, parent);
+    put(new THREE.BoxGeometry(.12, .035, .04), T.chrome, { x: X - .82, y: 1.6, z: Z + s * .06 }, parent);
+    put(new THREE.BoxGeometry(.06, .58, .07), T.band, { x: X - .9, y: 2.5, z: Z }, parent);   // the window's frame
+    put(new THREE.BoxGeometry(.86, .05, .07), T.band, { x: X - .47, y: 2.78, z: Z }, parent);
+    put(new THREE.BoxGeometry(.94, .06, .09), T.band, { x: X - .47, y: 2.22, z: Z + s * .01 }, parent);
+  };
+  door(truck, 2.9, 1.16, 1);
+  const cabDoor = new THREE.Group(); cabDoor.position.set(2.9, 0, -1.16); truck.add(cabDoor);
+  door(cabDoor, 0, 0, -1);
+  put(new THREE.BoxGeometry(.86, .76, .01), T.interior, { x: 2.43, y: 1.8, z: -1.165 });   // the doorway, dark when it opens
+  const driver = new THREE.Object3D(); driver.position.set(2.42, 2.5, 1.12); truck.add(driver);
+  for (const s of [-1, 1]) {
+    decal(.9, .62, ART.bonnet, { x: 3.38, y: 1.5, z: s * 1.175, ry: face(s) });
+    put(new THREE.TorusGeometry(.66, .09, 6, 18, PI), T.green, { x: 2.65, y: .62, z: s * 1.14 });   // front arch
+    // wing mirrors on arms
+    put(new THREE.BoxGeometry(.035, .035, .34), T.chassis, { x: 3.04, y: 2.28, z: s * 1.28 });
+    put(new THREE.BoxGeometry(.035, .3, .035), T.chassis, { x: 3.06, y: 2.4, z: s * 1.44 });
+    put(new THREE.BoxGeometry(.03, .38, .2), T.chrome, { x: 3.07, y: 2.55, z: s * 1.46 });
+    put(new THREE.BoxGeometry(.05, .34, .16), T.mirror, { x: 3.1, y: 2.55, z: s * 1.46 });
+  }
+  // the crown board and visor over the windscreen
+  put(new THREE.BoxGeometry(1.0, .34, 2.3), T.crown, { x: 2.3, y: 3.22 });
+  decal(2.3, .34, ART.crown, { x: 2.815, y: 3.22, ry: PI / 2 });
+  for (const s of [-1, 1]) decal(1.0, .34, ART.crownSide, { x: 2.3, y: 3.22, z: s * 1.165, ry: face(s) });
+  put(new THREE.BoxGeometry(.95, .08, 2.34), T.band, { x: 2.3, y: 3.05 });
+  put(new THREE.BoxGeometry(.42, .08, 2.36), T.crown, { x: 2.86, y: 3.06, rz: -.18 });
+  // the face: chrome-framed grille, round lamps in chrome rings, indicators, the bumper, its plate, tassels and the charm
+  put(new THREE.BoxGeometry(.04, .76, .96), T.chrome, { x: 3.95, y: 1.42 });
+  put(new THREE.BoxGeometry(.04, .66, .84), T.chassis, { x: 3.97, y: 1.42 });
+  for (let i = -3; i <= 3; i++) put(new THREE.BoxGeometry(.05, .6, .06), T.green, { x: 3.99, y: 1.42, z: i * .115 });
+  for (const s of [-1, 1]) {
+    put(new THREE.CylinderGeometry(.15, .15, .06, 16), T.lamp, { x: 3.97, y: 1.28, z: s * .74, rz: PI / 2, emit: 1 });
+    put(new THREE.TorusGeometry(.16, .035, 6, 18), T.chrome, { x: 4.0, y: 1.28, z: s * .74, ry: PI / 2 });
+    put(new THREE.BoxGeometry(.04, .08, .16), T.indicator, { x: 3.96, y: 1.58, z: s * .74 });
+  }
+  put(new THREE.BoxGeometry(.2, .3, 2.36), T.band, { x: 4.04, y: .8 });
+  decal(2.3, .3, ART.bumper, { x: 4.155, y: .8, ry: PI / 2 });
+  decal(.64, .17, ART.plate, { x: 4.167, y: .8, ry: PI / 2 });
+  T.tassels.forEach((c, i) => [-1, 1].forEach(s => {   // tassels: a knot, then the flared threads
+    put(new THREE.SphereGeometry(.04, 6, 4), c, { x: 4.08, y: .62, z: s * (.26 + i * .19) });
+    put(new THREE.ConeGeometry(.06, .28, 6), c, { x: 4.08, y: .46, z: s * (.26 + i * .19) });
+  }));
+  put(new THREE.BoxGeometry(.01, .12, .01), T.rope, { x: 4.1, y: .6, z: 0 });   // the nazar charm: a little black doll
+  put(new THREE.SphereGeometry(.09, 8, 6), T.doll, { x: 4.1, y: .48, z: 0 });
+  put(new THREE.ConeGeometry(.08, .16, 6), T.doll, { x: 4.1, y: .33, z: 0 });
+  for (const s of [-1, 1]) put(new THREE.BoxGeometry(.01, .035, .035), T.dollEye, { x: 4.19, y: .5, z: s * .035 });
+  put(new THREE.BoxGeometry(.01, .05, .03), T.dollTongue, { x: 4.19, y: .43, z: 0 });
+
+  // the cargo body: the bed, painted sides with raised posts, the tailgate, the tarp tied down over the load
+  const CX = -.98, SW = 5.5, SH = 1.82, SY = 2.01, postX = i => CX - SW / 2 + (Math.round(i * 173 / 7) + 1.5) / 176 * SW;
+  put(new THREE.BoxGeometry(SW, .15, 2.45), T.post, { x: CX, y: 1.03 });
+  put(new THREE.BoxGeometry(.06, SH, 2.36), T.cab, { x: 1.76, y: SY });
+  for (const s of [-1, 1]) {
+    put(new THREE.BoxGeometry(SW, SH, .05), T.post, { x: CX, y: SY, z: s * 1.2 });
+    decal(SW, SH, ART.side, { x: CX, y: SY, z: s * 1.235, ry: face(s) });
+    for (let i = 0; i <= 7; i++) put(new THREE.BoxGeometry(.09, SH, .04), T.post, { x: postX(i), y: SY, z: s * 1.24 });
+    put(new THREE.BoxGeometry(SW + .1, .07, .08), T.post, { x: CX, y: 1.1, z: s * 1.24 });
+    put(new THREE.BoxGeometry(.06, .6, .5), T.chassis, { x: -2.95, y: .7, z: s * 1.0 });   // mud flap
+    decal(.5, .56, ART.flap, { x: -2.995, y: .7, z: s * 1.0, ry: -PI / 2 });
+    put(new THREE.BoxGeometry(.04, .14, .16), T.tail, { x: -3.8, y: 1.0, z: s * .95, emit: 1 });
+    for (let i = 0; i < 3; i++) put(new THREE.ConeGeometry(.05, .26, 6), T.tassels[i * 2], { x: -3.8, y: .84, z: s * (1.15 - i * .12) });
+    // the tailgate's chains, slack between the corner post and the gate
+    for (let j = 0; j < 8; j++) {
+      const t = j / 7;
+      put(new THREE.BoxGeometry(.03, .06, .06), T.chain, { x: -3.8, y: 2.82 - .8 * t * (1 - t), z: s * lerp(1.18, .7, t), rx: j % 2 ? PI / 4 : 0 });
     }
+  }
+  put(new THREE.BoxGeometry(.06, SH, 2.36), T.post, { x: -3.73, y: SY });
+  decal(2.36, SH, ART.back, { x: -3.775, y: SY, ry: -PI / 2 });
+  const TP = [[-1.25, 0], [-1.2, .2], [-.9, .34], [0, .38], [.9, .34], [1.2, .2], [1.25, 0]];
+  put(extrude(TP, 5.6, .06), T.tarp, { x: CX, y: 2.9, ry: PI / 2 });
+  for (const s of [-1, 1]) put(new THREE.BoxGeometry(5.62, .18, .04), T.tarp, { x: CX, y: 2.91, z: s * 1.29 });   // its skirt
+  for (let i = 0; i <= 7; i++) {   // ropes over the hump, down the skirt, tied off on a hook at each post
+    put(extrude(TP.map(([a, b]) => [a * 1.06, b * 1.25]), .03, .012), T.rope, { x: postX(i), y: 2.9, ry: PI / 2 });
+    for (const s of [-1, 1]) {
+      put(new THREE.CylinderGeometry(.02, .02, .38, 4), T.rope, { x: postX(i), y: 2.81, z: s * 1.33 });
+      put(new THREE.TorusGeometry(.04, .016, 4, 8), T.rope, { x: postX(i), y: 2.6, z: s * 1.3 });
+    }
+  }
+  // wheels: single at the front, doubled at the back; red rims, chrome hubcaps and lug nuts
+  for (const [x, zs] of [[2.65, [1.0]], [-2.2, [1.0, .62]]]) for (const s of [-1, 1]) for (const zz of zs) {
+    put(new THREE.CylinderGeometry(.55, .55, .34, 20), T.tyre, { x, y: .55, z: s * zz, rx: PI / 2 });
+    if (zz !== zs[0]) continue;
+    put(new THREE.CylinderGeometry(.3, .3, .02, 16), T.rim, { x, y: .55, z: s * (zz + .18), rx: PI / 2 });
+    put(new THREE.CylinderGeometry(.14, .14, .04, 12), T.chrome, { x, y: .55, z: s * (zz + .2), rx: PI / 2 });
+    for (let k = 0; k < 6; k++) put(new THREE.CylinderGeometry(.03, .03, .04, 6), T.chrome, { x: x + .22 * Math.cos(k * PI / 3), y: .55 + .22 * Math.sin(k * PI / 3), z: s * (zz + .2), rx: PI / 2 });
   }
   for (const m of parts) m.layers.enable(1);
-  return { truck, mat, parts };
+  return { truck, mat, parts, driver, cabDoor };
 }
 
 /* ---------- the final pass: one pixel grid for the whole frame (PIXEL.md 1) ---------- */

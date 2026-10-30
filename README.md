@@ -14,7 +14,7 @@ Every painting is 2.5D: `<scene>/depth.png` (from `tools/make_depth.py`) displac
 
 What a scene gets in `ctx`, besides the renderer and `input`: `say(label, text, secs, expr)` for the dialogue box, `subAt('top' | 'bottom')` to move it (top by default, reset on every scene), `prompt(label)` for the advance button, `hornable(on)` to show the HORN button on touch while a honk would be answered (hidden by default, reset on every scene), and the sound API (`bed`, `rpm`, `engineOff`, `duck`, `duckFor`, `sfx`, `honk`). The shared UI classes (`.panel`, `.btn`, `.pick`, `.label`, `.box`, `.hint`, `.cue`) are listed at the top of `index.html`'s `<style>`. Each folder's old `index.html` now forwards to `/?scene=<name>`.
 
-Controls, the same everywhere and shown once on the title card: **hold** (mouse, screen or Space) is whatever the taxi does in that scene, drive faster or brake; **tap** or Enter is the next thing; **H** is the horn. On touch, the horn is a HORN button. With `?debug`, keys 1/2/3 show the lights / the dark painting / the lit painting. `?fps` shows the frame rate.
+Controls, the same everywhere and shown once on the title card: **hold** (mouse, screen or Space) is whatever the taxi does in that scene, drive faster or brake (at the edge, after the fall, it flags the truck down); **tap** or Enter is the next thing; **H** is the horn. On touch, the horn is a HORN button. With `?debug`, keys 1/2/3 show the lights / the dark painting / the lit painting. `?fps` shows the frame rate.
 
 ## What's here
 
@@ -27,7 +27,7 @@ Controls, the same everywhere and shown once on the title card: **hold** (mouse,
 | 05-framing-guide | The 3D framing guide for the hairpin painting, and its four renders | |
 | 06-dak-prototype | The first tiny-planet proof of concept (before Hairpin) | |
 | 07-webgl-oddities | The research gallery of niche WebGL projects | |
-| 08-edge-scene | Beats 05–09 on the real edge paintings: the last stretch of road and hold-to-brake (sets HANG), the hang, the doors, sitting on the edge, the wipe to *then* (the Ambassador on the cliff face, the two men), him in ink with the ember, the flick, the taxi falling, the truck that gives you a lift | |
+| 08-edge-scene | Beats 05–09 on the real edge paintings: the last stretch of road and hold-to-brake (sets HANG), the hang, the doors, sitting on the edge, the wipe to *then* (the Ambassador on the cliff face, the two men), him in ink with the ember, the flick, the taxi falling; the truck comes round the bend, you both stand and walk into its light, hold to flag it down (both wave), it stops, the driver leans out of his window (a short exchange, DRAFT lines), waves you in, you go round to the far-side door and climb in, and it pulls away round the hairpin into the cloud | |
 | 09-shillong | Beat 10, in November with the cherry in bloom (`blossom.js`: a painted tree over the railing with festival bulbs, blossom down the slopes, falling petals that catch the beam and drift from the pointer, a gust with the star and a shower when you wish): engine ticking, the shooting star, hold to bank a wish, the quote in dialogue boxes. Still a placeholder painting | |
 | 10-jorabat-intro | Beat 01 on the dashboard paintings (mirrored to right-hand drive): dome light as the passenger gets in, the five objects light up as you point; the paper star if a wish was banked | |
 | 11-nongpoh | Beat 03: the taxi crosses the rainy pineapple stalls; lanterns flicker and streak the wet road; the grandfather line | |
@@ -38,6 +38,7 @@ Controls, the same everywhere and shown once on the title card: **hold** (mouse,
 | source-art | Every painting and cut-out as you sent it (the old painted people, `p-*.png`, are kept here) | |
 | shared/kit.js | The taxi, the pixel pass, the Stage, helpers, and the passenger, shared by every scene | |
 | index.html | The whole piece: title card, scene swapping, sound, controls | |
+| audio | The score: eight Blue Dot Sessions tracks as AAC (-18 LUFS, 96 kbps), played by `shared/score.js`. Credits in `audio/CREDITS.md` | |
 | tools | prepare_sprites.py: trims, flips and makes the night version of a figure | |
 
 ## Running locally
@@ -56,9 +57,26 @@ Sprites for the edge scene live in `08-edge-scene/sprites/`. The ghost frames ar
 
 Not used yet: `source-art/rope-puller.png` (the rope rescue was dropped when the taxi started falling). The stand uses `jorabat-dark` with a warm lift in code until `13-the-stand/jorabat-lit.jpg` exists.
 
+## Music
+
+The score is eight recorded tracks by **Blue Dot Sessions** (https://www.sessions.blue), each licensed **CC BY-NC 4.0** (https://creativecommons.org/licenses/by-nc/4.0/), from the Free Music Archive. Transcoded, loudness-normalised and faded at the ends; otherwise unchanged. `ctx.score(mood, { now })` picks the track (`shared/score.js`); every scene has a default mood (index.html `SCORE`).
+
+| Mood | Track | Album | Source |
+|---|---|---|---|
+| hopeful (title, the stand) | Roundpine | Resolute | https://freemusicarchive.org/music/Blue_Dot_Sessions/Resolute/Roundpine/ |
+| warm (Jorabat) | Tiptoe Treadline | Resolute | https://freemusicarchive.org/music/Blue_Dot_Sessions/Resolute/Tiptoe_Treadline/ |
+| drive, drive-hold (the climb) | Flashing Runner | Resolute | https://freemusicarchive.org/music/Blue_Dot_Sessions/Resolute/Flashing_Runner/ |
+| tender (Nongpoh) | Greyleaf Willow | Resolute | https://freemusicarchive.org/music/Blue_Dot_Sessions/Resolute/Greyleaf_Willow/ |
+| suspended (the cloud line) | Inside the Paper Crane | Origami | https://freemusicarchive.org/music/Blue_Dot_Sessions/Origami_1726/Inside_the_Paper_Crane/ |
+| edge, edge-story (the hang, his story) | Dense Reflections | Ocean Blooms | https://freemusicarchive.org/music/Blue_Dot_Sessions/ocean-blooms/dense-reflections/ |
+| relief (the truck) | Even Dreams of Beaches | Resolute | https://freemusicarchive.org/music/Blue_Dot_Sessions/Resolute/Even_Dreams_of_Beaches/ |
+| shillong, bloom | Bright Edges | Ocean Blooms | https://freemusicarchive.org/music/Blue_Dot_Sessions/ocean-blooms/bright-edges/ |
+
+NonCommercial: Blue Dot Sessions' free tier covers non-monetised projects not made as part of a job (sessions.blue/licensing). A paid or commissioned use needs their project licence.
+
 ## Checking a moment without playing through
 
-- `?scene=edge&at=seated&t=20` jumps to 20 s after you both sit (`at` = car, pout, yout, seated, flick, truck, lift). `?hang=0.8` sets the hang. `?auto` plays the steps on its own; `?speed=3` runs faster.
+- `?scene=edge&at=seated&t=20` jumps to 20 s after you both sit (`at` = car, pout, yout, seated, flick, truck, stop, lift; for truck/stop/lift, `t` plays the beat on that far). `?hang=0.8` sets the hang. `?auto` plays the steps on its own; `?speed=3` runs faster.
 - `?scene=shillong&t=7` jumps to 7 s after the engine goes off.
 - `?scene=nongpoh&u=0.5` (or cloud) starts halfway along.
 

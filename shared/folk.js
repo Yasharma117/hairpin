@@ -7,7 +7,7 @@
 // shader picks each slot's colour from one of five light steps (quantized, never blended), plus a 1 px darker rim on the
 // side away from the light and a 1 px light rim on the side toward it, plus a pixel ellipse shadow.
 //
-//   const p = folk.person(look | 'you' | 'grandpa' | 'friend' | 'walker' | 'basket', { size: 'near' | 'far' })
+//   const p = folk.person(look | 'you' | 'grandpa' | 'friend' | 'walker' | 'basket' | 'driver', { size: 'near' | 'far' })
 //   scene.add(p.obj); stage.place(p.obj, x, y, paintPxPerSpritePx)   // p.obj's origin is the foot anchor; 1 unit = 1 sprite px
 //   p.face('left' | 'right' | 'front' | 'back'); p.play('walk');
 //   every frame: x += p.update(dt) * (facing left ? -1 : 1)          // update returns the sprite px walked: feet never slide
@@ -17,6 +17,8 @@
 //   sitting from behind: p.play('lookup')                            // the head tips back (to the star) and holds
 //   folk.person('ghost'): him in ink, a cream line only, sitting from behind; p.play('drag', { onEnd: () => p.play('sit') }),
 //   p.setEmber(0..1)                                                 // the cigarette's tip: > .5 is a drag (hot, 2 px)
+//   standing: p.play('flag') (both arms up, flagging down), from behind p.play('standup') (off the ledge)
+//   the driver at a window: p.play('lean') / p.play('leanwave'): chest up only (nothing below the sill row, folk.bustRow)
 // Every mesh (and the shadow) is flagged pixel art (userData.pixelArt, layer 3) so Ink draws it as is.
 import * as THREE from 'three';
 import { FOLK } from './style.js';
@@ -648,6 +650,26 @@ const N_TOPS = {
 };
 N_TOPS.work = N_TOPS.shirt;
 
+// the truck driver's woollen cap (the edge): a knitted dome, pulled down to the brows, the brim rolled up in ribs; grey at
+// the temples and the back. `rib(c)`: one row of the rolled brim, 25 wide (near) or 17 (far)
+const rib = (c, w) => 'o' + rows(w - 6, i => i % 2 ? 'K' : c).join('') + 'KKKKo';
+const N_WOOL = [
+  '.......ooooooooooo.......',
+  '.....oozkkkkkkkkkkoo.....',
+  '...oozkkkkkkkkkkkkkKoo...',
+  '..ozkkkkkkkkkkkkkkkkKKo..',
+  '.ozkkkkkkkkkkkkkkkkkkKKo.',
+  '.ozkkkkkkkkkkkkkkkkkKKKo.',
+  'okzkkkkkkkkkkkkkkkkkKKKKo',
+  'okkkkkkkkkkkkkkkkkkKKKKKo',
+  'o'.repeat(25), rib('k', 25), rib('z', 25), rib('k', 25), 'o'.repeat(25)];
+N_HAIR.wool = {
+  front: [L('head', 0, -3, 'hair', [...N_WOOL, 'oHh....................Ho', 'oH.....................Ho', 'oH.....................Ho'])],
+  left: [L('head', 0, -3, 'hair', [...N_WOOL, '.............ohhhhhhhHHHo', '.............oHhhhhhhHHHo', '..............oHhhhhhhHHo',
+    '..................ohhHHHo', '...................ohHHHo', '...................oHHHHo', '....................oHHo.'])],
+  back: [L('head', 0, -3, 'hair', [...N_WOOL, ...N_BACK, '....oHhhhhhhhhhhhHHHo....', '......ooooooooooooo......'])],
+};
+
 const N_EXTRAS = {
   headphones: {
     front: [L('head', 0, -4, 'ears', [
@@ -763,14 +785,28 @@ const N_FACE = {
     left: [L('head', 0, 16, 'face', ['....HHHHHH...............', '....H....................'])],
   },
 };
+// tired, kind eyes (the driver): heavy lids, the brows' outer ends dropping, a shadow under each eye
+N_FACE.tired = {
+  front: [L('head', 0, 11, 'face', ['......sHH.......HHs......', '......Hee.......eeH......', '.......We.......We.......', '.........................', '.......SS.......SS.......'])],
+  left: [L('head', 0, 11, 'face', ['...HH.....HHs............', '...ee.....eeH............', '...We.....We.............', '.........................', '...SS......S.............'])],
+};
+// flagging something down: both arms up, the hands crossing over (frame 0: the left hand out, the right in; frame 1 the
+// other way). The wave's raised arm (cols 0-11), mirrored about the body's centre column c of the arms map for the other
+// arm, its shading swapped to the far side.
+const SWAP_LR = { E: 'D', g: 'F', l: 'S' };
+const bothUp = (a, b, c) => a.map((row, k) => {
+  const out = [...row.slice(0, 12).padEnd(2 * c + 1, '.')];
+  [...(b[k] || '').slice(0, 12)].forEach((ch, i) => { if (ch !== '.') out[2 * c - i] = SWAP_LR[ch] || ch; });
+  return out.join('');
+});
 // props, near: the walker's umbrella and the basket are drawn at far size only (PIXEL.md); near shows the person without
 
 const NEAR = {
   W: 48, H: 72, cx: 23, x: 11, stride: 4, shadow: [25, 7], avatar: 36,
   front: {
     head: { m: N_HEAD_M, f: N_HEAD_F }, body: { m: N_BODY_M, f: N_BODY_F },
-    arms: { down: N_ARMS_DOWN, wave0: N_WAVE(0), wave1: N_WAVE(1) }, legs: N_LEGS,
-    off: { wave0: [-6, -12], wave1: [-6, -12] }, over: { wave0: 1, wave1: 1 },
+    arms: { down: N_ARMS_DOWN, wave0: N_WAVE(0), wave1: N_WAVE(1), flag0: bothUp(N_WAVE(0), N_WAVE(1), 18), flag1: bothUp(N_WAVE(1), N_WAVE(0), 18) }, legs: N_LEGS,
+    off: { wave0: [-6, -12], wave1: [-6, -12], flag0: [-6, -12], flag1: [-6, -12] }, over: { wave0: 1, wave1: 1, flag0: 1, flag1: 1 },
   },
   left: {
     head: { m: N_HEAD_L, f: N_HEAD_LF }, body: { m: N_BODY_L, f: N_BODY_LF },
@@ -1638,12 +1674,20 @@ const F_FACE = {
   },
 };
 
+// the driver's woollen cap, far (shrink drops head rows 4-5: plain dome rows here)
+const F_WOOL = ['....ooooooooo....', '..oozkkkkkkkkoo..', '.ozkkkkkkkkkkkKo.', 'ozkkkkkkkkkkkkKKo', 'okkkkkkkkkkkkkKKo', 'okkkkkkkkkkkkkKKo', 'okkkkkkkkkkkkKKKo',
+  'o'.repeat(17), rib('k', 17), 'o'.repeat(17)];
+F_HAIR.wool = {
+  front: [L('head', 0, -1, 'hair', [...F_WOOL, 'oHh...........hHo', 'oH.............Ho'])],
+  left: [L('head', 0, -1, 'hair', [...F_WOOL, '...........oHhHHo', '............oHHo.', '.............oo..'])],
+  back: [L('head', 0, -1, 'hair', [...F_WOOL, 'ohhhhhhhhhhhhHHHo', '..hhhhhhhhhhhHH..', '..HhhhhhhhhhHHH..', '..oHHhhhhhHHHHo..', '...ooooooooooo...'])],
+};
 const FAR_SRC = {
   W: 32, H: 48, cx: 15, x: 7, stride: 3,
   front: {
     head: { m: F_HEAD_M, f: F_HEAD_F }, body: { m: F_BODY_M, f: F_BODY_F },
-    arms: { down: F_ARMS_DOWN, wave0: F_WAVE(0), wave1: F_WAVE(1) }, legs: F_LEGS,
-    off: { wave0: [-6, -8], wave1: [-6, -8] }, over: { wave0: 1, wave1: 1 },
+    arms: { down: F_ARMS_DOWN, wave0: F_WAVE(0), wave1: F_WAVE(1), flag0: bothUp(F_WAVE(0), F_WAVE(1), 14), flag1: bothUp(F_WAVE(1), F_WAVE(0), 14) }, legs: F_LEGS,
+    off: { wave0: [-6, -8], wave1: [-6, -8], flag0: [-6, -8], flag1: [-6, -8] }, over: { wave0: 1, wave1: 1, flag0: 1, flag1: 1 },
   },
   left: {
     head: { m: F_HEAD_L, f: F_HEAD_LF }, body: { m: F_BODY_L, f: F_BODY_LF },
@@ -1722,6 +1766,13 @@ export const ANIMS = {
   lookup: { views: ['back'], loop: false, frames: { all: [{ legs: 'seat', tilt: 1, ms: 160 }, { legs: 'seat', tilt: 2, ms: 400 }] } },
   // the ghost's cigarette: hand up, at the mouth (hold), down again; then play('sit')
   drag: { views: ['back'], loop: false, frames: { all: [{ legs: 'seat', arms: 'drag0', ms: 220 }, { legs: 'seat', arms: 'drag1', ms: 1500 }, { legs: 'seat', arms: 'drag0', ms: 220 }] } },
+  // up off the ledge, from behind: sitdown backwards
+  standup: { views: ['back'], loop: false, frames: { all: [{ legs: 'squat', ms: 180 }, { legs: 'crouch', ms: 180 }, { legs: 'stand', ms: 120 }] } },
+  // flagging down the truck: both arms up, crossing
+  flag: { views: ['front'], loop: true, frames: { all: [{ arms: 'flag0', ms: 200 }, { arms: 'flag1', ms: 200 }] } },
+  // the driver at his cab window: only from the chest up (bust: the sill hides the rest), forearms on the sill; and waving you in
+  lean: { views: ['front', 'left'], loop: true, frames: { all: [{ bust: 1, sill: 1, ms: 700 }, { bust: 1, sill: 1, breath: 1, ms: 700 }] } },
+  leanwave: { views: ['front', 'left'], loop: true, frames: { all: [{ arms: 'wave0', bust: 1, ms: 260 }, { arms: 'wave1', bust: 1, ms: 260 }] } },
 };
 const framesOf = (anim, view) => ANIMS[anim].frames[view] || ANIMS[anim].frames.all;
 
@@ -1748,6 +1799,9 @@ export const CHARACTERS = {
   friend: { name: 'Friend', build: 'm', skin: 3, hair: 'curly', top: 'vest', legs: 'khaki', shoes: 'dark' },
   walker: { name: 'Walker', build: 'm', skin: 3, hair: 'short', top: 'work', legs: 'dark', shoes: 'dark', prop: 'umbrella' },
   basket: { name: 'Basket', build: 'f', skin: 2, hair: 'bun', top: 'jainsem', legs: 'cloth', shoes: 'sandal', prop: 'basket' },
+  // the truck driver at the edge: in his fifties, a maroon woollen cap, grey at the temples and in the moustache, a bottle-green
+  // sleeveless sweater over a cream shirt, a checked gamosa round his neck, tired kind eyes. topCol / capCol: whose colours
+  driver: { name: 'Driver', build: 'm', skin: 1, hair: 'wool', hairTone: 'grey', top: 'vest', topCol: 'hoodie', capCol: 'shawl', extra: 'muffler', muffler: 'gamosa', tache: true, tired: true, legs: 'dark', shoes: 'sandal' },
 };
 // him in ink: the grandfather as a line only (PIXEL.md 2), near size, sitting from behind with his cigarette
 CHARACTERS.ghost = { ...CHARACTERS.grandpa, name: 'Ghost', ghost: true, cig: true };
@@ -1758,7 +1812,7 @@ export function normalise(look) {
   look.skin = Math.max(0, Math.min(FOLK.skin.length - 1, look.skin | 0));
   if (look.top === 'jacket' && !look.muffler) look.top = 'denim';   // the old customiser's id for denim
   if (!TOPS[look.top]) look.top = 'tee';
-  if (!OPTIONS.hair.some(([k]) => k === look.hair)) look.hair = look.build === 'm' ? 'short' : 'long';
+  if (!N_HAIR[look.hair]) look.hair = look.build === 'm' ? 'short' : 'long';
   look.extra = look.extra ?? look.acc ?? 'none';
   if (!OPTIONS.extra.some(([k]) => k === look.extra)) look.extra = 'none';
   look.legs = FOLK.legs[look.legs] ? look.legs : TOPS[look.top].legs;
@@ -1769,7 +1823,7 @@ export function normalise(look) {
 // the lit colour of every slot for a look
 function litColours(look) {
   const c = new Array(NS).fill(FOLK.outline), set = (chars, ramp) => [...chars].forEach((ch, i) => { c[SLOT[ch]] = ramp[i]; });
-  const [main, alt] = FOLK.top[look.top], top = TOPS[look.top];
+  const [main, alt] = FOLK.top[look.topCol || look.top], top = TOPS[look.top];
   set('Sslr', FOLK.skin[look.skin]);
   set('Hhj', FOLK.hair[look.hairTone] || FOLK.hair.black);
   set('Ttu', main); set('Vvw', alt);
@@ -1777,8 +1831,9 @@ function litColours(look) {
   set('DdE', sleeve); set('Ffg', top.sleeve === 'short' ? FOLK.skin[look.skin] : sleeve);
   set('Ppq', FOLK.legs[look.legs]); set('Bbn', FOLK.shoes[look.shoes]);
   c[SLOT.e] = FOLK.eye; c[SLOT.W] = FOLK.eyeHi; c[SLOT.m] = FOLK.mouth;
-  set('Kkz', FOLK.cap);
-  const ex = look.extra === 'muffler' ? FOLK[look.muffler || 'muffler'] : look.extra !== 'none' ? FOLK[look.extra] : null;
+  set('Kkz', look.capCol ? FOLK.top[look.capCol][0] : FOLK.cap);
+  // the gamosa: cream cloth, red check (the shirt's and the cap's ramps)
+  const ex = look.extra === 'muffler' ? (look.muffler === 'gamosa' ? [FOLK.top.shirt[0], FOLK.cap] : FOLK[look.muffler || 'muffler']) : look.extra !== 'none' ? FOLK[look.extra] : null;
   if (ex) { set('Aac', ex[0]); if (ex[1]) set('Xxy', ex[1]); }
   if (look.prop) { set('Xxy', FOLK[look.prop][0]); set('Kkz', FOLK[look.prop][1]); }
   return c;
@@ -1866,7 +1921,7 @@ export function compose(size, lookIn, view, f = {}) {
   add(S.hair[look.hair]?.[view]);
   add(S.tops[look.top]?.[view]);
   if (look.extra !== 'none') add(S.extras[look.extra]?.[view]);
-  if (look.beard) add(S.face.beard[view]); if (look.tache) add(S.face.tache[view]);
+  if (look.beard) add(S.face.beard[view]); if (look.tache) add(S.face.tache[view]); if (look.tired) add(S.face.tired?.[view]);
   if (look.prop) add(S.props[look.prop]?.[view]);
   const put = o => stamp(buf, W, H, o.map, at[o.on][0] + o.x, at[o.on][1] + o.y);
   const armsOver = V.over?.[armsKey];
@@ -1878,10 +1933,22 @@ export function compose(size, lookIn, view, f = {}) {
       if (!armsOver) stamp(buf, W, H, arms, S.x + off(armsKey)[0], bodyY + off(armsKey)[1]);
     } else if (layer === 'head') stamp(buf, W, H, (f.blink ? blink(head) : head).slice(0, head.length - tilt), hx, headY);
     else layers[layer].forEach(put);
-    if (layer === 'neck' && look.muffler === 'mufflerYou') check(buf, W, H, S.x + 1, bodyY, 'Aac');
+    if (layer === 'neck' && (look.muffler === 'mufflerYou' || look.muffler === 'gamosa')) check(buf, W, H, S.x + 1, bodyY, 'Aac');
   }
   if (armsOver) stamp(buf, W, H, arms, S.x + off(armsKey)[0], bodyY + off(armsKey)[1]);
+  if (f.bust) {   // at a window: nothing below the sill; with sill, the forearms folded on it
+    const cut = bodyY + Math.round(body.length * .55), bw = body[0].length;
+    if (f.sill) stamp(buf, W, H, ['.' + 'o'.repeat(bw - 2) + '.', 'oss' + 'g' + 'f'.repeat(bw - 8) + 'F' + 'Sso', 'oSS' + 'F'.repeat(bw - 6) + 'SSo'], S.x, cut - 3);
+    buf.fill(0, Math.max(0, cut) * W);
+  }
   return buf;
+}
+
+// the sill under someone at a window (play('lean')): sprite px up from the foot anchor to the bust's bottom row
+export function bustRow(size, who, view = 'front') {
+  const S = SIZES[size], b = compose(size, who, view, { bust: 1, sill: 1 });
+  let j = S.H; while (j > 0 && !b.subarray((j - 1) * S.W, j * S.W).some(Boolean)) j--;
+  return S.H - j;
 }
 
 /* ======================================================================================================================

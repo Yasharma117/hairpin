@@ -88,6 +88,7 @@ layer.innerHTML = `<style>
   <h2 id="end-t">Hairpin</h2>
   <p class="by">by Yash Sharma</p>
   <span class="label for">Made for Pocket FM Design</span>
+  <span class="label for">Music: Blue Dot Sessions · CC BY-NC 4.0</span>
   <div class="row"><button class="btn again" id="again" type="button">Again</button><button class="btn" id="title" type="button">Title</button></div>
 </section>`;
 const $ = s => layer.querySelector(s);

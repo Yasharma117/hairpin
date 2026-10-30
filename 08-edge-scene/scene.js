@@ -1,6 +1,7 @@
 // The edge: the last stretch of road into the cloud (hold to brake: it decides how far the nose goes over), the hang,
 // the doors, sitting on the lip, the story wiping to the same cliff decades ago, him in ink with the ember, the flick,
-// the taxi going over, and the truck that gives you a lift. Tap (or the chip) for each next step.
+// the taxi going over, and the truck: you flag it down (hold), the driver leans out, a word, and he gives you a lift.
+// Tap (or the chip) for each next step.
 import * as THREE from 'three';
 import { clamp, lerp, sstep, loadImg, tex, strokeMap, NOISE, makeTaxi, makeTruck, LIVERY, passenger, line, disposeScene, Stage, keyLight, Steer, Ink } from '../shared/kit.js';
 import * as folk from '../shared/folk.js';
@@ -29,7 +30,8 @@ layer.innerHTML = `<style>
 .brake { white-space: nowrap; }
 .brake.held { animation: none; }
 </style>
-<div class="tag">HAIRPIN · THE EDGE</div><div class="cue brake" id="brake" hidden>HOLD TO BRAKE<span class="fill" id="bfill" aria-hidden="true">HOLD TO BRAKE</span></div>`;
+<div class="tag">HAIRPIN · THE EDGE</div><div class="cue brake" id="brake" hidden>HOLD TO BRAKE<span class="fill" id="bfill" aria-hidden="true">HOLD TO BRAKE</span></div>
+<div class="cue brake" id="flag" style="top: 64%" hidden>HOLD TO FLAG IT DOWN<span class="fill" id="ffill" aria-hidden="true">HOLD TO FLAG IT DOWN</span></div>`;
 const $ = s => layer.querySelector(s);
 ctx.bed({ engine: 1, wind: .6 });
 const [imgs, spr, depthImg] = await Promise.all([Promise.all(['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg'].map(f => loadImg(at(f)))), Promise.all(SPRITES.map(n => loadImg(at(`sprites/${n}.png`)))), loadImg(at('depth.png'))]);
@@ -140,8 +142,15 @@ const DEFAULT_LOOK = { build: 'f', skin: 2, hair: 'long', top: 'hoodie', extra: 
 const people = [passenger() || DEFAULT_LOOK, 'you'].map((look, i) => {
   const p = folk.person(look, { size: 'near' });
   p.obj.visible = false; scene.add(p.obj);
-  return { p, state: 'off', t: 0, x: 0, y: 0, seat: SEATS[i], ppx: 1.95 };
+  return { p, state: 'off', t: 0, x: 0, y: 0, d: null, seat: SEATS[i], ppx: 1.95, path: [], onArrive: null };
 });
+// walk a path of [x, y, depth] points (painting px; depth from toPx), facing each leg's way; then onArrive(w)
+const facingTo = (rx, ry) => Math.abs(ry) > Math.abs(rx) * 1.4 ? (ry > 0 ? 'front' : 'back') : rx < 0 ? 'left' : 'right';
+function walkPath(w, path, onArrive) {
+  if (w.d == null) w.d = stage.depthAt(w.x - 8, w.y + 4);
+  Object.assign(w, { state: 'path', path: path.slice(), onArrive }); w.p.play('walk');
+  w.p.face(facingTo(path[0][0] - w.x, path[0][1] - w.y));
+}
 const seat = w => { Object.assign(w, { state: 'seated', x: w.seat[0], y: w.seat[1] }); w.p.face('back'); w.p.play('sit'); };
 // one step of a person: wait for the door, walk to the seat by exactly the stride the frames take, turn, sit
 function stepPerson(w, dt) {
@@ -150,6 +159,17 @@ function stepPerson(w, dt) {
   if (w.state === 'wait' && w.t > .55) {
     const rx = w.seat[0] - w.x, ry = w.seat[1] - w.y;
     w.state = 'walk'; w.p.play('walk'); w.p.face(Math.abs(ry) > Math.abs(rx) ? (ry > 0 ? 'front' : 'back') : rx < 0 ? 'left' : 'right');
+  }
+  if (w.state === 'path') {
+    let s = w.p.update(dt) * w.ppx;
+    while (s > 0 && w.path.length) {
+      const [px, py, pd] = w.path[0], rx = px - w.x, ry = py - w.y, d = Math.hypot(rx, ry);
+      if (d > s) { const k = s / d; w.x += rx * k; w.y += ry * k; w.d += (pd - w.d) * k; break; }
+      w.x = px; w.y = py; w.d = pd; s -= d; w.path.shift();
+      if (w.path.length) w.p.face(facingTo(w.path[0][0] - w.x, w.path[0][1] - w.y));
+    }
+    if (!w.path.length) { w.state = 'there'; w.p.play('idle'); w.onArrive?.(w); }
+    return;
   }
   if (w.state !== 'walk') { w.p.update(dt); return; }
   const s = w.p.update(dt) * w.ppx, rx = w.seat[0] - w.x, ry = w.seat[1] - w.y, d = Math.hypot(rx, ry);   // painting px walked, at this depth
@@ -198,10 +218,35 @@ const thenPair = [['grandpa', .395, .505], ['friend', .428, .5]].map(([who, x, y
 
 /* ---------- the truck: comes round the bend after, and takes you on to Shillong ---------- */
 // built in 3D like the taxi (shared/kit.js), seen from the same height, turned a little to show its painted nose
-const { truck, mat: truckMat } = makeTruck(U.uMode); truck.visible = false; scene.add(truck);
-truck.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), .2).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -.3));
-const TRUCK = { size: 44, from: -.25 * IW, to: .25 * IW, y: .445 * IH };
+const TK = makeTruck(U.uMode), { truck, mat: truckMat } = TK; truck.visible = false; scene.add(truck);
+const YAW = -.3, X_AX = new THREE.Vector3(1, 0, 0), Y_AX = new THREE.Vector3(0, 1, 0);
+const turn = (o, yaw) => o.quaternion.setFromAxisAngle(X_AX, .2).multiply(new THREE.Quaternion().setFromAxisAngle(Y_AX, yaw));
+turn(truck, YAW);
+// creep: where it waits, unsure, until you flag it down (a fraction of the way from `from` to `to`)
+const TRUCK = { size: 44, from: -.25 * IW, to: .25 * IW, y: .445 * IH, creep: .9 };
 const truckW = TRUCK.size * 7.6 * Math.cos(.3), truckH = TRUCK.size * 3.3;   // its footprint on the painting, px
+// the truck where it stops for you: the places around it (its own units, the ground at y 0, +x its nose, +z the side we
+// see, the driver's: right-hand drive) come from this pose, so the two of you go in front of it and behind it in depth
+const stopPose = new THREE.Object3D(); turn(stopPose, YAW);
+const _a = new THREE.Vector3();
+const toPx = P => { const [x, y] = stage.toPaint(P); return [x, y, P.z / (stage.rest.z * stage.k)]; };   // painting px + stage depth
+const posePlace = () => { stage.place(stopPose, TRUCK.to, TRUCK.y, TRUCK.size, stage.depthAt(TRUCK.to, TRUCK.y)); stopPose.updateMatrixWorld(true); };
+const localPx = (o, lx, ly, lz) => toPx(o.localToWorld(_a.set(lx, ly, lz)));
+const AT = {
+  spot: [[5.5, 0, -.5], [4.95, 0, 1.15]],   // where you flag it down: in its path, in its light (passenger, you)
+  corner: [[4.9, 0, -1.75], [4.7, 0, -1.9]],   // round its nose to the far side
+  door: [[2.55, 0, -1.75], [2.75, 0, -1.9]],   // the passenger door (the far side), where you climb in
+};
+const truckK = { k: 0, k0: 0, go: -1 };
+// its way out, from where it stopped (painting px): up to the hairpin's apex by the old stones, and round it
+const AWAY = new THREE.CatmullRomCurve3([[0, 0], [110, -32], [170, -72], [130, -104]].map(([x, y]) => new THREE.Vector3(x, y, 0)));   // where it is (0 from, 1 stopped); go: seconds since it pulled away (-1: not yet)
+// the driver: leans out of his window (kit's `driver` anchor when the truck has one, else the window's sill on our side)
+const driver = folk.person('driver', { size: 'near' });
+driver.obj.visible = false; driver.shadow.visible = false; driver.mesh.renderOrder = 6; driver.mesh.material.depthTest = false; scene.add(driver.obj);
+const SILL = folk.bustRow('near', 'driver', 'left');   // sprite px from his foot anchor up to the sill
+let dppx = 1.95, driverOut = -1;   // painting px per sprite px at the window; seconds since he leaned out (-1: inside)
+// the cab door on the far side: kit's `cabDoor` (a group hinged at the front edge) if the truck has one
+const cabDoor = TK.cabDoor, door = { open: 0, v: 0, to: 0 };
 
 
 /* ---------- framing: locked, covering the screen ---------- */
@@ -218,7 +263,8 @@ function resize(w, h) {
     viewW /= 1.35; viewH /= 1.35;
     viewW *= .9; viewH *= .9;   // a little margin, so the camera moves never show past the painting's edge
   }
-  stage.view(clamp(cx, viewW / 2, IW - viewW / 2), clamp(cy, viewH / 2, IH - viewH / 2), viewH, aspect);
+  restCX = clamp(cx, viewW / 2, IW - viewW / 2);
+  stage.view(restCX, clamp(cy, viewH / 2, IH - viewH / 2), viewH, aspect);
 }
 
 /* ---------- the hang: set by how long you braked; ?hang=0.7 sets it by hand ---------- */
@@ -256,7 +302,8 @@ function horn(gain = .08, len = .7) {
 }
 
 // the truck's diesel: two detuned saws at ~30 Hz under a 300 Hz lid, swelling as it rolls in round the bend (ROLL s), then
-// the air brakes hiss and it settles to idle. Scene-local: it stops when the scene goes.
+// idling while it waits; the air brakes hiss when it stops for you; it revs as it pulls away. Scene-local: it stops when the
+// scene goes.
 const ROLL = 5;
 let diesel = null;
 function dieselOn() {
@@ -265,15 +312,29 @@ function dieselOn() {
     const t0 = ac.currentTime, lp = ac.createBiquadFilter(), g = ac.createGain();
     lp.type = 'lowpass'; lp.frequency.value = 300; lp.Q.value = .9; g.connect(ctx.out); lp.connect(g);
     const os = [1, 1.02].map(m => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(24 * m, t0); o.frequency.linearRampToValueAtTime(33 * m, t0 + ROLL * .8); o.frequency.linearRampToValueAtTime(27 * m, t0 + ROLL); o.connect(lp); o.start(t0); return o; });
-    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(.16, t0 + ROLL); g.gain.setTargetAtTime(.08, t0 + ROLL + .3, .6);   // near, then idling
-    // the air brakes: a hiss as it stops
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(.16, t0 + ROLL); g.gain.setTargetAtTime(.1, t0 + ROLL + .3, .6);   // near, then waiting
+    diesel = { os, g };
+  } catch (e) {}
+}
+// the air brakes: a hiss (long as it stops; short, the release, as it pulls away)
+function airBrake(len = .9, peak = .09) {
+  try {
+    const ac = ctx.ac; if (!ac) return;
     const n = ac.createBufferSource(), b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = b.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const hp = ac.createBiquadFilter(), hg = ac.createGain(), ts = t0 + ROLL - .1;
+    const hp = ac.createBiquadFilter(), hg = ac.createGain(), ts = ac.currentTime;
     n.buffer = b; hp.type = 'highpass'; hp.frequency.value = 2500;
-    hg.gain.setValueAtTime(.0001, ts); hg.gain.exponentialRampToValueAtTime(.09, ts + .04); hg.gain.exponentialRampToValueAtTime(.0001, ts + .9);
-    n.connect(hp).connect(hg).connect(ctx.out); n.start(ts); n.stop(ts + 1);
-    diesel = { os, g };
+    hg.gain.setValueAtTime(.0001, ts); hg.gain.exponentialRampToValueAtTime(peak, ts + .04); hg.gain.exponentialRampToValueAtTime(.0001, ts + len);
+    n.connect(hp).connect(hg).connect(ctx.out); n.start(ts); n.stop(ts + len + .1);
+  } catch (e) {}
+}
+// idle (stopped for you: low and steady), or away (it revs and pulls off)
+function dieselTo(away) {
+  if (!diesel) return;
+  try {
+    const t = ctx.ac.currentTime;
+    diesel.os.forEach((o, i) => { o.frequency.cancelScheduledValues(t); o.frequency.setTargetAtTime((away ? 42 : 26) * (i ? 1.02 : 1), t, away ? .5 : .3); });
+    diesel.g.gain.cancelScheduledValues(t); diesel.g.gain.setTargetAtTime(away ? .2 : .07, t, away ? .35 : .4);
   } catch (e) {}
 }
 function dieselOff() { if (!diesel) return; try { const t = ctx.ac.currentTime; diesel.g.gain.setTargetAtTime(.0001, t, .15); diesel.os.forEach(o => o.stop(t + 1)); } catch (e) {} diesel = null; }
@@ -297,6 +358,21 @@ const SCRIPT = [
 // him, when you can flick, and the one hint that you can look around
 const T = { thenIn: [25, 28], thenOut: [33, 36], ember: 37, ghost: [39, 41.5], flick: 46, look: [6, 12] };
 let lineI = 0;
+// the lift, after the truck stops for you: [seconds after it stops, who, line, he waves you in]. All DRAFT placeholders
+// for Yash to rewrite (the passenger's thanks is one line for every passenger, not from shared/roster.js).
+const LIFT_SCRIPT = [
+  [1.5, 'DRIVER', 'Where are you two headed at this hour?'],   // DRAFT
+  [3.6, 'YOU', 'Shillong.'],                                   // DRAFT
+  [5.2, 'DRIVER', "Cloud won't lift till morning. Get in.", true],   // DRAFT
+  [7.6, 'PASSENGER', 'Thank you. Really.'],                    // DRAFT
+];
+// the truck beat, in seconds: when you stand (you, the passenger: after it rounds the bend), how long a hold flags it
+// down, how long it takes to stop, when he leans out, when "Climb in" is offered; the lift: the door, in, away
+const FLAG = { stand: [.7, 1], hold: 1.2, brake: 1.4, lean: 1.1, ready: 9.2, tap: .6 };
+const LIFT = { climb: .35, shut: .5, away: .7, next: 2.8 };
+let flagT = 0, tapWave = 0, inCab = 0, liftT = -1;   // seconds held; a tap's short wave left; how many are in; since the door shut
+// the driver's window sill in the truck's own units (when kit's makeTruck gives no `driver` anchor)
+const WINDOW = new THREE.Vector3(2.3, 2.22, 1.14);
 // the drive in: along the road, into the cloud, straight on where the road bends, onto the lip
 const DRIVE = new THREE.CatmullRomCurve3([[-.08, .445], [.12, .43], [.28, .425], [.4, .432]].map(([x, y]) => new THREE.Vector3(x * IW, y * IH, 0)).concat(new THREE.Vector3(...CAR, 0)));
 const DRIVE_LEN = DRIVE.getLength(), BRAKE_FROM = .55;   // past the bend, the edge shows up: brake window from there to the lip
@@ -324,7 +400,7 @@ function go(next) {
     Object.assign(drv, { u: 0, v: 180, inWin: 0, heldWin: 0 }); ctx.bed({ engine: 1, wind: .6 }); ctx.rpm(1);
     tips = 0; fallT = -1; quiet = false; ang = reset(); angV = 0; stage.place(jeep, CAR[0], CAR[1], CAR_SIZE, CAR_D); lineI = 0; say(null);
     doors.forEach(d => { Object.assign(d.userData, { open: 0, v: 0, delay: 0 }); d.rotation.y = 0; });
-    people.forEach(w => { w.state = 'off'; w.p.obj.visible = false; }); truck.visible = false; dieselOff(); lastDrag = 0;
+    people.forEach(w => { w.state = 'off'; w.d = null; w.p.obj.visible = false; }); truck.visible = false; dieselOff(); lastDrag = 0;
   }
   if (next === 'car') { hangSaid = false; ang = 0; angV = 1.3; creak(1.3); skid(false); ctx.bed({ wind: 1 }); }   // over the lip: the nose drops and seesaws
   if (next === 'pout' || next === 'yout') {
@@ -336,43 +412,67 @@ function go(next) {
   }
   ctx.subAt(next === 'seated' || next === 'flick' ? 'bottom' : 'top');   // seated, the box sits below the two of you
   if (next === 'flick') emb.vel.set(120, -80);
-  ctx.score?.({ drive: 'edge', seated: 'edge-story', truck: 'relief' }[next]);   // the music: broken on the hang, his story, relief at the truck
-  if (next === 'truck') { if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); dieselOn(); ctx.bed({ wind: .5 }); }   // far off, round the bend
-  if (next === 'lift') horn(.09, .45);                                                                                    // it stops for you
+  ctx.score?.({ drive: 'edge', seated: 'edge-story' }[next]);   // the music: broken on the hang, his story (relief: as the truck pulls away)
+  if (next === 'truck') {   // far off, round the bend: its horn, its diesel, its lights; the two of you get up
+    if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); dieselOn(); ctx.bed({ wind: .5 });
+    Object.assign(truckK, { k: 0, go: -1 }); flagT = 0; tapWave = 0; inCab = 0; liftT = -1; driverOut = -1; door.to = 0;
+    people.forEach(w => { w.d = null; });
+  }
+  if (next === 'stop') {   // it stops for you: the air brakes, then it idles; he leans out
+    truckK.k0 = truckK.k; airBrake(); posePlace(); dieselTo(false); lineI = 0;
+    people.forEach((w, i) => { if (w.state !== 'there') { Object.assign(w, { state: 'there', path: [] }); [w.x, w.y, w.d] = localPx(stopPose, ...AT.spot[i]); } w.p.face('front'); w.p.play('flag'); });
+  }
+  if (next === 'lift') {   // round its nose to the far side; the passenger first
+    say(null); driver.play('lean');
+    people.forEach((w, i) => { w.t = -.5 * i; w.state = 'queue'; });
+    if (driverOut < 0) { driverOut = 1; driver.face('right'); }
+  }
 }
-const LABEL = { car: 'Open the passenger door', pout: 'Open your door', seated: 'Flick the ember', truck: 'Flag it down', lift: 'Ride to Shillong' };
-const NEXT = { car: 'pout', pout: 'yout', seated: 'flick', truck: 'lift' };
-const ready = () => phase === 'car' && since > 1.5 || phase === 'pout' && since > 1.2 || phase === 'seated' && since > T.flick || phase === 'truck' && since > ROLL || phase === 'lift' && since > 2;
-// seated, a tap brings the next line on now (never past the flick); otherwise it takes the next step once it's ready
+const LABEL = { car: 'Open the passenger door', pout: 'Open your door', seated: 'Flick the ember', stop: 'Climb in' };
+const NEXT = { car: 'pout', pout: 'yout', seated: 'flick', stop: 'lift' };
+const ready = () => phase === 'car' && since > 1.5 || phase === 'pout' && since > 1.2 || phase === 'seated' && since > T.flick || phase === 'stop' && since > FLAG.ready;
+// you can flag it once it's round the bend and the two of you are in its path
+const flagReady = () => phase === 'truck' && since > 3 && people.every(w => w.state === 'there');
+// seated (and while the driver talks), a tap brings the next line on now; flagging, a tap is a short wave; otherwise it
+// takes the next step once it's ready
 const advance = () => {
-  if (phase === 'seated' && !ready()) { since = Math.min(Math.max(since, lineI < SCRIPT.length ? SCRIPT[lineI][0] : T.flick), T.flick); ctx.sfx.tick(); return; }
-  if (!ready()) return; if (phase === 'lift') ctx.next(); else go(NEXT[phase]);
+  if (phase === 'truck') { if (flagReady()) tapWave = FLAG.tap; return; }
+  const lines = phase === 'seated' ? SCRIPT : phase === 'stop' ? LIFT_SCRIPT : null, end = phase === 'seated' ? T.flick : FLAG.ready;
+  if (lines && !ready()) { since = Math.min(Math.max(since, lineI < lines.length ? lines[lineI][0] : end), end); ctx.sfx.tick(); return; }
+  if (ready()) go(NEXT[phase]);
 };
 // ?auto plays the beat through on its own; ?speed=4 runs it faster (for checking timing)
 const AUTO = QS.has('auto'), SPEED = +QS.get('speed') || 1;
-// ?at=seated&t=12 jumps straight to a moment (for checking frames); at=pout or yout with t: that walk, t seconds in
+// ?at=seated&t=12 jumps straight to a moment (for checking frames); at=pout or yout with t: that walk, t seconds in;
+// at=truck, stop or lift with t: the truck beat played t seconds on (unheld: hold Space yourself to flag it down)
+let ff = 0;
 function jump(at, secs) {
-  const order = ['car', 'pout', 'yout', 'seated', 'flick', 'truck', 'lift'];
+  const order = ['car', 'pout', 'yout', 'seated', 'flick', 'truck', 'stop', 'lift'];
   go('drive');
   for (const p of order.slice(0, order.indexOf(at) + 1)) { jeep.updateMatrixWorld(true); go(p); }
   for (const d of doors) if (d.userData.open) { d.rotation.y = d.userData.side * 1.1; d.userData.delay = 0; }
   emb.pos.set(...tipAt('sit'));
   if (at === 'yout') seat(people[0]);
-  else if (order.indexOf(at) > 2) people.forEach(seat);
+  else if (order.indexOf(at) > 2 && order.indexOf(at) < 6) people.forEach(seat);
   for (let s = 0; s < secs && (at === 'pout' || at === 'yout'); s += 1 / 60) people.forEach(w => stepPerson(w, 1 / 60));
   if (at === 'yout' && people[1].state === 'seated') { phase = 'seated'; secs = 0; }
   ang = reset(); angV = 0; since = secs; lineI = at === 'seated' ? SCRIPT.filter(l => l[0] < secs).length : 0;
+  if (order.indexOf(at) >= 5) { since = 0; ff = secs; if (at !== 'truck') truckK.k = truckK.k0 = 1; }
 }
 
 /* ---------- loop ---------- */
 const hint = Object.assign(document.createElement('div'), { className: 'hint', textContent: ctx.isTouch ? 'Drag to look around' : 'Point to look around' });
 hint.style.bottom = '32px'; layer.appendChild(hint);
-let started = false, hornOn = false, fillShown = -1;
-const brakeEl = $('#brake'), fillEl = $('#bfill');
-window.__edge = { phase: () => phase, go, ang: () => ang };
+let truckX = 0, started = false, fillShown = -1, flagShown = -1, restCX = IW / 2, driverWave = 0, bobT = 9, gone = false;
+const brakeEl = $('#brake'), fillEl = $('#bfill'), flagEl = $('#flag'), ffillEl = $('#ffill');
+window.__edge = { phase: () => phase, go, ang: () => ang, people: () => people.map(w => [w.state, w.x | 0, w.y | 0, w.d, w.p.obj.visible]), since: () => since };
 const ptrPx = () => input.ptr && stage.screenToPaint(...input.ptr);
 function frame(dt0) {
   if (!started) { started = true; if (QS.get('at')) jump(QS.get('at'), +QS.get('t') || 0); else go('drive'); }
+  while (ff > 0) { const d = Math.min(ff, 1 / 30); ff -= d; step(d, false); }   // ?at=truck&t=…: play it on, undrawn
+  step(dt0, true);
+}
+function step(dt0, draw) {
   const dt = dt0 * SPEED, t = (U.uTime.value += dt);
   const braking = input.hold;   // HOLD: brake (only counts on the drive)
   if (AUTO && ready() && since > 1.5) advance();
@@ -404,6 +504,46 @@ function frame(dt0) {
   if (phase === 'flick' && since > 3.5 && fallT < 0) ctx.score?.('silence', { now: true });   // the music goes with the car
   if (phase === 'flick' && since > 3.5 && fallT < 0) { fallT = 0; creak(1.4); quiet = true; ctx.bed({}); }   // over it goes; then nothing
   if (phase === 'flick' && since > 8) go('truck');
+  // the truck beat: round the bend it comes; you stand and walk into its path; held, the two of you flag it down and it
+  // stops; he leans out, a word, he waves you in; round to the far side, in, the door, and away into the cloud
+  posePlace();
+  const flagging = phase === 'truck' && flagReady() && (input.hold || tapWave > 0 || AUTO);
+  tapWave = Math.max(0, tapWave - dt);
+  if (phase === 'truck') {
+    people.forEach((w, i) => {
+      if (w.state === 'seated' && since > FLAG.stand[i]) { w.state = 'up'; w.p.play('standup', { onEnd: () => walkPath(w, [localPx(stopPose, ...AT.spot[i])], w => w.p.face('front')) }); }
+      if (w.state === 'there') w.p.play(flagging ? 'flag' : 'idle');
+    });
+    if (flagging && (flagT += dt) >= FLAG.hold) go('stop');
+  }
+  if (phase === 'stop') {
+    if (since > .8) people.forEach(w => { w.p.play('idle'); if (since > FLAG.lean) w.p.face('left'); });   // arms down; then to him
+    if (since > FLAG.lean && driverOut < 0) { driverOut = 0; driver.play('lean'); driver.face('right'); }
+    if (lineI < LIFT_SCRIPT.length && since > LIFT_SCRIPT[lineI][0]) { const [, who, text, wave] = LIFT_SCRIPT[lineI++]; say(who, text, 3); if (wave) { driverWave = 2.6; driver.play('leanwave'); } }
+  }
+  if (driverWave > 0 && (driverWave -= dt) <= 0) driver.play('lean');
+  if (phase === 'lift') {
+    people.forEach((w, i) => {
+      if (w.state === 'queue' && w.t >= 0) walkPath(w, [localPx(stopPose, ...AT.corner[i]), localPx(stopPose, ...AT.door[i])], w => {
+        w.state = 'climb'; w.t = 0; if (!door.to) { door.to = 1; ctx.sfx.door(); }   // the passenger door, then up into the cab
+      });
+      if (w.state === 'climb' && w.t > LIFT.climb) { w.state = 'in'; inCab++; bobT = 0; }
+    });
+    if (inCab === 2) {
+      const l0 = liftT; liftT = Math.max(0, liftT) + dt;
+      if (l0 < LIFT.shut && liftT >= LIFT.shut) { door.to = 0; ctx.sfx.door(); bobT = 0; }
+      if (l0 < LIFT.shut + LIFT.away && liftT >= LIFT.shut + LIFT.away) { truckK.go = 0; dieselTo(true); airBrake(.35, .05); horn(.05, .3); ctx.score?.('relief'); }
+    }
+  }
+  if (truckK.go >= 0) {
+    truckK.go += dt;
+    if (truckK.go > LIFT.next && !gone) { gone = true; ctx.next(); }   // on to Shillong
+  }
+  if (driverOut >= 0) driverOut += dt;
+  bobT += dt;
+  // its passenger door (kit's cabDoor): a spring like the taxi's, swinging out on its side
+  door.v += (-49 * (door.open - door.to) - 7.7 * door.v) * dt; door.open += door.v * dt;
+  if (cabDoor) cabDoor.rotation.y = Math.sign(cabDoor.position.z || -1) * 1.1 * door.open;
   if (fallT >= 0) {
     // past the balance point: the nose goes, then the whole car slides off the lip into the cloud
     const f0 = fallT; fallT += dt; angV += (2 + Math.sin(ang) * 6) * dt; ang = Math.min(ang + angV * dt, 1.45);
@@ -431,10 +571,20 @@ function frame(dt0) {
   keyLight(jeepMat, camera, jeep.position, truck.visible ? truck.position : stage.toWorld(a[0] + 300, a[1] + 60, 0, v2), truck.visible ? .9 : .8);
   jeepMat.uniforms.uExposure.value = phase === 'drive' ? 1 : 1.2;
   if (truck.visible) keyLight(truckMat, camera, truck.position, stage.toWorld(.8 * IW, .7 * IH, 0, v2), .15);   // the moonlit cloud ahead
-  if (truck.visible) {   // the truck rolls in round the bend and stops; now its headlights are the light
-    const k = phase === 'truck' ? 1 - Math.pow(1 - clamp(since / ROLL, 0, 1), 2.2) : 1, x = lerp(TRUCK.from, TRUCK.to, k);
-    stage.place(truck, x, TRUCK.y - (k < 1 ? Math.sin(t * 9) * .8 : 0), TRUCK.size, stage.depthAt(clamp(x, 0, IW), TRUCK.y));
-    U.uHead.value.set(x + truckW * .5, TRUCK.y - truckH * .38); U.uDir.value.set(1, .04).normalize();
+  if (truck.visible) {   // the truck rolls in round the bend, waits, stops for you; now its headlights are the light
+    const k = truckK.k = phase === 'truck' ? TRUCK.creep * (1 - Math.pow(1 - clamp(since / ROLL, 0, 1), 2.2))
+      : phase === 'stop' ? lerp(truckK.k0, 1, 1 - Math.pow(1 - clamp(since / FLAG.brake, 0, 1), 2)) : 1;
+    // pulling away: on to the hairpin's apex by the old stones and round it, away from us, into the cloud
+    const g = Math.max(0, truckK.go), away = sstep(0, .25, g / LIFT.next), u = Math.pow(clamp(g / LIFT.next, 0, 1), 1.6) * .95;
+    const P = AWAY.getPointAt(u), q = AWAY.getTangentAt(u);
+    const x = lerp(TRUCK.from, TRUCK.to, k) + P.x, y = TRUCK.y + P.y;
+    const moving = k < 1 && phase !== 'stop' || truckK.go >= 0, bob = Math.exp(-bobT * 5) * Math.sin(bobT * 14) * 1.2;   // a climb in, a door: the cab rocks
+    stage.place(truck, x, y - (moving ? Math.sin(t * 9) * .8 : 0) + bob, TRUCK.size, stage.depthAt(clamp(x, 0, IW), Math.max(y, TRUCK.y - 40)));
+    const yaw = lerp(YAW, Math.atan2(-q.y * 2.4, q.x), away);
+    turn(truck, yaw); truck.updateMatrixWorld(true); truckX = x;
+    const a = lerp(phase === 'truck' ? lerp(-.5, .04, sstep(0, ROLL * .85, since)) : .04, Math.atan2(q.y, q.x), away);   // the beam sweeps round the bend
+    U.uHead.value.set(x + truckW * .5 * Math.cos(yaw), y - truckH * .38); U.uDir.value.set(Math.cos(a), Math.sin(a));
+    if (truckK.go >= 0) U.uFog.value = .75 * sstep(.6, 2.6, g);
   }
   // then: the old car and the two of them, only while the story's in the old painting
   thenCar.material.opacity = sstep(.55, .95, U.uThen.value);
@@ -469,6 +619,14 @@ function frame(dt0) {
   gm.uLit.value = seated && glow > 0 ? 1 : 0;   // the ember on his cigarette; flicked, it's the loose one below
   ember.visible = flick && glow > 0;
   U.uEmb.value.set(emb.pos.x, emb.pos.y, (seated ? sstep(T.ember, T.ember + 2, since) : 0) + (flick ? 1 - sstep(0, 2, since) : 0));
+  // flagging it down: the cue fills in eight steps as you hold (a tap counts a short wave)
+  const fl = flagReady();
+  flagEl.hidden = !fl;
+  if (fl) {
+    const f = Math.round(clamp(flagT / FLAG.hold, 0, 1) * 8) / 8;
+    if (f !== flagShown) { flagShown = f; ffillEl.style.clipPath = `inset(0 ${100 - f * 100}% 0 0)`; }
+    flagEl.classList.toggle('held', flagging);
+  }
   // the brake: the cue fills in eight steps with how much of the window you've held (where that leaves the nose)
   const inWin = phase === 'drive' && drv.u > BRAKE_FROM;
   brakeEl.hidden = !inWin;
@@ -477,8 +635,6 @@ function frame(dt0) {
     if (f !== fillShown) { fillShown = f; fillEl.style.clipPath = `inset(0 ${100 - f * 100}% 0 0)`; }
     brakeEl.classList.toggle('held', braking);
   }
-  const hp = phase === 'truck' && ready();   // the horn only answers the truck
-  if (hp !== hornOn) ctx.hornable(hornOn = hp);
   ctx.prompt(ready() && LABEL[phase] || null);
   // the long seated stretch: once, a quiet word that the light can be moved; gone as soon as it is
   if (seated && !looked && since > T.look[1]) looked = true;
@@ -492,27 +648,43 @@ function frame(dt0) {
   if (tip) Object.assign(T_, { dx: .035 * vh * tip, dolly: .07 * tip, yaw: -.035 * tip });
   if (out) Object.assign(T_, { dx: .02 * vh, dy: .05 * vh, dolly: -.05, pitch: -.025 });
   if (phase === 'flick' && fallT > 0) Object.assign(T_, { dx: .05 * vh, dy: .08 * vh, dolly: -.02, pitch: -.045 });
+  // the truck: phones turn to it (it stops left of the frame they hold); wide, a slow push in while he talks
+  if (truck.visible && phase !== 'flick') {
+    const fx = localPx(stopPose, 4.4, 0, .6)[0] - restCX;
+    Object.assign(T_, viewW < viewH ? { dx: fx } : { dx: fx * .3, dolly: phase === 'stop' ? .05 : 0 });
+  }
   stage.update(dt, phase === 'seated' ? .5 : .9);
   // everything drawn in sprite pixels goes on the grid now the camera has moved
   for (const w of people) {
-    w.p.obj.visible = w.state !== 'off' && now > .5;
+    w.p.obj.visible = w.state !== 'off' && w.state !== 'in' && now > .5;
     if (!w.p.obj.visible) continue;
-    w.ppx = pin(w.p.obj, w.x, w.y, stage.depthAt(w.x - 8, w.y + 4));
+    w.ppx = pin(w.p.obj, w.x, w.y, w.d ?? stage.depthAt(w.x - 8, w.y + 4));
     w.p.mesh.renderOrder = 3 + w.y / IH;   // the nearer one in front
     // you get out on the near side, in front of the taxi (it would hide you in depth); once seated, the truck can pass in front
-    if (w === people[1]) w.p.mesh.traverse(m => { m.material.depthTest = w.state === 'seated'; });
-    w.p.setLight(truck.visible ? 1.1 : 1.1, truck.visible ? -1 : 1);   // the beam-lit cloud on the right; then the truck's lights on the left
+    // (and round the truck, its cab hides you on the far side)
+    if (w === people[1]) w.p.mesh.traverse(m => { m.material.depthTest = w.state === 'seated' || truck.visible; });
+    // the beam-lit cloud on the right; then the truck's lights on the left, warm in front of its nose
+    w.p.setLight(truck.visible && w.x > truckX + truckW * .45 && w.state !== 'seated' ? 1.2 : 1.1, truck.visible ? -1 : 1);
+  }
+  // the driver, leaning out of his window: up from the sill as he leans out, gone back in as it pulls away
+  driver.obj.visible = driverOut >= 0 && truckK.go < .3;
+  if (driver.obj.visible) {
+    driver.update(dt);
+    if (TK.driver) WINDOW.set(TK.driver.position.x, 2.22, TK.driver.position.z + .02);   // kit's anchor is the window's middle
+    const [x, y, d] = toPx(truck.localToWorld(_a.copy(WINDOW)));
+    const sink = Math.round(5 * (1 - sstep(0, .35, driverOut)));
+    dppx = pin(driver.obj, x, y + (SILL - sink) * dppx, d);
+    driver.setLight(.95, 1, 'warm');
   }
   for (const w of thenPair) { w.p.obj.visible = U.uThen.value > .75; if (w.p.obj.visible) { w.p.update(dt); pin(w.p.obj, w.x, w.y, stage.depthAt(w.x - 8, w.y + 4)); } }
   ghost.obj.visible = gm.uOp.value > 0 || gm.uLit.value > 0;
   if (ghost.obj.visible) { ghost.update(dt); gppx = pin(ghost.obj, GX, G[1], G_D); }
   if (ember.visible) { const big = glow > .5; pin(ember, emb.pos.x, emb.pos.y, G_D, !big); if (!big) ember.scale.multiplyScalar(.5); emberMat.uniforms.uC.value.copy(rgb(FOLK.ghost.ember[since < 1 ? 1 : 0])); }
-  ctx.ink.render(scene, camera, [jeep, truck]);
+  if (draw) ctx.ink.render(scene, camera, [jeep, truck]);
 }
 return {
   frame, resize,
   onTap: advance,
-  onHorn() { if (phase === 'truck' && ready()) { go('lift'); return true; } return false; },   // flag the truck down with the horn
-  dispose() { skid(false); dieselOff(); people.concat(thenPair).forEach(w => w.p.dispose()); ghost.dispose(); disposeScene(scene); delete window.__edge; },
+  dispose() { skid(false); dieselOff(); people.concat(thenPair).forEach(w => w.p.dispose()); ghost.dispose(); driver.dispose(); disposeScene(scene); delete window.__edge; },
 };
 }

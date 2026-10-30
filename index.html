@@ -258,7 +258,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
     </div>
   </main>
   <footer class="foot">
-    <span class="credit">by <b>Yash Sharma</b></span>
+    <span class="credit" style="line-height: 1.6">by <b>Yash Sharma</b><br>music <b>Blue Dot Sessions</b> · CC BY-NC 4.0</span>
     <dl class="keys" aria-label="Controls">
       <div><dt id="hold-key">HOLD</dt><dd id="hold-say">Space · go faster, brake</dd></div>
       <div><dt>TAP</dt><dd>Enter · next</dd></div>
@@ -310,10 +310,11 @@ let ac = null, out = null, voice = null, verb = null, master = null, bedBus = nu
 let muted = (() => { try { return localStorage.getItem('hairpin.muted') === '1'; } catch { return false; } })();
 let rpmK = 1, mix = {}, duckTimer = 0, lastTick = 0;
 const bedGain = {};
-// the score: a mood per scene by default; scenes cue the rest with ctx.score(mood, { now })
+// the score (recorded tracks, shared/score.js): a mood per scene by default; scenes cue the rest with ctx.score(mood, { now })
 const SCORE = { stand: 'hopeful', jorabat: 'warm', climb: 'drive', nongpoh: 'tender', cloud: 'suspended', edge: 'edge', shillong: 'shillong' };
+const NEXT = { hopeful: 'warm', warm: 'drive', drive: 'tender', tender: 'suspended', suspended: 'edge', edge: 'relief', 'edge-story': 'relief', relief: 'shillong' };
 let score = null, scoreMood = 'silence';
-function setScore(m, opts) { if (!m) return; scoreMood = m; score?.set(m, opts); }
+function setScore(m, opts) { if (!m) return; scoreMood = m; score?.set(m, opts); score?.prefetch(NEXT[m]); }   // and the next track, ahead
 function glide(p, v, tau, at = 0) {   // from wherever the param is now, no jump
   const t = ac.currentTime;
   if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
@@ -372,7 +373,7 @@ function unlock() {
       layer('rain', g, LVL_RAIN);
     }
     rpm(rpmK); bed(mix);
-    score = makeScore(ac, master, verb); score.set(scoreMood);   // the music (shared/score.js), under the bed
+    score = makeScore(ac, master); setScore(scoreMood);   // the music, under the bed; its elements primed here, inside the tap (iOS)
   } catch (e) { console.warn('audio', e); ac = null; }
 }
 function bed(m) {   // { engine, wind, crickets, rain }: 0..1 each; anything left out fades to 0
@@ -405,7 +406,7 @@ function toggleMute() {
   if (master) glide(master.gain, muted ? 0 : 1, .05);
   return muted;
 }
-document.addEventListener('visibilitychange', () => { if (ac) document.hidden ? ac.suspend() : ac.resume(); });
+document.addEventListener('visibilitychange', () => { if (ac) { document.hidden ? ac.suspend() : ac.resume(); score?.suspend(document.hidden); } });
 // one-shots: filtered noise (hit) and a falling sine (thud), into the cue bus unless told otherwise
 function hit({ at = 0, len, type, hz, to, q = .7, peak, atk = .002, dest = out }) {
   const t = ac.currentTime + at, n = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
@@ -657,6 +658,8 @@ if (QS.get('scene') && SCENES[QS.get('scene')]) go(QS.get('scene'));
 else {
   prefetch('stand');   // its painting is the title's too
   showTitle();
+  const wake = () => { unlock(); if (!sceneName && !busy) setScore('hopeful'); };   // the first tap or key on the title: Roundpine under the splash, carried on into the stand
+  for (const t of ['pointerdown', 'keydown']) addEventListener(t, wake, { once: true });
   $('#play').addEventListener('click', () => { unlock(); $('#play').textContent = 'Loading…'; $('#play').disabled = true; go('stand'); });
   for (const t of ['pointerenter', 'focus']) $('#play').addEventListener(t, () => current?.greet?.());   // you wave back
   const drawer = $('#card .chapters');

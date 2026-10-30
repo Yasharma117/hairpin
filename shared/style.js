@@ -35,6 +35,14 @@ export const TRUCK = {
   eye: '#f1ead8', iris: '#2b56b8', pupil: '#0b0b0d', tarp: '#5a4632', rope: '#a8875a', chassis: '#1a1918', tank: '#2b2a28',
   tyre: '#121212', rim: '#bf452f', hub: '#262626', glass: '#000000', lamp: '#fff2c8', tail: '#c8352a', mirror: '#202022',
   tassels: ['#d8342c', '#f0b23a', '#2f8a4c', '#2c5aa8', '#e3702b'],
+  chrome: '#c9ccd1', seat: '#7a2a24', interior: '#1c1714', indicator: '#ffb347', doll: '#0b0b0d', dollEye: '#f4eedc', dollTongue: '#d8342c',
+  chain: '#8b8f96',
+  // the painted art (canvas textures, kit.js truckArt): sprite keys k ink, w white, y yellow, o orange, r red, p pink, b blue,
+  // B deep blue, g green, G deep green, R post red, P plate yellow
+  art: {
+    k: '#1a1410', w: '#f4eedc', y: '#efb03a', o: '#e3702b', r: '#d8342c', p: '#f08a8a', b: '#2c5aa8', B: '#1b3a78',
+    g: '#2f8a4c', G: '#1d5a32', R: '#d24f2a', P: '#f4cf3a',
+  },
 };
 
 // Shillong in November: the Himalayan cherry in bloom (09-shillong/blossom.js). Deep to pale; lit = in warm light, dark = under the moon.
