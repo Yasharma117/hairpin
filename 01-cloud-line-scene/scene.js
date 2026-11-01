@@ -32,7 +32,7 @@ const U = {
   tLit: { value: tLit }, tDark: { value: tDark }, tStroke: { value: tStroke },
   uImg: { value: new THREE.Vector2(IW, IH) }, uPar: { value: new THREE.Vector2() },
   uHead: { value: new THREE.Vector2(-999, -999) }, uDir: { value: new THREE.Vector2(1, 0) }, uScale: { value: 1 },
-  uLamp: { value: LAMPS }, uMode: { value: 0 }, uTime: { value: 0 },
+  uLamp: { value: LAMPS }, uMode: ctx.U.uMode, uTime: { value: 0 },
 };
 const LIGHT = /* glsl */`
 uniform vec2 uImg, uPar, uHead, uDir, uLamp[2]; uniform float uScale, uMode, uTime;
@@ -349,7 +349,7 @@ function updateLife(dt, car, dir, sCar, par) {
   place(dog, dog.pos.x, dog.pos.y, dog.face, par);
   // the walker heads downhill, the woman uphill, each by exactly the stride their feet take (1 sprite px = 1 frame px);
   // the horn stops the walker, who turns to the taxi and then walks on; the woman stops to watch the taxi go by
-  const pxPer = viewH / ctx.ink.size.y;   // painting px per frame px
+  const pxPer = viewH / ctx.ink.layoutSize.y;   // layout stays independent of painting detail
   for (const w of [walker, basket]) {
     const here = roadSide(w.u, w.side, w.inset), near = Math.hypot(here.x - car.x, (here.y - car.y) * 1.8) < 300;
     const halt = w === walker ? honkT > 0 : near;
@@ -357,13 +357,13 @@ function updateLife(dt, car, dir, sCar, par) {
     if (w.stop > 0) { w.p.play('idle'); w.p.face(car.x < here.x ? 'left' : 'right'); }
     else { w.p.play('walk'); w.p.face(here.d.x * w.dir < 0 ? 'left' : 'right'); }
     w.u += w.p.update(dt) * pxPer / total * w.dir;
-    if (walker.u < .28) walker.u = .62;
+    if (walker.u < .28 || walker.u > .64) { walker.u = clamp(walker.u, .28, .64); walker.dir *= -1; }
     if (basket.u > .6 || basket.u < .51) basket.dir = basket.u > .6 ? -1 : 1;   // her stretch of road, there and back
     const at = roadSide(w.u, w.side, w.inset), snap = v => Math.round(v / pxPer) * pxPer;   // feet on the pixel grid
     const fx = snap(at.x), fy = snap(at.y);
     stage.place(w.p.obj, fx, fy, pxPer, stage.depthAt(fx, fy));
     const l = lightCPU(fx, fy);
-    w.p.setLight(clamp(.15 + l.L * .85, .15, 1.2), U.uHead.value.x < fx ? -1 : 1);
+    w.p.setLight(clamp(.32 + l.L * .85, .32, 1.2), U.uHead.value.x < fx ? -1 : 1, 'cool');
   }
 }
 
@@ -511,6 +511,7 @@ function frame(dt) {
   hint.classList.toggle('on', t > hintAt && t < hintAt + 3 && !input.hold);
   if (s >= total * .994) s = total * .994;   // the top: wait there for the last line, then Nongpoh
   const u = s / total;
+  ctx.progress(u);
   if (!done && s >= total * .994 && lineIdx >= LINES.length && U.uTime.value >= lineFree) { done = true; ctx.next(); }
   const p = curve.getPointAt(u), pa = curve.getPointAt(Math.min(1, u + .006));
   const dir = new THREE.Vector2(pa.x - p.x, pa.y - p.y).normalize();
@@ -548,6 +549,7 @@ function frame(dt) {
   updateLife(dt, p, dir, s, par);
   updateSprites(p, par);
   // render: colour, then the ink and paper rim around the taxi
+  ctx.worldState?.({ phase: 'drive', progress: u, hold: input.hold, since: t, speed });
   ctx.ink.render(scene, camera, jeep);
 }
 return {

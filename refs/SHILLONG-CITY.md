@@ -1,0 +1,10 @@
+# Shillong city and blossom visual study — 1 November 2026
+
+The skyline is a stylised compression, not a recreation of a single viewpoint. No reference photo is bundled or used as a texture.
+
+- Actual evening city photograph inspected in the browser: [Outlook Traveller, quick guide to Shillong](https://www.outlooktraveller.com/amp/story/destinations/india/meghalaya-a-quick-guide-to-shillong), [photograph](https://media.assettype.com/outlooktraveller/import/public/uploads/2017/03/shillong1-1024x684.jpg?auto=format%2Ccompress&dpr=1.0&fit=max&format=webp&w=801). Observed low/mid-rise blocks, varied gabled metal roofs, layered winding roads, warm windows, twin-spire focal point and distant blue hills. The old repeated pyramid/grid roofs were replaced accordingly.
+- [Incredible India: All Saints’ Church](https://www.incredibleindia.gov.in/en/meghalaya/shillong/all-saints-church) documents the wooden, Gothic/Anglican building and local Khasi influence. It informed timber frames, fine posts, gables and pointed landmark details.
+- [Incredible India: Shillong guide](https://www.incredibleindia.gov.in/en/meghalaya/shillong/shillong-guide) identifies the Cathedral of Mary Help of Christians’ blue facade and stained glazing. The skyline uses a simplified blue church and twin towers as a recognisable accent.
+- [Sustainable solutions for low-cost building: material innovations for Assam-type houses](https://doi.org/10.1016/j.cscm.2025.e04461) describes dark green/reddish corrugated iron roofs, verandahs and large glazing adapted to Shillong. Near houses now use those assemblies instead of generic cubes with pyramids.
+
+The new blossom construction has five rounded cupped petals on twig clusters. Falling petals are separate slender curved blades (aspect ratio 2.09), with no notch, heart or symbolic silhouette. Pointer proximity and motion apply damped local curl; the whole tree sways slightly; a banked wish releases one short pulse. `tools/check-petals.mjs` compares actual instance transforms with and without gesture input, proves deterministic zero-time frames, and verifies the wish pulse is not restarted every frame.

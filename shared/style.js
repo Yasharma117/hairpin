@@ -105,6 +105,10 @@ export const UI = {
   ink: '#3a2a1c',        // warm ink: borders, text, hard shadows
   inkSoft: '#7a6248',    // quiet text on cream (hints, small print)
   inkLift: '#5c4632',    // a step up from ink: the chapters still ahead on the story window's progress bar
+  endQuote: '#fff2d8',   // Shillong's ending: the quote set on the night
+  endShadow: '#101d2c',  // its soft night shadow
+  endWish: '#ffe5b5',    // the wish hint's words on the night
+  endWishBg: '#17283ae0', // and its translucent night strip
   signal: '#fd1500',     // the red accent: the next arrow, the speaker's name, focus
   wood: '#dfac76',       // the wood trim, the title card's frame
   olive: '#3d422b',      // the chalkboard green
@@ -114,10 +118,20 @@ export function applyUICSS(root = document.documentElement) {
   for (const [k, v] of Object.entries(UI)) root.style.setProperty(`--ui-${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}`, v);
 }
 
+// The connected paper miniature: warm daylight, evergreen hills and the road’s cherry blossom ending.
+export const WORLD = {
+  cream: '#fff9e5', creamDeep: '#e8d8ad', ink: '#493a2b', wood: '#ae7850', amber: '#efba55',
+  night: '#273e46', grass: '#9ca97a', grassLight: '#abb887', leaf: '#4d6a50', leafLight: '#6c8659',
+  roof: '#bd6e4a', red: '#bc4b35', pink: '#e5a1ad', road: '#7a7e6f', rock: '#859386', water: '#9cbab7',
+  earth: '#c0a480', blue: '#617e8c', plaster: '#f1dfb6', yellow: '#e7b859',
+};
+
 // ---- PIXEL_PALETTES: written by tools/fit_palette.py, do not edit by hand ----
 // Per scene, dark to light, fitted in Oklab to its graded paintings (PIXEL.md 1). The final pass in shared/kit.js
-// quantizes every frame to its scene's set, with a light 4x4 ordered dither in gradients.
+// gently guides each frame toward its scene's set while preserving the paintings' intermediate colors and fine detail.
 export const PIXEL_PALETTES = {
+  // Diorama skill: a deliberate 64-colour construction palette, with intermediate material values.
+  world: ['#fff9e5', '#f3ead1', '#e8d8ad', '#d4c49d', '#493a2b', '#293831', '#3b503c', '#596d4e', '#738560', '#8e9f6e', '#9ca97a', '#b2bf8f', '#c5cfaa', '#24392f', '#3b5542', '#4d6a50', '#6c8659', '#8fa377', '#3f554e', '#60776c', '#859386', '#aab6a6', '#c8d0bd', '#414a47', '#586157', '#7a7e6f', '#919787', '#5a3c2c', '#81563b', '#ae7850', '#c59461', '#dec293', '#733e36', '#9d4e38', '#bd6e4a', '#d98d66', '#edb383', '#297e86', '#617e8c', '#65bcb6', '#c4e6d7', '#7c4b61', '#a6647d', '#cd839e', '#e5a1ad', '#f8c9ca', '#ad743b', '#d68d39', '#efba55', '#f8d27a', '#ffecb4', '#1b2427', '#323b3c', '#50636b', '#819496', '#e7b859', '#b55235', '#d97b3d', '#e9a155', '#416586', '#338f93', '#4db6b4', '#8fd7c7', '#e0f1dc'],
   stand: ['#0b070c', '#030d18', '#141826', '#1f1a12', '#031a39', '#0e2429', '#25301b', '#0b2b60', '#1e383b', '#462f22', '#303756', '#344a2a', '#613941', '#354f55', '#3d5767', '#704d2f', '#3d625a', '#466634', '#616151', '#6b6234', '#60795a', '#8d6a4d', '#64759a', '#658c45', '#8c8951', '#be8759', '#a0a55f', '#8bba56', '#f2c230', '#f7c46b', '#ccef6f', '#efe6cf'],
   jorabat: ['#000000', '#00000a', '#090206', '#020c22', '#0f0c13', '#141826', '#371408', '#052043', '#2b201d', '#152634', '#0b325b', '#27374c', '#2f3939', '#443327', '#5b331d', '#163f73', '#264d80', '#5a4a42', '#465343', '#46546b', '#7b4a27', '#766344', '#ad692e', '#748493', '#9b8357', '#cb9c4f', '#ff7f29', '#f2c230', '#f7c46b', '#efe6cf', '#ffea5a', '#faedaa'],
   climb: ['#0b0a12', '#0d122c', '#141826', '#0f1f3c', '#2c1d16', '#232a36', '#142b4b', '#3c272a', '#2a3934', '#1b365c', '#473322', '#3a4a38', '#5c3d31', '#374964', '#6e3a4c', '#4e5539', '#305c80', '#7b5336', '#566835', '#656345', '#4e747f', '#6b698e', '#75782d', '#b16c3a', '#968a2d', '#9f856b', '#b58e2c', '#d3a144', '#f2c230', '#f7c46b', '#efe6cf', '#f2e4e5'],

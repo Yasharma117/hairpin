@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { clamp, lerp, sstep, loadImg, tex, strokeMap, NOISE, makeTaxi, makeTruck, LIVERY, passenger, line, disposeScene, Stage, keyLight, Steer, Ink } from '../shared/kit.js';
 import * as folk from '../shared/folk.js';
 import { FOLK } from '../shared/style.js';
+import { TRUCK_SIGNAL, truckApproachU, truckBrakeU } from '../shared/choreography.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const SPRITES = ['then-car'];
@@ -21,7 +22,7 @@ const lip = y => {   // the point on the edge at height y (a fraction of the pai
 };
 // where the two of you sit, side by side on the side lip below the taxi, backs to us: you on the edge, legs over the drop,
 // the passenger just in from you (painting px)
-const SEATS = [[-58, -3], [-4, 0]].map(([dx, dy]) => { const [x, y] = lip(.58); return [x + dx, y + dy]; });
+const SEATS = [[-68, -3], [-4, 0]].map(([dx, dy]) => { const [x, y] = lip(.58); return [x + dx, y + dy]; });
 
 export async function load(ctx) {
 const { input, layer, params: QS } = ctx;
@@ -29,9 +30,19 @@ layer.innerHTML = `<style>
 .brake .fill { position: absolute; inset: 0; padding: inherit; background: var(--ui-cream); color: var(--ui-signal); clip-path: inset(0 100% 0 0); }
 .brake { white-space: nowrap; }
 .brake.held { animation: none; }
+.truck-signal { position:fixed; right:24px; bottom:28px; width:280px; padding:20px; z-index:15; border-radius:20px; background:var(--ui-cream); border:1px solid #594c3a35; box-shadow:0 8px 30px #251b1920; }
+.truck-signal[hidden] { display:none; }
+.truck-signal h3 { margin:0 0 7px; font:500 23px/1.1 var(--serif); }
+.truck-signal p { margin:0 0 14px; font:14px/1.45 var(--sans, sans-serif); opacity:.72; }
+.truck-signal .signal-track { height:5px; margin:0 0 16px; overflow:hidden; background:#493f2f20; border-radius:4px; }
+.truck-signal .signal-fill { display:block; height:100%; width:100%; background:var(--ui-signal); clip-path:inset(0 100% 0 0); }
+.truck-signal button { width:100%; min-height:44px; }
+.truck-signal button:disabled { opacity:.55; cursor:default; }
+@media(max-width:640px) { .truck-signal { right:16px; bottom:96px; left:16px; width:auto; padding:17px 20px; } .truck-signal h3 { font-size:22px; } }
+
 </style>
 <div class="tag">HAIRPIN · THE EDGE</div><div class="cue brake" id="brake" hidden>HOLD TO BRAKE<span class="fill" id="bfill" aria-hidden="true">HOLD TO BRAKE</span></div>
-<div class="cue brake" id="flag" style="top: 64%" hidden>HOLD TO FLAG IT DOWN<span class="fill" id="ffill" aria-hidden="true">HOLD TO FLAG IT DOWN</span></div>`;
+<section class="truck-signal" id="flag" hidden aria-labelledby="signal-title"><h3 id="signal-title" aria-live="polite">A truck, through the mist.</h3><p id="signal-detail">Stay on the verge. Let it come closer.</p><div class="signal-track" id="signal-progress" role="progressbar" aria-label="The driver noticing your wave" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="signal-fill" id="ffill"></span></div><button class="btn" id="wave" type="button" disabled>Wave to the driver</button></section>`;
 const $ = s => layer.querySelector(s);
 ctx.bed({ engine: 1, wind: .6 });
 const [imgs, spr, depthImg] = await Promise.all([Promise.all(['edge-lit.jpg', 'edge-dark.jpg', 'edge-then.jpg'].map(f => loadImg(at(f)))), Promise.all(SPRITES.map(n => loadImg(at(`sprites/${n}.png`)))), loadImg(at('depth.png'))]);
@@ -125,13 +136,14 @@ const _pp = new THREE.Vector3();
 // put o's origin at painting (x, y) at depth d, scaled so one unit is one frame pixel at that distance, and snapped so its
 // pixels land on the frame's (oddX: the origin sits mid-pixel across, as a folk sprite's foot anchor does). Returns
 // painting px per sprite px there. Call after the camera has moved this frame.
-function pin(o, x, y, d, oddX = true) {
+function pin(o, x, y, d, oddX = true, scale = 1) {
   const s = stage.place(o, x, y, null, d), cam = camera, h = ctx.ink.size.y, w = ctx.ink.size.x;
-  const u = 2 * (cam.position.z - o.position.z) * Math.tan(cam.fov * Math.PI / 360) / h;
+  const u = 2 * (cam.position.z - o.position.z) * Math.tan(cam.fov * Math.PI / 360) / (ctx.ink.layoutSize || ctx.ink.size).y * scale;
   o.scale.set(u, u, 1);
   _pp.copy(o.position).project(cam);
   const gx = (_pp.x + 1) / 2 * w, gy = (_pp.y + 1) / 2 * h;
-  o.position.x += ((oddX ? Math.floor(gx) + .5 : Math.round(gx)) - gx) * u; o.position.y += (Math.round(gy) - gy) * u;
+  const fine = 2 * (cam.position.z - o.position.z) * Math.tan(cam.fov * Math.PI / 360) / h;
+  o.position.x += ((oddX ? Math.floor(gx) + .5 : Math.round(gx)) - gx) * fine; o.position.y += (Math.round(gy) - gy) * fine;
   return u / s;
 }
 
@@ -157,11 +169,15 @@ function stepPerson(w, dt) {
   if (w.state === 'off') return;
   w.t += dt;
   if (w.state === 'wait' && w.t > .55) {
-    const rx = w.seat[0] - w.x, ry = w.seat[1] - w.y;
-    w.state = 'walk'; w.p.play('walk'); w.p.face(Math.abs(ry) > Math.abs(rx) ? (ry > 0 ? 'front' : 'back') : rx < 0 ? 'left' : 'right');
+    // Step onto safe ground before turning toward the lip; the route gives the exit a readable beginning and end.
+    const x = Math.min(w.x, w.seat[0]) - 28, y = lerp(w.y, w.seat[1], .46);
+    walkPath(w, [[x, y, stage.depthAt(x, y)], [...w.seat, stage.depthAt(w.seat[0] - 8, w.seat[1] + 4)]], w => {
+      w.state = 'sit'; w.p.face('back');
+      w.p.play('sitdown', { onEnd: () => { w.p.play('sit'); w.state = 'seated'; } });
+    });
   }
   if (w.state === 'path') {
-    let s = w.p.update(dt) * w.ppx;
+    let s = w.p.update(dt * .72) * w.ppx;
     while (s > 0 && w.path.length) {
       const [px, py, pd] = w.path[0], rx = px - w.x, ry = py - w.y, d = Math.hypot(rx, ry);
       if (d > s) { const k = s / d; w.x += rx * k; w.y += ry * k; w.d += (pd - w.d) * k; break; }
@@ -368,8 +384,9 @@ const LIFT_SCRIPT = [
 ];
 // the truck beat, in seconds: when you stand (you, the passenger: after it rounds the bend), how long a hold flags it
 // down, how long it takes to stop, when he leans out, when "Climb in" is offered; the lift: the door, in, away
-const FLAG = { stand: [.7, 1], hold: 1.2, brake: 1.4, lean: 1.1, ready: 9.2, tap: .6 };
+const FLAG = { stand: [.7, 1], hold: TRUCK_SIGNAL.waveSeconds, brake: TRUCK_SIGNAL.brakeSeconds, lean: 1.1, ready: 9.2, tap: .6 };
 const LIFT = { climb: .35, shut: .5, away: .7, next: 2.8 };
+let noticedAt = -1, brakeFrom = 0;
 let flagT = 0, tapWave = 0, inCab = 0, liftT = -1;   // seconds held; a tap's short wave left; how many are in; since the door shut
 // the driver's window sill in the truck's own units (when kit's makeTruck gives no `driver` anchor)
 const WINDOW = new THREE.Vector3(2.3, 2.22, 1.14);
@@ -391,7 +408,7 @@ function skid(on) {   // tyres on gravel: filtered noise while you hold the brak
   } catch (e) {}
 }
 let hangSaid = false, looked = false;
-let phase = 'drive', since = 0, tips = 0, ang = 0, angV = 0, fallT = -1;
+let phase = 'drive', since = 0, tips = 0, ang = 0, angV = 0, fallT = -1, fallStartAngle = .2;
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), steer = new Steer(.32), aim = new THREE.Vector2();
 const say = ctx.say;
 function go(next) {
@@ -415,11 +432,11 @@ function go(next) {
   ctx.score?.({ drive: 'edge', seated: 'edge-story' }[next]);   // the music: broken on the hang, his story (relief: as the truck pulls away)
   if (next === 'truck') {   // far off, round the bend: its horn, its diesel, its lights; the two of you get up
     if (fallT < 0) fallT = 5; truck.visible = true; horn(.03, 1.1); dieselOn(); ctx.bed({ wind: .5 });
-    Object.assign(truckK, { k: 0, go: -1 }); flagT = 0; tapWave = 0; inCab = 0; liftT = -1; driverOut = -1; door.to = 0;
+    Object.assign(truckK, { k: 0, go: -1 }); flagT = 0; tapWave = 0; noticedAt = -1; brakeFrom = 0; inCab = 0; liftT = -1; driverOut = -1; door.to = 0;
     people.forEach(w => { w.d = null; });
   }
   if (next === 'stop') {   // it stops for you: the air brakes, then it idles; he leans out
-    truckK.k0 = truckK.k; airBrake(); posePlace(); dieselTo(false); lineI = 0;
+    truckK.k0 = truckK.k = 1; posePlace(); dieselTo(false); lineI = 0; driverWave = 1.1;
     people.forEach((w, i) => { if (w.state !== 'there') { Object.assign(w, { state: 'there', path: [] }); [w.x, w.y, w.d] = localPx(stopPose, ...AT.spot[i]); } w.p.face('front'); w.p.play('flag'); });
   }
   if (next === 'lift') {   // round its nose to the far side; the passenger first
@@ -430,9 +447,9 @@ function go(next) {
 }
 const LABEL = { car: 'Open the passenger door', pout: 'Open your door', seated: 'Flick the ember', stop: 'Climb in' };
 const NEXT = { car: 'pout', pout: 'yout', seated: 'flick', stop: 'lift' };
-const ready = () => phase === 'car' && since > 1.5 || phase === 'pout' && since > 1.2 || phase === 'seated' && since > T.flick || phase === 'stop' && since > FLAG.ready;
-// you can flag it once it's round the bend and the two of you are in its path
-const flagReady = () => phase === 'truck' && since > 3 && people.every(w => w.state === 'there');
+const ready = () => phase === 'car' && since > 1.5 || phase === 'pout' && since > 1.2 && people[0].state === 'seated' || phase === 'seated' && since > T.flick || phase === 'stop' && since > FLAG.ready;
+// You can signal once both travellers have reached the safe verge.
+const flagReady = () => phase === 'truck' && noticedAt < 0 && since >= TRUCK_SIGNAL.ready && people.every(w => w.state === 'there');
 // seated (and while the driver talks), a tap brings the next line on now; flagging, a tap is a short wave; otherwise it
 // takes the next step once it's ready
 const advance = () => {
@@ -457,14 +474,16 @@ function jump(at, secs) {
   for (let s = 0; s < secs && (at === 'pout' || at === 'yout'); s += 1 / 60) people.forEach(w => stepPerson(w, 1 / 60));
   if (at === 'yout' && people[1].state === 'seated') { phase = 'seated'; secs = 0; }
   ang = reset(); angV = 0; since = secs; lineI = at === 'seated' ? SCRIPT.filter(l => l[0] < secs).length : 0;
-  if (order.indexOf(at) >= 5) { since = 0; ff = secs; if (at !== 'truck') truckK.k = truckK.k0 = 1; }
+  if (at === 'flick' || order.indexOf(at) >= 5) { since = 0; ff = secs; if (at !== 'truck' && at !== 'flick') truckK.k = truckK.k0 = 1; }
 }
 
 /* ---------- loop ---------- */
 const hint = Object.assign(document.createElement('div'), { className: 'hint', textContent: ctx.isTouch ? 'Drag to look around' : 'Point to look around' });
-hint.style.bottom = '32px'; layer.appendChild(hint);
-let truckX = 0, started = false, fillShown = -1, flagShown = -1, restCX = IW / 2, driverWave = 0, bobT = 9, gone = false;
+hint.style.bottom = '32px'; hint.hidden = !!ctx.worldState; layer.appendChild(hint);
+let truckX = 0, started = false, fillShown = -1, restCX = IW / 2, driverWave = 0, bobT = 9, gone = false;
 const brakeEl = $('#brake'), fillEl = $('#bfill'), flagEl = $('#flag'), ffillEl = $('#ffill');
+const signalTitle=$('#signal-title'),signalDetail=$('#signal-detail'),signalProgress=$('#signal-progress'),waveButton=$('#wave');
+ctx.on(waveButton,'click',e=>{e.stopPropagation();if(flagReady()){tapWave=FLAG.hold+.15;ctx.sfx.tick();}});
 window.__edge = { phase: () => phase, go, ang: () => ang, people: () => people.map(w => [w.state, w.x | 0, w.y | 0, w.d, w.p.obj.visible]), since: () => since };
 const ptrPx = () => input.ptr && stage.screenToPaint(...input.ptr);
 function frame(dt0) {
@@ -502,10 +521,10 @@ function step(dt0, draw) {
     }
   } else U.uFog.value = phase === 'car' ? .85 * (1 - sstep(.5, 4, since)) : 0;
   if (phase === 'flick' && since > 3.5 && fallT < 0) ctx.score?.('silence', { now: true });   // the music goes with the car
-  if (phase === 'flick' && since > 3.5 && fallT < 0) { fallT = 0; creak(1.4); quiet = true; ctx.bed({}); }   // over it goes; then nothing
+  if (phase === 'flick' && since > 3.5 && fallT < 0) { fallStartAngle = ang; fallT = 0; creak(1.4); quiet = true; ctx.bed({}); }   // over it goes; then nothing
   if (phase === 'flick' && since > 8) go('truck');
-  // the truck beat: round the bend it comes; you stand and walk into its path; held, the two of you flag it down and it
-  // stops; he leans out, a word, he waves you in; round to the far side, in, the door, and away into the cloud
+  // the truck beat: round the bend it comes; you stand on the verge; a deliberate wave tells the driver to pull over. It
+  // brakes to a stop before he leans out and invites you in; the door shuts, then you leave together.
   posePlace();
   const flagging = phase === 'truck' && flagReady() && (input.hold || tapWave > 0 || AUTO);
   tapWave = Math.max(0, tapWave - dt);
@@ -514,7 +533,12 @@ function step(dt0, draw) {
       if (w.state === 'seated' && since > FLAG.stand[i]) { w.state = 'up'; w.p.play('standup', { onEnd: () => walkPath(w, [localPx(stopPose, ...AT.spot[i])], w => w.p.face('front')) }); }
       if (w.state === 'there') w.p.play(flagging ? 'flag' : 'idle');
     });
-    if (flagging && (flagT += dt) >= FLAG.hold) go('stop');
+    if(noticedAt<0){
+      flagT=clamp(flagT+(flagging?dt:-dt*.45),0,FLAG.hold);
+      truckK.k=truckApproachU(since);
+      if(flagT>=FLAG.hold){noticedAt=since;brakeFrom=truckK.k;horn(.03,.24);airBrake(.25,.08);dieselTo(false);}
+    }
+    if(noticedAt>=0){truckK.k=truckBrakeU(brakeFrom,since-noticedAt);if(since-noticedAt>=FLAG.brake)go('stop');}
   }
   if (phase === 'stop') {
     if (since > .8) people.forEach(w => { w.p.play('idle'); if (since > FLAG.lean) w.p.face('left'); });   // arms down; then to him
@@ -522,7 +546,12 @@ function step(dt0, draw) {
     if (lineI < LIFT_SCRIPT.length && since > LIFT_SCRIPT[lineI][0]) { const [, who, text, wave] = LIFT_SCRIPT[lineI++]; say(who, text, 3); if (wave) { driverWave = 2.6; driver.play('leanwave'); } }
   }
   if (driverWave > 0 && (driverWave -= dt) <= 0) driver.play('lean');
-  if (phase === 'lift') {
+  if (phase === 'lift' && ctx.worldState) {
+    people.forEach((w,i) => { w.state = since >= 3.1 + i*.65 ? 'in' : 'path'; });
+    inCab = people.filter(w => w.state === 'in').length;
+    door.to = since > 1.6 && since < 4.25 ? 1 : 0;
+    if (since > 4.9 && truckK.go < 0) { truckK.go = 0; dieselTo(true); ctx.score?.('relief'); airBrake(.35,.05); }
+  } else if (phase === 'lift') {
     people.forEach((w, i) => {
       if (w.state === 'queue' && w.t >= 0) walkPath(w, [localPx(stopPose, ...AT.corner[i]), localPx(stopPose, ...AT.door[i])], w => {
         w.state = 'climb'; w.t = 0; if (!door.to) { door.to = 1; ctx.sfx.door(); }   // the passenger door, then up into the cab
@@ -572,8 +601,7 @@ function step(dt0, draw) {
   jeepMat.uniforms.uExposure.value = phase === 'drive' ? 1 : 1.2;
   if (truck.visible) keyLight(truckMat, camera, truck.position, stage.toWorld(.8 * IW, .7 * IH, 0, v2), .15);   // the moonlit cloud ahead
   if (truck.visible) {   // the truck rolls in round the bend, waits, stops for you; now its headlights are the light
-    const k = truckK.k = phase === 'truck' ? TRUCK.creep * (1 - Math.pow(1 - clamp(since / ROLL, 0, 1), 2.2))
-      : phase === 'stop' ? lerp(truckK.k0, 1, 1 - Math.pow(1 - clamp(since / FLAG.brake, 0, 1), 2)) : 1;
+    const k = truckK.k = phase === 'truck' ? (noticedAt<0?truckApproachU(since):truckBrakeU(brakeFrom,since-noticedAt)) : 1;
     // pulling away: on to the hairpin's apex by the old stones and round it, away from us, into the cloud
     const g = Math.max(0, truckK.go), away = sstep(0, .25, g / LIFT.next), u = Math.pow(clamp(g / LIFT.next, 0, 1), 1.6) * .95;
     const P = AWAY.getPointAt(u), q = AWAY.getTangentAt(u);
@@ -593,6 +621,11 @@ function step(dt0, draw) {
   U.uSpill.value = phase === 'drive' || truck.visible ? 1 : 0;
   // the two of you: getting out, the walk, sitting down
   for (const w of people) stepPerson(w, dt);
+  if (ctx.worldState) {
+    if (phase === 'pout') people[0].state = since >= 4.2 ? 'seated' : 'path';
+    if (phase === 'yout') { people[0].state = 'seated'; people[1].state = since >= 6.6 ? 'seated' : 'path'; }
+    if (phase === 'truck') people.forEach(w => { w.state = since >= TRUCK_SIGNAL.ready ? 'there' : 'path'; });
+  }
   if (phase === 'car' && since > 2.2 && !hangSaid) { hangSaid = true; const l = line('hang'); if (l) say(l.who, l.text, 3.4, l.expr); }
   if (phase === 'yout' && people[1].state === 'seated') go('seated');
   if (phase === 'seated' && lineI < SCRIPT.length && since > SCRIPT[lineI][0]) { const [, who, text] = SCRIPT[lineI++]; say(who, text, 4); }
@@ -619,13 +652,19 @@ function step(dt0, draw) {
   gm.uLit.value = seated && glow > 0 ? 1 : 0;   // the ember on his cigarette; flicked, it's the loose one below
   ember.visible = flick && glow > 0;
   U.uEmb.value.set(emb.pos.x, emb.pos.y, (seated ? sstep(T.ember, T.ember + 2, since) : 0) + (flick ? 1 - sstep(0, 2, since) : 0));
-  // flagging it down: the cue fills in eight steps as you hold (a tap counts a short wave)
-  const fl = flagReady();
-  flagEl.hidden = !fl;
-  if (fl) {
-    const f = Math.round(clamp(flagT / FLAG.hold, 0, 1) * 8) / 8;
-    if (f !== flagShown) { flagShown = f; ffillEl.style.clipPath = `inset(0 ${100 - f * 100}% 0 0)`; }
-    flagEl.classList.toggle('held', flagging);
+  // The hand signal has a visible consequence: acknowledgement, braking, then conversation.
+  const fl = phase==='truck',canWave=flagReady(),brakingTruck=fl&&noticedAt>=0;
+  flagEl.hidden=!fl;
+  if(fl){
+    const title=brakingTruck?"He's seen you.":canWave?'Flag it down.':'A truck, through the mist.';
+    const detail=brakingTruck?'He’s pulling over. Stay on the verge.':canWave?'Hold Space, hold the scene, or send a wave.':'Stay on the verge. Let it come closer.';
+    const buttonText=brakingTruck?'Pulling over…':canWave?'Wave to the driver':'Wait for the truck…';
+    if(signalTitle.textContent!==title)signalTitle.textContent=title;
+    if(signalDetail.textContent!==detail)signalDetail.textContent=detail;
+    if(waveButton.textContent!==buttonText)waveButton.textContent=buttonText;
+    waveButton.disabled=!canWave;
+    const f=clamp(flagT/FLAG.hold,0,1);ffillEl.style.clipPath=`inset(0 ${100-f*100}% 0 0)`;signalProgress.setAttribute('aria-valuenow',String(Math.round(f*100)));
+    flagEl.classList.toggle('held',flagging);
   }
   // the brake: the cue fills in eight steps with how much of the window you've held (where that leaves the nose)
   const inWin = phase === 'drive' && drv.u > BRAKE_FROM;
@@ -636,6 +675,13 @@ function step(dt0, draw) {
     brakeEl.classList.toggle('held', braking);
   }
   ctx.prompt(ready() && LABEL[phase] || null);
+  const beatProgress = {
+    drive: .12 * drv.u, car: .12, pout: .2, yout: .28,
+    seated: .34 + .4 * clamp(since / T.flick, 0, 1), flick: .74 + .08 * clamp(since / 8, 0, 1),
+    truck: .82 + .06 * clamp(flagT / FLAG.hold, 0, 1), stop: .88 + .06 * clamp(since / FLAG.ready, 0, 1),
+    lift: .94 + .06 * clamp(inCab / 2, 0, 1),
+  };
+  ctx.progress?.(beatProgress[phase] || 0);
   // the long seated stretch: once, a quiet word that the light can be moved; gone as soon as it is
   if (seated && !looked && since > T.look[1]) looked = true;
   if (Math.abs(steer.angle) > .05) looked = true;
@@ -658,13 +704,13 @@ function step(dt0, draw) {
   for (const w of people) {
     w.p.obj.visible = w.state !== 'off' && w.state !== 'in' && now > .5;
     if (!w.p.obj.visible) continue;
-    w.ppx = pin(w.p.obj, w.x, w.y, w.d ?? stage.depthAt(w.x - 8, w.y + 4));
+    w.ppx = pin(w.p.obj, w.x, w.y, w.d ?? stage.depthAt(w.x - 8, w.y + 4), true, 1.12);
     w.p.mesh.renderOrder = 3 + w.y / IH;   // the nearer one in front
     // you get out on the near side, in front of the taxi (it would hide you in depth); once seated, the truck can pass in front
     // (and round the truck, its cab hides you on the far side)
     if (w === people[1]) w.p.mesh.traverse(m => { m.material.depthTest = w.state === 'seated' || truck.visible; });
     // the beam-lit cloud on the right; then the truck's lights on the left, warm in front of its nose
-    w.p.setLight(truck.visible && w.x > truckX + truckW * .45 && w.state !== 'seated' ? 1.2 : 1.1, truck.visible ? -1 : 1);
+    w.p.setLight(truck.visible && w.x > truckX + truckW * .45 && w.state !== 'seated' ? 1.15 : 1.06, truck.visible ? -1 : 1, truck.visible ? 'warm' : 'cool');
   }
   // the driver, leaning out of his window: up from the sill as he leans out, gone back in as it pulls away
   driver.obj.visible = driverOut >= 0 && truckK.go < .3;
@@ -674,12 +720,13 @@ function step(dt0, draw) {
     const [x, y, d] = toPx(truck.localToWorld(_a.copy(WINDOW)));
     const sink = Math.round(5 * (1 - sstep(0, .35, driverOut)));
     dppx = pin(driver.obj, x, y + (SILL - sink) * dppx, d);
-    driver.setLight(.95, 1, 'warm');
+    driver.setLight(1.08, 1, 'warm');
   }
   for (const w of thenPair) { w.p.obj.visible = U.uThen.value > .75; if (w.p.obj.visible) { w.p.update(dt); pin(w.p.obj, w.x, w.y, stage.depthAt(w.x - 8, w.y + 4)); } }
   ghost.obj.visible = gm.uOp.value > 0 || gm.uLit.value > 0;
-  if (ghost.obj.visible) { ghost.update(dt); gppx = pin(ghost.obj, GX, G[1], G_D); }
+  if (ghost.obj.visible) { ghost.update(dt); gppx = pin(ghost.obj, GX, G[1], G_D, true, 1.12); }
   if (ember.visible) { const big = glow > .5; pin(ember, emb.pos.x, emb.pos.y, G_D, !big); if (!big) ember.scale.multiplyScalar(.5); emberMat.uniforms.uC.value.copy(rgb(FOLK.ghost.ember[since < 1 ? 1 : 0])); }
+  ctx.worldState?.({ phase, since, driveU: drv.u, progress: beatProgress[phase] || 0, hold: input.hold, angle: ang, fallT, fallStartAngle, fog: U.uFog.value, memory: U.uThen.value, truckU: truckK.k, truckGo: truckK.go, cabDoor: door.open, flagProgress: clamp(flagT / FLAG.hold, 0, 1), flagging, driverAcknowledged: noticedAt>=0, brakeProgress: noticedAt<0?0:clamp((since-noticedAt)/FLAG.brake,0,1), flagStage: phase==='truck'?(noticedAt>=0?'braking':flagReady()?'waiting':'approach'):phase==='stop'?'stopped':phase, look: passenger() || DEFAULT_LOOK, people: people.map(w => w.state) });
   if (draw) ctx.ink.render(scene, camera, [jeep, truck]);
 }
 return {

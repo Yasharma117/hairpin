@@ -55,11 +55,13 @@ Object colours (the taxi's parts, placeholder figures, the Shillong placeholder)
 
 Every scene goes through one final pass, `Ink` in `shared/kit.js` (PIXEL.md section 1):
 
-1. The scene renders at twice a low pixel grid (an integer scale, the frame about 360 px tall in landscape, 400 in
-   portrait) and is box-filtered down to it.
-2. The 1 px outline on things that move, an edge-keeping smoothing, then the per-scene grade (below).
-3. Quantized to the scene's palette (`PIXEL_PALETTES`) in Oklab, with a light 4x4 ordered dither only in gradients.
-4. Blown up with nearest-neighbour, offset by the camera's sub-pixel remainder so slow moves stay smooth (the `Stage`
+1. The scene renders directly at a detailed grid: at least 720 rows in landscape or 800 in portrait where the drawing
+   buffer permits, with an integer device-pixel scale of at least 1. The actor staging grid is separate (`layoutSize`)
+   so increasing detail does not make people smaller.
+2. The 1 px outline on things that move, a trace of edge-aware smoothing, then the per-scene grade (below).
+3. The scene's palette (`PIXEL_PALETTES`) guides color gently in Oklab. Original painted detail and intermediate colors
+   remain visible; only the vehicle contour has a strong palette treatment. Dither is restrained to smooth gradients.
+4. Presented with nearest-neighbour, offset by the camera's sub-pixel remainder so slow moves stay smooth (the `Stage`
    snaps the camera to the grid and moves on a critically damped spring).
 
 No paper grain, no boil.

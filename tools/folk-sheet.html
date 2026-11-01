@@ -13,7 +13,8 @@
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
 <body></body>
 <script type="module">
-// Every Folk character, size, view and animation (near 48 x 72 cells, far 32 x 48), at 3x with nearest, on cream and on night. ?still freezes the clock.
+// Every Folk character, size, view and animation. Logical cells remain near 48x72 / far 32x48; fine artwork is 2x.
+// ?still freezes the clock. ?compact shows the primary cast and the newly authored character detail first.
 import * as THREE from 'three';
 import * as folk from '../shared/folk.js';
 import { FOLK } from '../shared/style.js';
@@ -25,7 +26,7 @@ function cell(parent, label, draw, z = Z) {   // draw(ms) -> canvas
   const f = document.createElement('figure'), cv = document.createElement('canvas'), cap = document.createElement('figcaption');
   cap.textContent = label; f.append(cv, cap); parent.append(f);
   let last = null;
-  const paint = ms => { const src = draw(ms); if (src === last) return; last = src; cv.width = src.width * z; cv.height = src.height * z; const x = cv.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(src, 0, 0, cv.width, cv.height); };
+  const paint = ms => { const src = draw(ms); if (src === last) return; last = src; const scale = z / (src.artScale || 1); cv.width = src.width * scale; cv.height = src.height * scale; const x = cv.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(src, 0, 0, cv.width, cv.height); };
   paint(0); live.push(paint);
 }
 // an animation playing: its frame at time ms
@@ -38,12 +39,17 @@ function block(title, night, fill) {
 const PASSENGER = { name: 'passenger', build: 'f', skin: 1, hair: 'long', top: 'hoodie', extra: 'headphones' };
 const WHO = ['you', 'grandpa', 'friend', 'walker', 'basket', 'driver'];
 
+block('fine atlas: original logical size, twice the authored detail — face, silhouette, hair, cloth and seated profile', false, r => {
+  for (const who of ['you', PASSENGER, 'driver', {build:'f',skin:3,hair:'curly',top:'kurta'}])
+    for (const v of ['front','left','back']) cell(r, `${who.name || (typeof who === 'string' ? who : who.hair)} ${v}`, anim(who, 'near', v, 'idle', {light:1}), 4);
+});
+
 for (const night of [false, true]) {
   const L = night ? .6 : 1;
   block(`near: the characters, idle (front, three-quarter, back)${night ? ' — night, light step 2, rim on' : ''}`, night, r => {
     for (const who of [...WHO, PASSENGER]) for (const v of ['front', 'left', 'back']) cell(r, `${who.name || who} ${v}`, anim(who, 'near', v, 'idle', { light: L, rim: night }));
   });
-  block(`near: walk (4 frames, 8 fps), wave, sit down + sit (from behind)${night ? ' — night' : ''}`, night, r => {
+  block(`near: walk (8 phases, planted stride), wave, sit down + sit (from behind)${night ? ' — night' : ''}`, night, r => {
     for (const who of ['you', PASSENGER]) {
       for (const v of ['left', 'right', 'front', 'back']) cell(r, `walk ${v}`, anim(who, 'near', v, 'walk', { light: L, rim: night }));
       for (const v of ['front', 'left', 'right']) cell(r, `wave ${v}`, anim(who, 'near', v, 'wave', { light: L, rim: night }));

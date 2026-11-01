@@ -1,0 +1,31 @@
+{
+  "result": "passed",
+  "date": "2026-11-01",
+  "module_version": "finish-20261101-b",
+  "native_browser_checks": {
+    "wave_button": "Clicked Wave to the driver; observed He\u2019s seen you, progress100, disabled Pulling over, then stopped truck.",
+    "canvas_hold": "Held scene1900ms; observed acknowledgement, braking, then stopped truck.",
+    "boarding": "Clicked Climb in after stopped dialogue; recorded8.5seconds including walk around nose, doorway, door shut and departure.",
+    "console_errors": []
+  },
+  "phone": {
+    "viewport": [
+      390,
+      844
+    ],
+    "wave_button": {
+      "left": 37,
+      "right": 353,
+      "top": 686,
+      "bottom": 730
+    },
+    "story_strip": {
+      "top": 783,
+      "bottom": 820
+    },
+    "overlap": false,
+    "clearance_pixels": 53
+  },
+  "evidence": "../../outputs/truck-flag/",
+  "scope": "Actual runtime UI and playback checks. Node continuity and safe-verge measurements are in truck-flag-report.json."
+}

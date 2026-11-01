@@ -136,7 +136,7 @@ export async function load(ctx) {
   function resize(w, h) {
     const aspect = w / h; narrow = aspect < 1;
     const viewH = narrow ? IH : Math.min(IH * .9, IW / aspect), viewW = viewH * aspect;
-    ppf = viewH / ctx.ink.size.y;
+    ppf = viewH / ctx.ink.layoutSize.y;
     stage.place(taxi.jeep, TAXI[0], TAXI[1], TAXI_K * ppf, stage.depthAt(TAXI[0], TAXI[1] + 14));
     U.uHead.value.set(TAXI[0] + 1.69 * TAXI_K * ppf, TAXI[1] - 20 * ppf);
     // phones: the stall, you and the taxi across the middle; wide screens: they sit in the left third, the road runs right
@@ -152,7 +152,7 @@ export async function load(ctx) {
   /* ---------- pin a person to the frame's grid, 1 sprite px = 1 frame px (as the stand does) ---------- */
   const tanH = () => Math.tan(stage.fov * Math.PI / 360);
   function pin(p, x, y) {
-    const grid = ctx.ink.size; stage.toWorld(x, y, stage.depthAt(x, y), V).project(camera);
+    const grid = ctx.ink.layoutSize; stage.toWorld(x, y, stage.depthAt(x, y), V).project(camera);
     V.x = (Math.floor((V.x * .5 + .5) * grid.x) + .5) / grid.x * 2 - 1;
     V.y = Math.round((V.y * .5 + .5) * grid.y) / grid.y * 2 - 1;
     V.unproject(camera); p.obj.position.copy(V);
@@ -212,7 +212,7 @@ export async function load(ctx) {
       stage.update(dt, .7);
       const [yx, yy] = P(YOU);
       pin(me, yx, yy);
-      me.setLight(.9, 1);
+      me.setLight(1.05, 1, 'warm');
       ctx.ink.render(scene, camera, taxi.jeep);
     },
     dispose() { me.dispose(); disposeScene(scene); delete window.__title; },

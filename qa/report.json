@@ -1,0 +1,325 @@
+{
+  "revision": "truck-petals-wish-and-reference-ui",
+  "date": "2026-11-01",
+  "status": "interaction_and_visual_checks_passed",
+  "skill": {
+    "repository": "https://github.com/sloemo01/diorama",
+    "version": "3.8.0"
+  },
+  "adaptations": [
+    "Interactive seven-chapter story; approximately five minutes, not a fixed 46-second loop.",
+    "The user-requested home overview rotates freely on drag; chapter cameras retain their authored direction.",
+    "Accessible DOM portfolio, dialogue and appearance controls retained.",
+    "Existing HTTP-served ES-module entry point retained.",
+    "After the Shillong arrival, a full-screen 3D night overlook replaces the paper-backed miniature for the user-requested city, cherry blossom and shooting-star reveal."
+  ],
+  "capture_mode": "still query freezes the chapter/world and CSS transitions; five chapter proof frames plus overview captured through the browser.",
+  "shots": [
+    {
+      "id": "stand",
+      "url": "/?scene=stand&still",
+      "status": "reviewed",
+      "criteria": [
+        "ground contact",
+        "counter visible",
+        "faces",
+        "unclipped controls"
+      ],
+      "capture": "../../outputs/diorama-qa/01-stand.png"
+    },
+    {
+      "id": "projects",
+      "url": "/?scene=jorabat&still",
+      "status": "reviewed",
+      "criteria": [
+        "project assemblies visible",
+        "cutaway roof",
+        "keyboard accessible project list"
+      ],
+      "capture": "../../outputs/diorama-qa/02-workshop.png"
+    },
+    {
+      "id": "market",
+      "url": "/?scene=nongpoh&still",
+      "status": "reviewed",
+      "criteria": [
+        "fruit rows",
+        "awning construction",
+        "vendor scale",
+        "clear road"
+      ],
+      "capture": "../../outputs/diorama-qa/03-market.png"
+    },
+    {
+      "id": "memory",
+      "url": "/?scene=edge&at=seated&t=43&still",
+      "status": "reviewed",
+      "criteria": [
+        "ledge depth",
+        "two seated figures",
+        "remembered person",
+        "no car/figure clipping"
+      ],
+      "capture": "../../outputs/diorama-qa/04-cliff.png"
+    },
+    {
+      "id": "wish",
+      "url": "/?scene=shillong&t=10&still",
+      "status": "reviewed",
+      "criteria": [
+        "town silhouette",
+        "blossom construction",
+        "warm windows",
+        "star visible"
+      ],
+      "capture": "../../outputs/diorama-qa/05-shillong.png"
+    },
+    {
+      "id": "overview",
+      "url": "/?still",
+      "status": "reviewed",
+      "criteria": [
+        "all seven stops",
+        "readable route",
+        "no clipped landmark",
+        "desktop and phone fit"
+      ],
+      "capture": "../../outputs/diorama-qa/06-overview-desktop.png"
+    }
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800,
+      "status": "reviewed",
+      "console_errors": 0
+    },
+    {
+      "width": 1388,
+      "height": 950,
+      "status": "reviewed",
+      "console_errors": 0
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "status": "reviewed",
+      "console_errors": 0
+    }
+  ],
+  "checks": {
+    "console_errors": "No errors on the fixed build; an earlier boarding turn crash was corrected and retested.",
+    "geometry_finite": "All seven landmarks: zero nonfinite attributes; 47,799 triangles across 359 meshes.",
+    "flat_surface_noise": "Reviewed five full frames and phone view; empty paper unchanged and flat surfaces calm.",
+    "shadow_contact": "Real sun shadows plus contact patches reviewed under vehicles, cast and buildings.",
+    "keyboard_controls": "Appearance summary opens and closes with native Space behavior; normal boarding reaches Jorabat."
+  },
+  "research": {
+    "primary_photographs_inspected": 3,
+    "additional_photographic_leads": 1,
+    "new_external_models_imported": 0,
+    "limitation": "Photographs inform material and staging; no new motion footage was measured, and no source photograph is bundled as a texture."
+  },
+  "regression": {
+    "motion_contract": {
+      "command": "node tools/check-motion.mjs",
+      "checks": 6814,
+      "result": "passed"
+    },
+    "actual_world": {
+      "command": "node tools/check-world-motion.mjs",
+      "checks": 24983,
+      "result": "passed",
+      "evidence": "world-motion-report.json",
+      "coverage": "Actual nine-metre opening; approach/stop/fall axis; supported seats; all six continuous vehicle journeys, 900 frames each."
+    },
+    "road_clearance": {
+      "command": "node tools/check-scene-clearance.mjs",
+      "samples": 123,
+      "collisions": 0,
+      "result": "passed",
+      "evidence": "scene-clearance-report.json"
+    },
+    "night_reveal": {
+      "command": "node tools/check-skyline.mjs",
+      "checks": 927771,
+      "result": "passed",
+      "evidence": "skyline-report.json",
+      "coverage": "Actual connected controller, reveal crossfade, finite architecture, complete desktop/phone travellers, star size and unobstructed sightline."
+    },
+    "browser_playback": {
+      "result": "passed",
+      "full_route": "../../outputs/interaction-polish/full-journey-e.json",
+      "metrics": {
+        "parkedMovement": 0,
+        "fallYawError": 0,
+        "fallRoll": 0
+      },
+      "native_wish": "Holding on the live canvas displayed Wish kept. Ending reached Again and Title controls.",
+      "console": "No errors or warnings in inspected latest-route and ending browser logs.",
+      "module_version": "finish-20261101-e",
+      "ending": "Full integrated route reached phase done and visible end controls, with no browser console errors."
+    },
+    "syntax": {
+      "scripts": 21,
+      "inline_modules": 1,
+      "result": "passed"
+    },
+    "diff_whitespace": "passed",
+    "truck_flag": {
+      "result": "passed",
+      "checks": 1847,
+      "evidence": "truck-flag-report.json",
+      "native_browser": "truck-flag-browser.json",
+      "coverage": "Wave button and held wave, acknowledgement, 2.4-second braking, continuous stop, safe verge, boarding and mobile card clearance."
+    },
+    "petal_interaction": {
+      "result": "passed",
+      "changedTransformValues": 261,
+      "liveDisplacement": 16.134908632622682,
+      "interaction": {
+        "breeze": 0.015511284803631665,
+        "petalDisplacement": 0.00018358919078309555,
+        "bankedAt": 20
+      },
+      "petalAspectRatio": 2.0871700545387983,
+      "deterministicFreeze": true,
+      "singleWishPulse": true
+    },
+    "intentional_wish": {
+      "result": "passed",
+      "checks": 115,
+      "coverage": [
+        "canvas brushing cannot bank a wish",
+        "pointer reaches breeze",
+        "cancelled hold drains",
+        "button and keyboard each keep once",
+        "wish remains available after the star",
+        "festival caption precedes star",
+        "quote reaches final controls"
+      ],
+      "evidence": "overlook-interactions-report.json"
+    }
+  },
+  "limits": [
+    "The location remains a stylised compression, not a geographic reconstruction.",
+    "Clearance sampling tests the taxi body against the three roadside chapter sets; it is not a general-purpose collision engine.",
+    "No broad device-performance claim is made from background browser capture.",
+    "The old standalone painted chapter implementations remain as narrative/input providers; the connected world and the new skyline are the rendered presentation.",
+    "The skyline is a stylised, photo-informed city composition; the cathedral and districts are not geographically registered to a real viewpoint."
+  ],
+  "ending_timing": {
+    "leave_truck_and_sit": "0\u20135.75 seconds after engine-off",
+    "dissolve_to_city": "6\u20138.5 seconds",
+    "camera_settles": 10,
+    "quiet_view_before_star": "10\u201314 seconds",
+    "star": "14\u201323 seconds unless banked",
+    "wish_hold_seconds": 0.9,
+    "quote": "After the star has crossed; original sequential quote and end-card controls remain.",
+    "late_wish": "Available after the star has crossed, until the end card; canvas brushing cannot bank it."
+  },
+  "module_version": "icons-20261101-b",
+  "interface": {
+    "reference": "https://8bityash.vercel.app/projects/search",
+    "opening": "Pocket FM tells stories. Here\u2019s one I\u2019d like to share with you.",
+    "components": [
+      "glossy dark primary controls",
+      "silver secondary controls",
+      "numbered active chapter rail",
+      "refined story, project and character panels"
+    ],
+    "phone_rail": {
+      "expanded_width": 198,
+      "collapsed_width": 48,
+      "visible_stops_when_expanded": 7
+    },
+    "evidence": "../../outputs/interaction-polish/"
+  },
+  "previous_recordings": {
+    "road": "../../outputs/motion-audit/continuous-road.gif",
+    "cliff": "../../outputs/motion-audit/cliff-fall.gif",
+    "shillong": "../../outputs/motion-audit/shillong-reveal.gif",
+    "notes": "Actual sequential browser frames with recorded wall-clock timestamps, not interpolated stills. Shillong capture starts at engine-off time 5.9 seconds, immediately before the reveal. Screenshot capture and background-tab scheduling can affect playback cadence.",
+    "scope": "Historical recordings before the interaction and city revision. The old skyline and petal shapes are superseded."
+  },
+  "current_playback_evidence": {
+    "browser_checks": "../../outputs/interaction-polish/browser-checks.json",
+    "full_journey": "../../outputs/interaction-polish/full-journey-e.json",
+    "petal_motion": "../../outputs/interaction-polish/shillong-petals.gif",
+    "home": "../../outputs/interaction-polish/home-final-desktop.png",
+    "skyline_desktop": "../../outputs/interaction-polish/shillong-final-desktop.png",
+    "skyline_phone": "../../outputs/interaction-polish/shillong-final-phone.png",
+    "festival_phone": "../../outputs/interaction-polish/festival-final-phone.png",
+    "native_wish_phone": "../../outputs/interaction-polish/wish-kept-phone.png",
+    "native_wish_desktop": "../../outputs/interaction-polish/wish-kept-final-desktop.png",
+    "notes": "Normal-speed recorded browser frames after a canvas sweep, followed by a native 1500ms wish hold. Other explicit mouse and phone interaction checks are in browser-checks.json. Screenshot capture can affect cadence; the recording is not a performance benchmark."
+  },
+  "button_cleanup": {
+    "date": "2026-11-01",
+    "actions": "Plain-text primary, road, truck, project-link and replay labels; no decorative arrow or star in buttons.",
+    "functional_icons": "16px SVG stroke icons for menu, sound, previous, next and close; neutral CSS chevron for Chapters.",
+    "wish": "Preserved hold progress ring; removed decorative star.",
+    "validation": [
+      "Changed scripts and inline module syntax passed",
+      "git diff --check passed",
+      "Native mute toggle passed both states",
+      "Native project open, next and close passed",
+      "Home and project controls visually inspected"
+    ],
+    "evidence": "../../outputs/button-cleanup/"
+  },
+  "homeLandscapeRevision": {
+    "version": "home-20261101-e",
+    "url": "/?v=home-20261101-e",
+    "changes": [
+      "Lowered and responsively fitted home landscape",
+      "Drag orbit with inertia and reset",
+      "Removed home Chapters button",
+      "Closed layered earth base to -13.3m",
+      "Backed gorge walls, ledges, fractures and talus",
+      "Animated teal river and western cascade",
+      "Four animated native birds"
+    ],
+    "checks": [
+      "overview-orbit-report.json",
+      "earth-cutout-report.json",
+      "landscape-life-report.json",
+      "world-motion-report.json",
+      "scene-clearance-report.json"
+    ],
+    "screenshots": {
+      "phone": "../../outputs/home-diorama/phone.png",
+      "desktop": "../../outputs/home-diorama/desktop.png",
+      "default": "../../outputs/home-diorama/home.png"
+    },
+    "browserChecks": [
+      "Canvas drag changes yaw and settles",
+      "Reset restores opening angle",
+      "Begin the drive reaches stand customization",
+      "Phone chapter marker opens edge",
+      "No browser errors during checked interactions"
+    ]
+  },
+  "riverRevision": {
+    "version": "river-20261101-d",
+    "url": "/?v=river-20261101-d",
+    "checks": [
+      "river-report.json",
+      "landscape-life-report.json",
+      "earth-cutout-report.json",
+      "world-motion-report.json",
+      "overview-orbit-report.json",
+      "scene-clearance-report.json"
+    ],
+    "browserChecks": [
+      "Desktop and phone home composition",
+      "Native drag and reset",
+      "No browser rendering errors"
+    ],
+    "screenshots": {
+      "desktop": "../../outputs/river-finish/desktop.png",
+      "phone": "../../outputs/river-finish/phone.png",
+      "default": "../../outputs/river-finish/home.png"
+    }
+  }
+}

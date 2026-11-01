@@ -166,6 +166,7 @@ function frame(dt) {
   x = Math.min(TO, x + speed * dt * 95);   // across (then out of frame, until the last line is said), then the cloud line
   if (!done && (x - FROM) / (TO - FROM) >= OUT && lineIdx >= LINES.length && t >= lineFree) { done = true; ctx.next(); }   // at the frame's edge: it drives out under the sheet
   const u = (x - FROM) / (TO - FROM);
+  ctx.progress(clamp(u / OUT, 0, 1));
   const dLane = stage.depthAt(clamp(x, 0, IW), LANE * IH), s = stage.place(jeep, x, LANE * IH, CAR_SIZE, dLane);
   body.position.y = -PIVOT.y + Math.sin(t * 13) * .012 * speed + Math.pow(Math.max(0, Math.sin(t * 11.9)), 10) * .03;   // road shake + bass thump
   body.rotation.z = Math.sin(kick * Math.PI) * .06;   // a tap: the taxi lurches, nose up
@@ -184,6 +185,7 @@ function frame(dt) {
   camX = clamp(lerp(camX || x, x + viewW * .15, damp(1.5, dt)), viewW / 2 + mW, IW - viewW / 2 - mW);
   Object.assign(stage.move, { dx: camX - IW / 2, dy: 0, dolly: 0 }); stage.apply();
   if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && t >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 4); lineFree = t + lineSecs(text, 4); }
+  ctx.worldState?.({ phase: 'drive', progress: clamp(u / OUT, 0, 1), hold: input.hold, since: t, speed });
   ctx.ink.render(scene, camera, jeep);
 }
 return { frame, resize, onTap() { kick = 1; }, dispose() { disposeScene(scene); } };

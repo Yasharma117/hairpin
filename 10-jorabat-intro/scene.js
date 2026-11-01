@@ -1,7 +1,7 @@
 // Jorabat, inside the taxi: the passenger gets in and asks what I do; the dashboard answers.
 // Pointing lights the dash; each object is a project. Tap (or the chip) and we drive.
 import * as THREE from 'three';
-import { clamp, lerp, damp, sstep, loadImg, tex, strokeMap, line, disposeScene, Stage } from '../shared/kit.js';
+import { clamp, lerp, damp, sstep, loadImg, tex, strokeMap, line, passenger, disposeScene, Stage } from '../shared/kit.js';
 
 const at = f => new URL(f, import.meta.url).href;
 const OBJ_FILES = ['teleprompter', 'pill-strip', 'test-sheet', 'billing-receipt', 'markon-card', 'star'];
@@ -90,20 +90,40 @@ export async function load(ctx) {
         .proj h2 { font-size: 24px; } .proj .role { font-size: var(--t1); }
         .proj .tagline { font-size: 18px; } .proj .about { font-size: 16px; line-height: 1.45; }
       }
+      .projects-list { position: fixed; z-index: 11; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); top: calc(var(--top) + 62px); width: min(300px, calc(100vw - 32px)); box-sizing: border-box; padding: 16px; border-radius: 14px; }
+      .projects-list p { margin: 0 0 12px; font: 400 21px/1.15 var(--display); }
+      .projects-list .project-options { display: flex; flex-direction: column; gap: 5px; }
+      .projects-list .project-options button { justify-content: flex-start; min-height: 36px; padding: 7px 10px; font: 500 14px/1.3 var(--pixel); text-transform: none; letter-spacing: 0; border-radius: 7px; box-shadow: none; }
+      .projects-list .project-options button span { color: var(--ui-rust); margin-right: 5px; font-size: 11px; }
+      .projects-list[hidden] { display: none; }
+      .world-projects .proj { border-radius: 14px; transition: transform 200ms ease, opacity 200ms ease, visibility 0s; }
+      @media (max-width: 700px), (max-aspect-ratio: 1/1) {
+        .projects-list { top: calc(var(--top) + 54px); left: 16px; right: 16px; width: auto; padding: 12px; }
+        .projects-list p { font-size: 18px; margin-bottom: 8px; }
+        .projects-list .project-options { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .projects-list .project-options button { font-size: 12px; min-height: 34px; padding: 6px 8px; }
+        .world-projects .proj { border-radius: 18px 18px 0 0; }
+      }
       @media (prefers-reduced-motion: reduce) { .proj, .proj.gone { transform: none; } }
     </style>
     <div class="tag">HAIRPIN · JORABAT</div><div class="hint" aria-hidden="true"></div>
+    <nav class="panel projects-list" aria-label="Projects on the dashboard" ${ctx.worldState ? '' : 'hidden'}>
+      <p>A few things I’ve made.</p>
+      <div class="project-options">${PROJECTS.map((p, i) => `<button class="btn sm" type="button" data-project="${i}"><span aria-hidden="true">0${i + 1}</span>${p.name[0]}</button>`).join('')}</div>
+    </nav>
     <section class="panel proj gone" role="dialog" aria-labelledby="proj-t" aria-describedby="proj-d" tabindex="-1">
       <div class="bar"><span class="label count"></span>
-        <button type="button" class="btn sm" data-d="-1" aria-label="Previous project"><span aria-hidden="true">◀</span></button>
-        <button type="button" class="btn sm" data-d="1" aria-label="Next project"><span aria-hidden="true">▶</span></button>
-        <button type="button" class="btn sm x" aria-label="Close">×</button></div>
+        <button type="button" class="btn sm" data-d="-1" aria-label="Previous project"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m14 6-6 6 6 6"/></svg></button>
+        <button type="button" class="btn sm" data-d="1" aria-label="Next project"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m10 6 6 6-6 6"/></svg></button>
+        <button type="button" class="btn sm x" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
       <div class="head"><div class="pic"><canvas aria-hidden="true"></canvas></div>
         <div aria-live="polite"><h2 id="proj-t"></h2><p class="role"></p></div></div>
       <p class="tagline" id="proj-d"></p>
       <p class="about"></p>
       <div class="links"></div>
     </section>`;
+  layer.classList.toggle('world-projects', !!ctx.worldState);
+  const projectNav = layer.querySelector('.projects-list');
   const chip = layer.querySelector('.hint');   // hovering an object shows its name here, by it
   const panel = layer.querySelector('.proj'), $p = sel => panel.querySelector(sel), thumb = $p('canvas');
   ctx.bed({ engine: 1, crickets: 1 }); ctx.rpm(0);   // idling at the stand
@@ -170,7 +190,7 @@ export async function load(ctx) {
     $p('h2').textContent = p.name[0]; $p('.role').textContent = `${p.role[0]} · ${p.year[0]}`;
     $p('.tagline').textContent = p.tagline[0]; $p('.about').textContent = p.about[0];
     $p('.links').replaceChildren(...p.links.map(([text, href]) => {
-      const a = Object.assign(document.createElement('a'), { className: 'btn sm', href, target: '_blank', rel: 'noopener noreferrer', textContent: `${text} ↗` });
+      const a = Object.assign(document.createElement('a'), { className: 'btn sm', href, target: '_blank', rel: 'noopener noreferrer', textContent: text });
       a.setAttribute('aria-label', `${text} (opens in a new tab)`); return a;
     }));
     // its sprite, 40 px tall with hard edges, scaled up whole-pixel by CSS
@@ -178,16 +198,21 @@ export async function load(ctx) {
     thumb.width = w; thumb.height = h; thumb.style.width = `calc(${w}px * var(--k))`; g.drawImage(img, 0, 0, w, h);
     const d = g.getImageData(0, 0, w, h); for (let k = 3; k < d.data.length; k += 4) d.data[k] = d.data[k] > 110 ? 255 : 0; g.putImageData(d, 0, 0);
     panel.classList.remove('gone');
+    if (ctx.worldState) projectNav.hidden = true;
     if (was < 0) panel.focus({ preventScroll: true });   // a screen reader lands on it; Esc, the arrows and Tab work from here
   }
   function close() {
     if (win < 0) return; win = -1;
-    if (panel.contains(document.activeElement)) document.activeElement.blur();
+    const hadFocus = panel.contains(document.activeElement);
+    if (hadFocus) document.activeElement.blur();
     panel.classList.add('gone');
+    if (ctx.worldState) { projectNav.hidden = false; if (hadFocus) projectNav.querySelector(`[data-project="${kbd}"]`)?.focus(); }
   }
   const choose = i => { kbd = i; if (since > READY) objects[i].proj ? show(i) : close(); };   // before the YOU line it only lights
   const step = d => choose((Math.max(kbd, picked) + d + objects.length) % objects.length);
+  on(projectNav, 'click', e => { const b = e.target.closest('[data-project]'); if (b) show(+b.dataset.project); });
   on(window, 'keydown', e => {
+    if (e.target.closest?.('input')) return;
     if (e.code === 'ArrowRight') step(1); if (e.code === 'ArrowLeft') step(-1);
     if (e.code === 'Escape' && win >= 0) { close(); kbd = -1; }
   });
@@ -201,6 +226,7 @@ export async function load(ctx) {
   let canvasDown = -1e9;
   on(ctx.canvas, 'pointerdown', () => { canvasDown = performance.now(); });
   const pickAt = (sx, sy) => {
+    if (ctx.worldState) return;
     // on a phone the dash is wider than the screen: a tap near either side steps to the next object that way
     if (innerWidth < innerHeight && (sx < innerWidth * .22 || sx > innerWidth * .78)) { step(sx < innerWidth / 2 ? -1 : 1); return; }
     const p = stage.screenToPaint(sx, sy); if (!p) return;
@@ -238,7 +264,7 @@ export async function load(ctx) {
       if (lineI < SCRIPT.length && since > SCRIPT[lineI][0]) { const [, who, text, expr] = SCRIPT[lineI++]; ctx.say(who, text, 3.2, expr); }
       if (since > 8.5) ctx.prompt('Drive');
       // which object: the keyboard's choice, else the one under the pointer
-      const ptr = input.ptr && stage.screenToPaint(...input.ptr);
+      const ptr = !ctx.worldState && input.ptr && stage.screenToPaint(...input.ptr);
       // the engine idling: the dash and the road outside shift against each other, just
       if (kbd >= 0) pan = clamp(objects[kbd].px - cx0, (viewW / 2 - cx0) * .72, (IW - viewW / 2 - cx0) * .72);   // a narrow screen turns to the chosen one (short of the painting's edge: the near dash moves more)
       Object.assign(stage.target, { dx: pan + Math.sin(since * 1.7) * 3 + Math.sin(since * 23) * .6, dy: Math.sin(since * 2.3) * 1.5 }); stage.update(dt, 6);
@@ -261,7 +287,7 @@ export async function load(ctx) {
       const ready = since > READY, o = objects[picked];
       if (ready && picked !== shownObj) { shownObj = picked; if (o?.line) ctx.say(o.name, o.line, 4); }
       const named = ready && o && !o.line && picked !== win;   // a project you point at: its name, as a chip just above it (not the one already open)
-      chip.classList.toggle('on', named);
+      chip.classList.toggle('on', named && !ctx.worldState);
       if (named) {
         v.setFromMatrixPosition(o.m.matrixWorld).project(camera);
         if (chip.textContent !== o.name) chip.textContent = o.name;
@@ -273,6 +299,7 @@ export async function load(ctx) {
         panel.style.setProperty('--foot', `${innerHeight - top}px`);
       }
       if (since > DRIVE_AT && win < 0) leave();   // not while you're reading a window
+      ctx.worldState?.({ phase: 'explore', progress: clamp(since / DRIVE_AT, 0, 1), since, project: win, look: passenger(), hold: input.hold });
       ctx.ink.render(scene, camera, null);   // no taxi in this shot: just the grain and vignette
     },
     dispose() { disposeScene(scene); },

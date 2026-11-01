@@ -2,9 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hairpin</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=VT323&display=swap">
+<link rel="stylesheet" href="./shared/fonts.css">
 <link rel="icon" href="data:,">
 <style>
 /* Layout: one page. A title card, then every scene swapped in place on one canvas, with a pixel sheet between them.
@@ -128,7 +126,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 /* the one advance button; with HORN up it centres in the space left of it, and may wrap */
 .chip { position: fixed; left: 50%; bottom: var(--bottom); z-index: 10; max-width: calc(100% - 2 * var(--gutter)); transform: translateX(-50%); }
 .horn-up .chip { left: calc(50% - (var(--horn-w) + 10px) / 2); max-width: calc(100% - 2 * var(--gutter) - var(--horn-w) - 10px); white-space: normal; text-align: center; padding-block: 8px 6px; }
-.chip::after { content: "▶"; color: var(--ui-signal); font-size: .8em; animation: nudge 1.2s steps(1) infinite; }
+.chip::after { content:none; }
 .chip.btn:active:not(:disabled) { transform: translate(calc(-50% + var(--line)), var(--line)); }
 @keyframes nudge { 50% { transform: translateX(2px); } }
 /* the horn, bottom-right, on touch only (H on a keyboard), while the scene says it answers (ctx.hornable) */
@@ -136,9 +134,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 
 /* mute, top-right, like their speaker button */
 .mute { position: fixed; top: var(--top); right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); z-index: 45; width: calc(44px * var(--u)); min-height: calc(44px * var(--u)); padding: 0; }
-.mute svg { width: calc(24px * var(--u)); height: calc(24px * var(--u)); shape-rendering: crispEdges; fill: currentColor; }
+.mute svg { width:16px; height:16px; fill:none; }
 .mute .x { display: none; }
-.mute[aria-pressed="true"] .x { display: inline; fill: var(--ui-signal); } .mute[aria-pressed="true"] .waves { display: none; }
+.mute[aria-pressed="true"] .x { display:inline; fill:none; } .mute[aria-pressed="true"] .waves { display: none; }
 
 #fps { position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 400 var(--t1) var(--pixel); color: var(--amber); background: var(--night); padding: 4px 6px; pointer-events: none; }
 
@@ -154,7 +152,7 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 /* the title card: the type over a living diorama. 00-title/scene.js draws the Jorabat stall behind it, on the same pixel
    grid as the piece (the stand's own painting, so Play hands off to the same place under the sheet). Wide screens: the
    diorama low and left, the type up and right; phones: the type on top, the diorama below. A wordmark, a one-line hook,
-   Play; the chapters in a drawer; the controls as a quiet row of keycaps; the credit. */
+   Play, the controls as a quiet row of keycaps, and the credit. */
 #card { position: fixed; inset: 0; z-index: 40; pointer-events: none; box-sizing: border-box; display: grid; grid-template-rows: 1fr auto;
   padding: calc(var(--top) + 8px) calc(env(safe-area-inset-right, 0px) + var(--gutter) + 6px) var(--bottom) calc(env(safe-area-inset-left, 0px) + var(--gutter) + 6px); }
 #card > * { pointer-events: auto; }
@@ -168,26 +166,9 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 #card .hook { margin: calc(18px * var(--u)) 0 0; max-width: 34ch; font: 400 calc(20px * var(--u))/1.45 var(--serif); color: var(--ui-cream-deep); text-wrap: pretty; text-shadow: 0 2px 0 var(--night); }
 #card .act { display: flex; flex-wrap: wrap; align-items: center; gap: calc(14px * var(--u)); margin-top: calc(28px * var(--u)); }
 #play { min-height: calc(56px * var(--u)); padding: 0 calc(24px * var(--u)) 0 calc(26px * var(--u)); font-size: var(--t-cue); background: var(--ui-signal); color: var(--ui-cream); }
-#play::after { content: "▶"; font-size: .7em; animation: nudge 1.2s steps(1) infinite; }
+#play::after { content:none; }
 #play:disabled::after { content: none; }
 @media (hover: hover) and (pointer: fine) { #play:hover:not(:disabled) { background: var(--ui-rust); } }
-/* the chapters: a drawer under its button (native details: keyboard and screen readers for free) */
-#card .chapters { position: relative; }
-#card .chapters summary { list-style: none; min-height: calc(56px * var(--u)); font-size: var(--t2); }
-#card .chapters summary::-webkit-details-marker { display: none; }
-#card .chapters summary::after { content: "▼"; font-size: .7em; color: var(--ui-rust); }
-#card .chapters[open] summary::after { content: "▲"; }
-#card .chapters[open] summary { background: var(--ui-cream-deep); }
-#card .chapters nav { position: absolute; left: 0; top: calc(100% + 14px * var(--u)); z-index: 2; min-width: calc(280px * var(--u)); padding: calc(6px * var(--u)) 0; animation: drop 160ms steps(3) both; }
-#card .chapters.up nav { top: auto; bottom: calc(100% + 14px * var(--u)); }   /* no room below: it opens upward, over the hook */
-@keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
-#card .chapters ol { list-style: none; margin: 0; padding: 0; counter-reset: s; }
-#card .chapters a { counter-increment: s; display: flex; align-items: baseline; gap: 14px; padding: calc(7px * var(--u)) 18px calc(6px * var(--u)); min-height: 28px;
-  font: 400 calc(19px * var(--u))/1.25 var(--serif); color: var(--ui-ink); text-decoration: none; white-space: nowrap; }
-#card .chapters a::before { content: "0" counter(s); font: 400 var(--t2)/1 var(--pixel); color: var(--ui-rust); letter-spacing: .06em; }
-#card .chapters li + li a { border-top: 2px dashed var(--ui-cream-deep); }
-#card .chapters a:hover, #card .chapters a:focus-visible { background: var(--ui-cream-deep); }
-#card .chapters a:focus-visible { outline-offset: calc(var(--line) * -2); }
 /* the bottom row: the credit, and the controls as keycaps */
 #card .foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 24px; flex-wrap: wrap; pointer-events: none; }
 #card .credit { font: 400 var(--t2)/1 var(--pixel); letter-spacing: .14em; text-transform: uppercase; color: var(--ui-wood); text-shadow: 0 2px 0 var(--night); }
@@ -206,23 +187,97 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
   #card .hook { font-size: 17px; max-width: 30ch; margin-top: 12px; text-wrap: balance; }
   #card .act { justify-content: center; margin-top: 20px; gap: 10px; }
   #play { min-height: 52px; }
-  #card .chapters summary { min-height: 52px; }
-  #card .chapters nav { left: auto; right: 0; }
   #card .foot { flex-direction: column-reverse; align-items: center; gap: 14px; }
   .keys { justify-content: center; gap: 8px 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tear, .tear.up, .tear.below { transform: none; transition: opacity .2s ease; }
   .tear.up, .tear.below { opacity: 0; }
-  .sub:not(.off), #card .hero > *, #card .foot, #card .chapters nav, #play::after { animation: none; }
+  .sub:not(.off), #card .hero > *, #card .foot, #play::after { animation: none; }
   #card::before { transition: none; }
   .cue, .chip::after { animation: none; }
   .box.done::after { animation: none; opacity: 1; }
   .btn { transition: none; }
 }
-</style>
 
-<canvas id="c" aria-label="Hairpin: a night drive by taxi from Jorabat to Shillong"></canvas>
+.still *, .still *::before, .still *::after { animation: none !important; transition: none !important; }
+.world-stoplist { display: none; }
+/* A quieter paper interface leaves the connected miniature world in view. */
+:root { --pixel: Arial, Helvetica, sans-serif; --line: 1px; --t1: calc(12px * var(--u)); --t2: calc(14px * var(--u)); --t3: calc(16px * var(--u)); --t-cue: calc(22px * var(--u)); --drop: 0 4px 18px color-mix(in srgb, var(--ui-ink) 10%, transparent); color-scheme: light; }
+html, body { background: var(--ui-cream); color: var(--ui-ink); }
+.panel, .btn { border-color: color-mix(in srgb, var(--ui-ink) 24%, transparent); border-radius: 8px; }
+.btn { letter-spacing: .025em; text-transform: none; transition: background 150ms, transform 150ms, box-shadow 150ms; }
+.btn.sm { font-size: 14px; }
+.btn.on::after, .pick[aria-pressed="true"]::after { font-size: 10px; }
+.label { letter-spacing: .1em; font-size: 11px; }
+#card { padding: 32px; }
+#card::before { background: var(--ui-cream); transition: opacity .5s; }
+#card .hero { align-self: start; justify-self: start; width: 300px; margin: 2vh 0 0; padding: 0; }
+#card .kicker { color: var(--ui-rust); font-size: 10px; }
+#card h1 { margin: 12px 0 0; font-size: clamp(52px, 5.7vw, 86px); line-height: 1; color: var(--ui-ink); text-shadow: none; }
+#card .hook { color: var(--ui-ink-soft); font-size: 18px; max-width: 26ch; margin-top: 16px; text-shadow: none; }
+#card .act { margin-top: 24px; gap: 10px; }
+#play { min-height: 44px; font-size: 14px; padding: 0 16px; }
+#play { background: var(--ui-ink); }
+#card .credit { color: var(--ui-ink-soft); font-size: 10px; letter-spacing: .04em; text-shadow: none; }
+#card .credit b { color: var(--ui-ink); }
+.keys { font-size: 10px; color: var(--ui-ink-soft); }
+.keys dd { text-shadow: none; }
+.keys dt { border-width: 1px; border-radius: 4px; padding: 5px 7px; }
+.road-button { position: fixed; left: var(--gutter); top: var(--top); z-index: 44; background: var(--ui-cream); }
+.world-labels { position: fixed; inset: 0; pointer-events: none; z-index: 15; }
+.world-marker { position: absolute; pointer-events: auto; transform: translate(-50%, -100%); border: 1px solid color-mix(in srgb, var(--ui-ink) 22%, transparent); background: var(--ui-cream); color: var(--ui-ink); padding: 8px 11px; border-radius: 6px; box-shadow: var(--drop); cursor: pointer; font: 12px/1.2 Arial, sans-serif; white-space: nowrap; }
+.world-marker:hover { background: var(--ui-cream-deep); transform: translate(-50%, -100%) translateY(-3px); }
+.world-marker b, .world-marker span { margin-right: 5px; }
+#travel { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 30; padding: 10px 18px; background: var(--ui-cream); color: var(--ui-ink-soft); border-radius: 30px; font: 13px/1.4 Arial, sans-serif; white-space: nowrap; box-shadow: var(--drop); }
+#load-error { position: fixed; z-index: 70; left: 50%; top: 40%; transform: translate(-50%, -50%); padding: 24px; }
+.story { width: min(372px, calc(100% - 32px)); border-radius: 8px; overflow: hidden; }
+.story .head { font-size: 12px; letter-spacing: .02em; padding: 11px 14px; }
+.story .segs li { height: 3px; border-radius: 3px; }
+.story .body { padding: 14px 18px 17px; }
+.story .box .who { border: 0; background: none; padding: 0; font-size: 11px; letter-spacing: .07em; }
+.story .log li { font-size: 14px; }
+.story .log b { font-size: 10px; }
+.story .box .line { font-size: 20px; }
+.map-open .hint, .map-open .cue { display: none; }
+#layer .cue { top: calc(var(--top) + 86px) !important; font: 600 13px/1.3 Arial, sans-serif; letter-spacing: .05em; padding: 12px 18px; border-radius: 24px; max-width: calc(100% - 72px); text-align: center; }
+#layer .brake .fill { border-radius: inherit; }
+.person-label { display: none; }
+@media (max-width: 700px) {
+  #card { padding: 22px 18px; }
+  #card .hero { width: 100%; align-items: flex-start; text-align: left; margin: 18px 0 0; }
+  #card h1 { font-size: 52px; }
+  #card .hook { max-width: 30ch; font-size: 16px; margin-top: 10px; }
+  #card .act { margin-top: 16px; }
+  #card .foot { align-items: flex-start; }
+  #card .keys { display: none; }
+  .world-marker { font-size: 11px; padding: 7px; border-radius: 50%; min-width: 30px; min-height: 30px; }
+  .world-marker .world-marker-text { display: none; }
+  .world-marker .world-marker-number { margin: 0; }
+  .world-overview .world-stoplist { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; position: fixed; left: 18px; right: 18px; bottom: 82px; z-index: 41; }
+  .world-stoplist button { border: 0; border-bottom: 1px solid var(--ui-cream-deep); background: transparent; color: var(--ui-ink); text-align: left; padding: 8px 0; font: 12px/1.2 Arial, sans-serif; cursor: pointer; }
+  .world-stoplist span { color: var(--ui-rust); margin-right: 5px; font-size: 10px; }
+  .story .box .line { font-size: 18px; }
+  #travel { max-width: calc(100% - 64px); white-space: normal; text-align: center; }
+}
+</style>
+<link rel="stylesheet" href="./shared/journey-ui.css?v=river-20261101-d">
+
+<canvas id="c" aria-label="An illustrated miniature road from Jorabat to Shillong, connecting seven chapters"></canvas>
+<button class="btn sm road-button" id="road" type="button" aria-expanded="false" hidden>The whole road</button>
+<div id="travel" role="status" hidden></div>
+<div id="load-error" class="panel" role="alert" hidden><p>This stop couldn't open. Let's try it again.</p><button class="btn sm" id="retry">Try again</button></div>
+<nav class="world-stoplist" id="chapter-rail" aria-label="Chapter navigation">
+<button class="rail-toggle" id="chapter-toggle" type="button" aria-expanded="false" aria-label="Show chapter names"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 6h14M5 12h14M5 18h14"/></svg><span class="rail-label">THE CHAPTERS</span></button>
+<button data-stop="stand" aria-label="Chapter 1: The taxi stand" title="The taxi stand"><span class="rail-number">01</span><span class="rail-label">The taxi stand</span></button>
+<button data-stop="jorabat" aria-label="Chapter 2: The dashboard" title="The dashboard"><span class="rail-number">02</span><span class="rail-label">The dashboard</span></button>
+<button data-stop="climb" aria-label="Chapter 3: The climb" title="The climb"><span class="rail-number">03</span><span class="rail-label">The climb</span></button>
+<button data-stop="nongpoh" aria-label="Chapter 4: Nongpoh" title="Nongpoh"><span class="rail-number">04</span><span class="rail-label">Nongpoh</span></button>
+<button data-stop="cloud" aria-label="Chapter 5: The cloud line" title="The cloud line"><span class="rail-number">05</span><span class="rail-label">The cloud line</span></button>
+<button data-stop="edge" aria-label="Chapter 6: The hairpin" title="The hairpin"><span class="rail-number">06</span><span class="rail-label">The hairpin</span></button>
+<button data-stop="shillong" aria-label="Chapter 7: Shillong" title="Shillong"><span class="rail-number">07</span><span class="rail-label">Shillong</span></button>
+</nav>
+<div id="orbit-tools" class="orbit-tools" hidden><span>Drag to rotate</span><button id="reset-view" type="button">Reset view</button></div>
 <div id="layer"></div>
 <aside class="panel story quiet" id="story" hidden>
   <div class="head"><span class="ch" id="ch"></span><span class="no" id="chno" aria-hidden="true"></span>
@@ -232,29 +287,16 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 <div class="visually-hidden" id="said" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
 <button class="btn chip" id="chip" type="button" hidden></button>
 <button class="btn sm horn" id="horn" type="button" hidden>Horn</button>
-<button class="btn mute" id="mute" type="button" aria-pressed="false" aria-label="Mute"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 4h3v4H1zM4 3h1v6H4zM5 2h1v8H5zM6 1h1v10H6z"/><path class="waves" d="M8 4h1v4H8zM10 2h1v8h-1z"/><path class="x" d="M8 4h1v1H8zM11 4h1v1h-1zM9 5h2v2H9zM8 7h1v1H8zM11 7h1v1h-1z"/></svg></button>
+<button class="btn mute" id="mute" type="button" aria-pressed="false" aria-label="Mute"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="x" d="m16 9 6 6m0-6-6 6"/></svg></button>
 <div class="tear up" id="tear" aria-hidden="true"><span></span></div>
 <div id="card">
   <main class="hero">
-    <span class="label kicker">Jorabat → Shillong · 5 min</span>
+    <span class="label kicker">Jorabat → Shillong · 6 min</span>
     <h1>Hairpin</h1>
-    <p class="hook">A night drive by taxi, built around one idea: a wish kept in the bank until you need it.</p>
+    <p class="invitation">Pocket FM tells stories.<br><em>Here’s one I’d like to share with you.</em></p>
+    <p class="hook">Real moments from the hills of Northeast India. A night drive, a stranger’s kindness, and a wish for another day.</p>
     <div class="act">
-      <button id="play" class="btn" type="button">Play</button>
-      <details class="chapters">
-        <summary class="btn">Chapters</summary>
-        <nav class="panel" aria-label="Chapters">
-          <ol>
-            <li><a href="?scene=stand">The stand</a></li>
-            <li><a href="?scene=jorabat">Jorabat</a></li>
-            <li><a href="?scene=climb">The climb</a></li>
-            <li><a href="?scene=nongpoh">Nongpoh</a></li>
-            <li><a href="?scene=cloud">The cloud line</a></li>
-            <li><a href="?scene=edge">The edge</a></li>
-            <li><a href="?scene=shillong">Shillong</a></li>
-          </ol>
-        </nav>
-      </details>
+      <button id="play" class="btn" type="button">Begin the drive</button>
     </div>
   </main>
   <footer class="foot">
@@ -268,13 +310,40 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
 </div>
 <script src="shared/roster.js"></script>
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{
+  "imports": {
+    "three": "./shared/vendor/three.module.js",
+    "./shared/landmarks.js": "./shared/landmarks.js?v=river-20261101-d",
+    "./shared/cliff.js": "./shared/cliff.js?v=river-20261101-d",
+    "./shared/choreography.js": "./shared/choreography.js?v=river-20261101-d",
+    "./shared/overlook.js": "./shared/overlook.js?v=river-20261101-d",
+    "./shared/skyline.js": "./shared/skyline.js?v=river-20261101-d",
+    "./shared/earth-cutout.js": "./shared/earth-cutout.js?v=river-20261101-d",
+    "./shared/overview-camera.js": "./shared/overview-camera.js?v=river-20261101-d",
+    "./shared/river.js": "./shared/river.js?v=river-20261101-d",
+    "./shared/landscape-life.js": "./shared/landscape-life.js?v=river-20261101-d",
+    "./shared/world.js": "./shared/world.js?v=river-20261101-d",
+    "./shared/kit.js": "./shared/kit.js?v=river-20261101-d",
+    "./shared/style.js": "./shared/style.js?v=river-20261101-d",
+    "./shared/score.js": "./shared/score.js?v=river-20261101-d",
+    "./shared/grade.js": "./shared/grade.js?v=river-20261101-d",
+    "./shared/folk.js": "./shared/folk.js?v=river-20261101-d",
+    "./13-the-stand/scene.js": "./13-the-stand/scene.js?v=river-20261101-d",
+    "./10-jorabat-intro/scene.js": "./10-jorabat-intro/scene.js?v=river-20261101-d",
+    "./01-cloud-line-scene/scene.js": "./01-cloud-line-scene/scene.js?v=river-20261101-d",
+    "./11-nongpoh/scene.js": "./11-nongpoh/scene.js?v=river-20261101-d",
+    "./12-cloud-line/scene.js": "./12-cloud-line/scene.js?v=river-20261101-d",
+    "./08-edge-scene/scene.js": "./08-edge-scene/scene.js?v=river-20261101-d",
+    "./09-shillong/scene.js": "./09-shillong/scene.js?v=river-20261101-d",
+    "./09-shillong/blossom.js": "./09-shillong/blossom.js?v=river-20261101-d"
+  }
+}
 </script>
 <script type="module">
 import * as THREE from 'three';
 import { Ink, PIX, clamp, loadImg, who } from './shared/kit.js';
 import { applyCSS, applyUICSS } from './shared/style.js';
-import { GRADES } from './shared/grade.js';
+import { createWorld } from './shared/world.js';
 import { makeScore } from './shared/score.js';
 applyCSS(); applyUICSS();
 THREE.ColorManagement.enabled = false;
@@ -282,8 +351,13 @@ THREE.ColorManagement.enabled = false;
 // the scenes, in story order; each folder has a scene.js
 const SCENES = { stand: '13-the-stand', jorabat: '10-jorabat-intro', climb: '01-cloud-line-scene', nongpoh: '11-nongpoh', cloud: '12-cloud-line', edge: '08-edge-scene', shillong: '09-shillong' };
 const ORDER = Object.keys(SCENES);
+const CHAPTER_NAMES={stand:'The stand',jorabat:'Jorabat',climb:'The climb',nongpoh:'Nongpoh',cloud:'The cloud line',edge:'The edge',shillong:'Shillong'};
+const chapterTitle=name=>CHAPTER_NAMES[name]||name||'';
 const $ = s => document.querySelector(s);
 const QS = new URLSearchParams(location.search);
+const STILL = QS.has('still');
+document.documentElement.classList.toggle('still', STILL);
+const PLAYBACK_RATE = QS.has('audit') ? clamp(Number(QS.get('rate')) || 1, .25, 4) : 1; // Repeatable art-direction shots; normal playback keeps every interaction.
 
 /* ---------- one renderer for the whole piece ---------- */
 const canvas = $('#c');
@@ -298,6 +372,11 @@ const DPR = Math.min(devicePixelRatio || 1, 3);
 renderer.setPixelRatio(DPR);
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 const ink = new Ink(renderer);
+const world = createWorld({ renderer, ink, still: STILL, onSelect: name => { unlock(); go(name); } });
+// Chapter modules keep their narrative clocks, inputs and sound. One world owns every image.
+const chapterInk = Object.create(ink);
+chapterInk.render = () => {}; // Chapter scripts update state; the world renders once after that update.
+ink.setGrade(undefined, 'world');
 const U = { uMode: { value: 0 } };   // debug: 0 lights, 1 dark painting, 2 lit painting
 
 /* ---------- sound: one context, unlocked by the Play tap; the bed runs unbroken across scenes ----------
@@ -508,7 +587,10 @@ let prog = 0, progShown = -1, reported = false, sceneT = 0;
 function setProgress(k) { prog = Math.max(prog, clamp(k, 0, 1)); }   // never runs backwards within a chapter
 function progress(k) { reported = true; setProgress(k); }
 function chapter(name) {
-  const i = ORDER.indexOf(name), title = $(`#card a[href="?scene=${name}"]`).textContent;
+  document.body.classList.add('is-playing');
+  document.body.dataset.chapter=name;
+  for(const button of document.querySelectorAll('#chapter-rail [data-stop]')){if(button.dataset.stop===name)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');}
+  const i = ORDER.indexOf(name), title = chapterTitle(name);
   segs.forEach((s, j) => { s.className = j < i ? 'done' : j === i ? 'now' : ''; });
   $('#ch').textContent = title; $('#chno').textContent = `${i + 1}/${ORDER.length}`;
   $('#segs').setAttribute('aria-valuenow', i + 1); $('#segs').setAttribute('aria-valuetext', `Chapter ${i + 1} of ${ORDER.length}: ${title}`);
@@ -534,20 +616,32 @@ $('#mute').addEventListener('click', e => {
 });
 
 /* ---------- input: HOLD = the taxi's action, TAP or Enter = advance, H = horn ---------- */
-const input = { hold: false, ptr: null };
+const input = { hold: false, ptr: null, source: null };
 let downAt = 0, downXY = null, current = null, scope = null;
-canvas.addEventListener('pointerdown', e => { unlock(); input.hold = true; downAt = performance.now(); downXY = [e.clientX, e.clientY]; });
-addEventListener('pointerup', e => {
-  if (input.hold && downXY && performance.now() - downAt < 260 && Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]) < 12) tap();
-  input.hold = false; downXY = null; unlock();
+let orbitPointer=null;
+function finishOrbit(cancel=false){if(!orbitPointer)return false;const id=orbitPointer.id;orbitPointer=null;world.endOrbit(cancel);canvas.classList.remove('is-orbiting');document.body.classList.remove('orbit-dragging');if(canvas.hasPointerCapture?.(id))canvas.releasePointerCapture(id);return true;}
+canvas.addEventListener('pointerdown',e=>{
+  if(!busy&&world.beginOrbit()){e.preventDefault();unlock();orbitPointer={id:e.pointerId,x:e.clientX,y:e.clientY,time:e.timeStamp};canvas.setPointerCapture(e.pointerId);canvas.classList.add('is-orbiting');document.body.classList.add('orbit-dragging');return;}
+  if(busy||mapOpen||!current)return;unlock();input.hold=true;input.source='pointer';input.ptr=[e.clientX,e.clientY];downAt=performance.now();downXY=[e.clientX,e.clientY];
 });
-addEventListener('pointercancel', () => { input.hold = false; });
-canvas.addEventListener('pointermove', e => { input.ptr = [e.clientX, e.clientY]; });
-canvas.addEventListener('pointerleave', () => { input.ptr = null; });
+addEventListener('pointerup',e=>{
+  if(finishOrbit())return;
+  if(input.hold&&downXY&&performance.now()-downAt<260&&Math.hypot(e.clientX-downXY[0],e.clientY-downXY[1])<12)tap();
+  input.hold=false;input.source=null;downXY=null;unlock();
+});
+addEventListener('pointercancel',()=>{finishOrbit(true);input.hold=false;input.source=null;});
+canvas.addEventListener('lostpointercapture',()=>finishOrbit(true));
+canvas.addEventListener('pointermove',e=>{
+  if(orbitPointer&&orbitPointer.id===e.pointerId){world.dragOrbit(e.clientX-orbitPointer.x,e.clientY-orbitPointer.y,(e.timeStamp-orbitPointer.time)/1000);orbitPointer={id:e.pointerId,x:e.clientX,y:e.clientY,time:e.timeStamp};return;}
+  input.ptr=[e.clientX,e.clientY];
+});
+canvas.addEventListener('pointerleave',()=>{input.ptr=null;});
+addEventListener('blur',()=>{finishOrbit(true);input.hold=false;input.source=null;});
+$('#reset-view').addEventListener('click',()=>{finishOrbit(true);world.resetOrbit();});
 addEventListener('keydown', e => {
-  if (e.target.closest?.('input, a, #card')) return;
+  if (e.target.closest?.('input, textarea, select, button, summary, a, [contenteditable], #card') || busy || mapOpen) return;
   unlock();
-  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) input.hold = true; }
+  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) {input.hold = true;input.source='keyboard';} }
   else if (e.code === 'Enter' && !e.target.closest?.('button')) { e.preventDefault(); tap(); }
   else if (e.code === 'KeyH' && !e.repeat) { if (!current?.onHorn?.()) hornUp = honk(3); }   // held: the horn lasts until keyup (3 s at most)
   else if (QS.has('debug') && 'Digit1 Digit2 Digit3'.includes(e.code)) U.uMode.value = +e.code.slice(-1) - 1;
@@ -557,27 +651,28 @@ let hornUp = null;
   h.addEventListener('pointerdown', e => { e.preventDefault(); unlock(); if (!hornUp && !current?.onHorn?.()) hornUp = honk(3); });
   for (const t of ['pointerup', 'pointercancel', 'pointerleave']) h.addEventListener(t, up);
   h.addEventListener('contextmenu', e => e.preventDefault()); }
-addEventListener('keyup', e => { if (e.code === 'Space') input.hold = false; if (e.code === 'KeyH') { hornUp?.(); hornUp = null; } });
-function tap() { if (current && !busy) current.onTap?.(); }
+addEventListener('keyup', e => { if (e.code === 'Space') {input.hold = false;input.source=null;} if (e.code === 'KeyH') { hornUp?.(); hornUp = null; } });
+function tap() { if (current && !busy && !mapOpen) current.onTap?.(); }
 
 /* ---------- scenes: load the next while the sheet covers, swap, draw a frame, lift the sheet ---------- */
 const tear = $('#tear');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 let busy = false, sceneName = null;
 async function sheetDown(name) {
-  tear.firstChild.textContent = name && $(`#card a[href="?scene=${name}"]`)?.textContent || '';   // the next scene's name on the sheet
+  tear.firstChild.textContent = name && chapterTitle(name) || '';   // the next scene's name on the sheet
   sfx.tear(); tear.classList.remove('up'); tear.classList.add('below'); tear.getBoundingClientRect(); tear.classList.remove('below'); await wait(780); }
 function sheetUp() { requestAnimationFrame(() => tear.classList.add('up')); }
 function makeCtx(name) {
   const ctrl = new AbortController(), layer = document.createElement('div');
   layer.className = 'scene'; $('#layer').appendChild(layer);
   return {
-    THREE, renderer, canvas, layer, isTouch, DPR, ink, U, input, params: QS,
+    THREE, renderer, canvas, layer, isTouch, DPR, ink: chapterInk, U, input, params: QS,
+    worldState: state => world.setState(name, state),
     get ac() { return ac; }, get out() { return out; }, get verb() { return verb; }, get voice() { return voice; },
     rpm, engineOff, duck, duckFor, sfx, score: setScore,
     on: (target, type, fn, opts) => target.addEventListener(type, fn, { ...opts, signal: ctrl.signal }),
     bed, say, prompt, honk, subAt, hornable, progress,
-    next: () => go(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length]),
+    next: () => queueMicrotask(() => go(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length])),
     go,
     dispose() { ctrl.abort(); layer.remove(); },
   };
@@ -587,23 +682,66 @@ const load = name => modules[name] ||= import(`./${SCENES[name]}/scene.js`);
 function prefetch(name) {   // the next scene's code and paintings, while this one plays
   load(name).then(m => setTimeout(() => (m.assets || []).forEach(a => loadImg(`${SCENES[name]}/${a}`)), 2500)).catch(() => {});
 }
+let mapOpen = false, pendingName = null;
+const roadButton = $('#road');
+const rail=$('#chapter-rail'),railToggle=$('#chapter-toggle');
+const closeRail=()=>{rail.classList.remove('is-open');railToggle.setAttribute('aria-expanded','false');railToggle.setAttribute('aria-label','Show chapter names');};
+railToggle.addEventListener('click',()=>{const open=rail.classList.toggle('is-open');railToggle.setAttribute('aria-expanded',String(open));railToggle.setAttribute('aria-label',open?'Hide chapter names':'Show chapter names');});
+for (const b of document.querySelectorAll('[data-stop]')) b.addEventListener('click', () => { unlock();closeRail();go(b.dataset.stop); });
+addEventListener('pointerdown',e=>{if(!rail.contains(e.target))closeRail();});
+rail.addEventListener('keydown',e=>{if(e.key==='Escape'){closeRail();railToggle.focus();}});
+function setMapUI(open) {
+  mapOpen = open;
+  document.body.classList.toggle('map-open', open);
+  story.hidden = open || !sceneName;
+  $('#layer').hidden = open;
+  $('#chip').style.visibility = open ? 'hidden' : '';
+  $('#horn').style.visibility = open ? 'hidden' : '';
+  roadButton.textContent = open ? 'Resume the drive' : 'The whole road';
+  roadButton.setAttribute('aria-expanded', String(open));
+}
+roadButton.addEventListener('click', async () => {
+  if (busy || !sceneName) return;
+  busy = true; input.hold = false;
+  try {
+    if (mapOpen) { await world.focus(sceneName); setMapUI(false); }
+    else { setMapUI(true); await world.overview(); }
+  } finally { busy = false; }
+});
 async function go(name) {
   if (busy || !SCENES[name]) return;
-  busy = true;
-  const [mod] = await Promise.all([load(name), sheetDown(name)]);   // the first time too: the sheet covers the title
-  if (current) { current.dispose?.(); scope.dispose(); current = null; }   // the outgoing scene ran under the sheet until here
-  say(null); prompt(null); hornable(false);
-  scope = makeCtx(name); sceneName = name; chapter(name); setScore(SCORE[name]);
-  ink.setGrade(GRADES[name], name);   // every scene graded toward the edge painting, and quantized to its own palette
-  try { current = await mod.load(scope); }
-  catch (e) { console.error(e); current = null; }
-  resize();
-  current?.frame?.(0, now);   // its first frame, before the sheet lifts
+  busy = true; input.hold = false;input.source=null; pendingName = name;document.body.classList.add('is-travelling');
+  $('#load-error').hidden = true;
   $('#card').hidden = true;
-  sheetUp(); busy = false;
-  prefetch(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length]);
-  if (QS.has('scene')) history.replaceState(null, '', `?${new URLSearchParams({ ...Object.fromEntries(QS), scene: name })}`);
+  $('#travel').textContent = `On the road to ${chapterTitle(name)}`;
+  $('#travel').hidden = false;
+  $('#layer').hidden = true; story.hidden = true;
+  try {
+    if (name === sceneName && mapOpen && current) {
+      await world.focus(name); setMapUI(false); return;
+    }
+    // Start loading while the camera leaves the previous stop and finds the next one.
+    world.setState(name, { phase: name === 'stand' ? 'customize' : name === 'shillong' ? 'arrive' : 'drive', progress: 0, since: 0, hold: false, fallT: -1, driveU: 0, truckU: 0, truckGo: 0, starK: 0, starUp: false, banked: false, leg: 0 });
+    const [mod] = await Promise.all([load(name), world.focus(name, { viaOverview: !!sceneName && !mapOpen, immediate: STILL })]);
+    current?.dispose?.(); scope?.dispose(); current = null;
+    say(null); prompt(null); hornable(false);
+    scope = makeCtx(name); sceneName = name; chapter(name); setScore(SCORE[name]);
+    world.setState(name, { progress: 0, hold: false });
+    current = await mod.load(scope);
+    setMapUI(false); roadButton.hidden = false;
+    resize(); current?.frame?.(0, now);
+    prefetch(ORDER[(ORDER.indexOf(name) + 1) % ORDER.length]);
+    history.replaceState(null, '', `?${new URLSearchParams({ ...Object.fromEntries(QS), scene: name })}`);
+  } catch (e) {
+    delete modules[name];
+    console.error('Could not open chapter', name, e);
+    $('#load-error').hidden = false;
+  } finally {
+    busy = false;document.body.classList.remove('is-travelling'); $('#travel').hidden = true;
+    $('#play').disabled = false; $('#play').textContent = 'Begin the drive';
+  }
 }
+$('#retry').addEventListener('click', () => { $('#load-error').hidden = true; go(pendingName || sceneName || 'stand'); });
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
@@ -618,6 +756,15 @@ function resize() {
     tear.style.clipPath = `polygon(${pts.join(', ')})`;
     tear.style.top = tear.style.bottom = `${-10 * px}px`;
   }
+  const home=!$('#card').hidden,hero=$('#card .hero').getBoundingClientRect();
+  const side=home&&innerWidth>780&&innerWidth/innerHeight>1.1;
+  const left=home?(side?Math.max(hero.right+30,innerWidth*.30):16):24;
+  const top=home?(side?innerHeight*.20+20:hero.bottom+28):74;
+  const bottom=home?innerHeight-(side?96:116):innerHeight-64;
+  const frame={left,top,width:Math.max(100,innerWidth-left-(home?20:24)),height:Math.max(90,bottom-top)};
+  world.setOverviewFrame(home?frame:null);
+  world.resize(innerWidth,innerHeight);
+  const tools=$('#orbit-tools');tools.style.left=(home?frame.left+frame.width*.5:innerWidth*.5)+'px';tools.style.top=(home?bottom+9:innerHeight-44)+'px';
   current?.resize?.(innerWidth, innerHeight);
 }
 addEventListener('resize', resize);
@@ -626,14 +773,34 @@ resize();
 /* ---------- the loop ---------- */
 const clock = new THREE.Clock();
 const fps = QS.has('fps') ? Object.assign(document.body.appendChild(document.createElement('div')), { id: 'fps' }) : null;
+const auditHUD = QS.has('audit') ? Object.assign(document.body.appendChild(document.createElement('pre')), { id: 'motion-audit' }) : null;
+if (auditHUD) Object.assign(auditHUD.style, {position:'fixed',right:'12px',bottom:'12px',width:'420px',maxWidth:'80vw',maxHeight:'180px',overflow:'auto',zIndex:80,background:'var(--ui-cream)',color:'var(--ui-ink)',font:'10px/1.3 monospace',padding:'10px',pointerEvents:'none'});
+const auditEvents = [];
+let auditPrevious = null;
+const auditMetrics = { parkedMovement: 0, fallYawError: 0, fallRoll: 0 };
 let fN = 0, fT = 0, fWorst = 0;
 function frame() {
-  const dt = Math.min(clock.getDelta(), .05);
-  now += dt;
-  current?.frame?.(dt, now);   // busy only gates input: the outgoing scene keeps moving while the sheet comes down
-  typeTick(dt);
-  if (lineEnd && now > lineEnd) say(null);
-  logTick(); progressTick(dt);
+  const elapsedFrame = Math.min(clock.getDelta(), .05);
+  const dt = STILL ? 0 : elapsedFrame * PLAYBACK_RATE;
+  document.body.classList.toggle('world-overview',world.mode==='overview');
+  $('#orbit-tools').hidden=world.mode!=='overview';
+  if (!busy && !mapOpen && current) {
+    now += dt;
+    current.frame?.(dt, now);
+    typeTick(dt);
+    if (lineEnd && now > lineEnd) say(null);
+    logTick(); progressTick(dt);
+  }
+  world.frame(dt); world.render();
+  if (auditHUD) {
+    const a = world.audit;
+    if (a.active !== auditPrevious?.active || a.phase !== auditPrevious?.phase) auditEvents.push({active:a.active,phase:a.phase,since:a.since,taxi:a.taxi,truck:a.truck});
+    if (a.mode==='focus' && auditPrevious?.mode==='focus' && a.active===auditPrevious.active && a.phase===auditPrevious.phase && a.taxi.visible && auditPrevious.taxi.visible) {
+      if (['car','pout','yout','seated'].includes(a.phase)) auditMetrics.parkedMovement=Math.max(auditMetrics.parkedMovement,Math.hypot(a.taxi.x-auditPrevious.taxi.x,a.taxi.z-auditPrevious.taxi.z));
+      if (a.fallT>=0) { auditMetrics.fallYawError=Math.max(auditMetrics.fallYawError,Math.abs(Math.atan2(Math.sin(a.taxi.yaw-Math.PI/2),Math.cos(a.taxi.yaw-Math.PI/2))));auditMetrics.fallRoll=Math.max(auditMetrics.fallRoll,Math.abs(a.taxi.roll)); }
+    }
+    auditPrevious=a;auditHUD.textContent=JSON.stringify({latest:a,events:auditEvents,metrics:auditMetrics});
+  }
   if (fps) {   // real time, not the capped step: a slow phone must read as slow
     const t = performance.now(), real = (t - (fps.last || t)) / 1000; fps.last = t;
     fN++; fT += real; fWorst = Math.max(fWorst, real);
@@ -644,14 +811,9 @@ function frame() {
 requestAnimationFrame(frame);
 
 /* ---------- start: the title card over its diorama (00-title, the stand's painting), or straight into a scene with ?scene= ---------- */
-async function showTitle() {   // the title scene runs like any other (frame, resize), but outside the story: no chapter, no sheet
-  try {
-    const mod = await import('./00-title/scene.js'), s = makeCtx('title');
-    ink.setGrade(GRADES.stand, 'stand');
-    const t = await mod.load(s);
-    if (busy || current) { t.dispose?.(); s.dispose(); return; }   // Play was quicker than the painting
-    current = t; scope = s; resize(); current.frame?.(0, now);
-  } catch (e) { console.error(e); }
+async function showTitle() {
+  await world.overview({ immediate: true });
+  resize(); world.render();
   $('#card').classList.add('live');
 }
 if (QS.get('scene') && SCENES[QS.get('scene')]) go(QS.get('scene'));
@@ -662,20 +824,8 @@ else {
   for (const t of ['pointerdown', 'keydown']) addEventListener(t, wake, { once: true });
   $('#play').addEventListener('click', () => { unlock(); $('#play').textContent = 'Loading…'; $('#play').disabled = true; go('stand'); });
   for (const t of ['pointerenter', 'focus']) $('#play').addEventListener(t, () => current?.greet?.());   // you wave back
-  const drawer = $('#card .chapters');
-  drawer.addEventListener('click', e => {   // a chapter: straight there, under the sheet, without reloading the page
-    const a = e.target.closest('a'); if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
-    e.preventDefault(); unlock(); drawer.open = false; go(new URLSearchParams(a.search).get('scene'));
-  });
-  addEventListener('pointerdown', e => { if (drawer.open && !drawer.contains(e.target)) drawer.open = false; });
-  drawer.addEventListener('toggle', () => {   // open downward if it fits, else upward
-    if (!drawer.open) return;
-    drawer.classList.remove('up');
-    if (drawer.querySelector('nav').getBoundingClientRect().bottom > innerHeight - 12) drawer.classList.add('up');
-  });
-  drawer.addEventListener('keydown', e => { if (e.key === 'Escape' && drawer.open) { drawer.open = false; drawer.querySelector('summary').focus(); } });
   $('#play').focus();
 }
-window.__hairpin = { go, get scene() { return sceneName; }, get current() { return current; },
+window.__hairpin = { go, world, get scene() { return sceneName; }, get current() { return current; },
   toggleMute, get muted() { return muted; }, audio: { get ac() { return ac; }, get score() { return score; }, bed, rpm, engineOff, duck, honk, sfx } };   // audio: for tools and the console
 </script>

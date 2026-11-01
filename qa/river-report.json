@@ -1,0 +1,25 @@
+{
+  "result": "passed",
+  "checks": 3046,
+  "river": {
+    "water": {
+      "minY": -8.917981147766113,
+      "maxY": -8.802067756652832,
+      "vertices": 2709
+    },
+    "waterfall": {
+      "top": -8.86,
+      "bottom": -13.2
+    },
+    "channel": {
+      "length": 26.730243630640373,
+      "banks": 2,
+      "stones": 48,
+      "flowLines": 30
+    }
+  },
+  "largestLipGap": 0.08421341802581975,
+  "downstreamFoam": true,
+  "fallingStreaks": true,
+  "repeatableGeometry": true
+}

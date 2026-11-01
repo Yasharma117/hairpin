@@ -106,6 +106,7 @@ function frame(dt) {
   ctx.rpm(1 + (speed - 1) / 1.2 * 2 + kick * 1.5);   // and the engine with it (a tap blips it)
   u += speed * dt / 10;   // about ten seconds up the road
   if (u >= 1) u = 1;
+  ctx.progress(u);
   if (!done && u >= 1 && lineIdx >= LINES.length && t >= lineFree) { done = true; ctx.next(); }   // whited out (and the last line said): the edge
   const p = PATH.getPointAt(u), q = PATH.getTangentAt(u), sc = sizeAt(p.y);
   stage.place(jeep, p.x, p.y, sc, stage.depthAt(p.x, clamp(p.y, 0, IH - 1)));
@@ -123,6 +124,7 @@ function frame(dt) {
   U.uScale.value = .3 + sc / 260;   // the beam's reach shrinks with distance too
   U.uFog.value = Math.pow(clamp((u - .25) / .7, 0, 1), 1.3) * .95;
   if (lineIdx < LINES.length && u >= LINES[lineIdx][0] && t >= lineFree) { const [, who, text] = LINES[lineIdx++]; ctx.say(who, text, 3.5); lineFree = t + lineSecs(text, 3.5); }
+  ctx.worldState?.({ phase: 'drive', progress: u, hold: input.hold, since: t, speed, fog: U.uFog.value });
   ctx.ink.render(scene, camera, jeep);
 }
 return { frame, resize, onTap() { kick = 1; }, dispose() { disposeScene(scene); } };

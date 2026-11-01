@@ -153,9 +153,9 @@ export function paintOverlay(IW, IH, HORIZON, RAIL, trees = true, seed = 9) {
     }
   }
   // fallen petals: thickest under the hero tree (right) and along the foot of the railing
-  for (let i = 0; i < 3200; i++) {
+  for (let i = 0; i < 1400; i++) {
     const right = r() < .6, x = right ? IW * (.62 + Math.pow(r(), .6) * .4) : r() * IW, y = right ? ry + 8 + r() * (IH - ry) : ry + 4 + Math.abs(g()) * 40;
-    P.dab(x, y, 1.6 + r() * 2.2, .9 + r() * 1.2, r() * 3, [B.lit[2 + (r() < .4)], B.dark[2 + (r() < .4)]], .55 + r() * .4);
+    P.dab(x, y, 1.2 + r() * 1.7, .7 + r() * .9, r() * 3, [B.lit[2 + (r() < .4)], B.dark[2 + (r() < .4)]], .32 + r() * .35);
   }
   return P.cv;
 }
@@ -172,8 +172,8 @@ export class Petals {
     const attr = (name, k) => { const a = new THREE.BufferAttribute(new Float32Array(n * k), k); a.setUsage(THREE.DynamicDrawUsage); this.geo.setAttribute(name, a); return a; };
     this.aPos = attr('position', 3); this.aPx = attr('aPx', 2); this.aSize = attr('aSize', 1); this.aAng = attr('aAng', 1); this.aFl = attr('aFl', 1); this.aA = attr('aA', 1);
     const col = h => new THREE.Color(h);
-    // Each petal is 1 to 3 frame pixels, centred on the pixel grid (grid: the frame's pixel grid, ctx.ink.size; the scene
-    // renders at 2x it), drawn as whole pixels: a single dot far off, a 2 px chip or a little plus shape near, its base a
+    // Each petal is 1 to 3 detailed frame pixels, centred on the same grid as the final scene,
+    // drawn as whole pixels: a single dot far off, a 2 px chip or a little plus shape near, its base a
     // shade deeper. It fades in and out by an ordered dither, never by blending.
     this.mat = new THREE.ShaderMaterial({
       uniforms: { ...U, uScreen: { value: 600 }, uGrid: { value: grid }, cDark: { value: col(B.petalDark) }, cLit: { value: col(B.petalLit) }, cCore: { value: col(B.petalCore) }, cGlow: { value: col(B.petalGlow) } },
@@ -187,7 +187,7 @@ export class Petals {
           vec2 g = (cp.xy / cp.w * .5 + .5) * uGrid;
           g = mod(sz, 2.) > .5 ? floor(g) + .5 : floor(g + .5);            // odd sizes on a pixel's centre, even on its corner
           cp.xy = (g / uGrid * 2. - 1.) * cp.w;
-          gl_Position = cp; gl_PointSize = sz * 2.; vSz = sz;
+          gl_Position = cp; gl_PointSize = sz; vSz = sz;
           vL = clamp(lightAt(aPx), 0., 1.3); vAng = aAng; vFl = aFl; vA = aA;
           vTown = smoothstep(${(HORIZON * IH).toFixed(1)}, ${(RAIL * IH).toFixed(1)}, aPx.y) * (1. - smoothstep(${(RAIL * IH).toFixed(1)}, ${(RAIL * IH + 70).toFixed(1)}, aPx.y));
         }`,
@@ -203,7 +203,7 @@ export class Petals {
             ivec2 cl = ivec2(gl_PointCoord * 2.); int drop = int(mod(aAngQ(vAng), 4.));
             if (cl.x + cl.y * 2 == drop || (vFl < .5 && cl.y == (drop & 1))) discard;
           }
-          ivec2 b = ivec2(gl_FragCoord.xy * .5) & 1;
+          ivec2 b = ivec2(gl_FragCoord.xy) & 1;
           if (vA < (float(b.x * 2 + (b.x ^ b.y)) + .5) / 4.) discard;      // fading: a 2x2 ordered dither
           vec3 col = mix(cDark, cLit, step(.5, vL) * .6 + step(.9, vL) * .4);  // stepped, like the people
           col += cGlow * step(.5, vTown) * .14;                              // the town's glow from below

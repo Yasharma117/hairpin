@@ -1,6 +1,8 @@
+> **Local connected-world edition (1 November 2026).** The main entry point now presents all seven chapters in one continuous miniature landscape, with an opening route overview, camera transitions, and a pauseable “The whole road” view. Chapter scripts retain the dialogue, sound, controls, portfolio, and wish; `shared/world.js` renders the connected journey and `shared/landmarks.js` builds its scenery. Vehicles now visibly travel along the connecting road between stops. Shillong opens into a full-screen night overlook with interactive, natural-shaped cherry petals, festival context and an explicit wish hold. The truck acknowledges a wave and visibly brakes. The opening invitation, chrome-edged controls and numbered chapter rail follow the supplied portfolio reference. Dependencies and fonts are self-hosted. Run this folder with a local HTTP server, then open `index.html` through that server.
+
 # Hairpin
 
-A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160), drawn as pixel art. About five minutes.
+A night drive on the Guwahati–Shillong road, built in WebGL (three.js 0.160), drawn as pixel art. About six minutes, depending on browsing and reading pace.
 
 **How it looks is set in [PIXEL.md](PIXEL.md)** (the pixel grid, the people, the UI) **and [STYLE.md](STYLE.md)**: the house style (the edge painting), the palette in `shared/style.js`, light, line, the pixel pass, the per-scene grade, framing, asset rules, and the checks to run before every push (`tools/check_style.py`, `tools/contact_sheet.py`).
 

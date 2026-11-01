@@ -35,9 +35,15 @@ export async function load(ctx) {
     <style>
       .dress { position: fixed; right: calc(env(safe-area-inset-right, 0px) + var(--gutter)); top: calc(var(--top) + 48px * var(--u)); width: calc(404px * var(--u)); box-sizing: border-box;
         padding: calc(18px * var(--u)) calc(18px * var(--u)) calc(16px * var(--u)); display: flex; flex-direction: column; gap: calc(10px * var(--u)); transition: transform 200ms steps(4), opacity 200ms steps(4); }
+      .appearance summary { cursor: pointer; padding: 8px 0; font: 500 14px/1.4 var(--pixel); color: var(--ui-ink-soft); }
+      .appearance-options { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
+      .world-dress .dress { max-height: calc(100dvh - var(--top) - 150px); overflow: auto; width: min(360px, calc(100vw - 32px)); border-radius: 14px; }
+      .world-dress .opts { --av: 44px; }
+      .world-dress .person-label { display: none; }
       .dress.gone { transform: translateX(calc(100% + 40px)); opacity: 0; pointer-events: none; }
       .dress h2 { margin: 2px 0 0; font: 400 calc(26px * var(--u))/1.05 var(--display); color: var(--ui-ink); text-wrap: balance; }
       .dress .kick { display: block; margin-bottom: 6px; font-size: var(--t1); }
+      .person-label { position: fixed; z-index: 4; pointer-events: none; transform: translate(-50%, -100%); padding: 4px 9px 5px; border: 1px solid var(--ui-ink); background: var(--ui-cream); color: var(--ui-ink); font: 400 13px/1 var(--pixel); letter-spacing: .08em; box-shadow: 2px 2px 0 var(--ui-ink); white-space: nowrap; }
       /* the name, typed into an RPG box: a tab above its corner, the serif inside, a red ▼ once there's a name */
       .namebox { position: relative; display: block; margin-top: calc(14px * var(--u)); border: var(--edge); background: var(--ui-cream); box-shadow: inset 0 -3px 0 var(--ui-cream-deep); }
       .namebox .label { position: absolute; left: 10px; bottom: calc(100% - var(--line)); background: var(--ui-cream); border: var(--edge); border-bottom: 0; padding: 3px 8px 0; font-size: var(--t1); }
@@ -75,17 +81,21 @@ export async function load(ctx) {
         .av span { display: none; }
         .sw { width: 34px; height: 28px; }
       }
+      @media (max-width: 700px), (max-aspect-ratio: 1/1) { .world-dress .opts { --av: 36px; } .world-dress .dress { width: auto; max-height: calc(100dvh - var(--top) - 210px); } }
       @media (prefers-reduced-motion: reduce) { .dress { transition: opacity 200ms; } .dress.gone { transform: none; } .namebox.ready::after { animation: none; opacity: 1; } }
     </style>
     <div class="tag">HAIRPIN · THE STAND</div>
     <form class="dress panel" autocomplete="off" aria-label="Who's riding with me?">
       <h2><span class="label kick">Last taxi to Shillong</span>Who's riding with me?</h2>
       <label class="namebox"><span class="label">Name</span><input id="name" maxlength="16" placeholder="Your name" enterkeyhint="go" autocapitalize="words" spellcheck="false"></label>
+      <details class="appearance" ${ctx.worldState ? '' : 'open'}><summary>Change appearance</summary><div class="appearance-options">
       <div class="pair">${grp('build')}${skinGrp}</div>
       ${['hair', 'top', 'extra'].map(grp).join('')}
-    </form>`;
+      </div></details>
+    </form><div class="person-label" id="you-label">YASH</div><div class="person-label" id="rider-label" hidden></div>`;
   // a fieldset's legend won't sit in a grid cell: lift it into the grid as a plain span
   for (const lg of layer.querySelectorAll('.grp > legend')) { const s = document.createElement('span'); s.className = lg.className; s.id = lg.id; s.textContent = lg.textContent; lg.replaceWith(s); }
+  layer.classList.toggle('world-dress', !!ctx.worldState);
   const $ = s => layer.querySelector(s), sheet = $('.dress'), nameIn = $('#name');
   ctx.bed({ engine: 1, crickets: 1 }); ctx.rpm(0);   // the taxi idling by the stall
 
@@ -169,13 +179,22 @@ export async function load(ctx) {
   // put a person's foot on a painting point, snapped to the frame's pixel grid, at exactly 1 sprite px per frame px
   const V = new THREE.Vector3(), tanH = () => Math.tan(stage.fov * Math.PI / 360);
   function pin(p, x, y, back = 1) {   // back > 1: pushed away along the sight line (same size on screen), behind the taxi's depth
-    const grid = ctx.ink.size, d = stage.depthAt(x, y);
+    const grid = ctx.ink.size, layout = ctx.ink.layoutSize || grid, d = stage.depthAt(x, y);
     stage.toWorld(x, y, d, V).project(camera);
     V.x = (Math.floor((V.x * .5 + .5) * grid.x) + .5) / grid.x * 2 - 1;   // the foot is the middle of a sprite column
     V.y = Math.round((V.y * .5 + .5) * grid.y) / grid.y * 2 - 1;          // the sole sits on a row's edge
     V.unproject(camera).sub(camera.position).multiplyScalar(back).add(camera.position); p.obj.position.copy(V);
-    const dist = camera.position.z - V.z, u = 2 * dist * tanH() / grid.y;   // world units per frame px, at that depth
+    const dist = camera.position.z - V.z, u = 2 * dist * tanH() / layout.y * (narrow ? 1.04 : 1.12);   // source detail is independent of the scene's fine render grid
     p.obj.scale.set(u * camera.aspect * grid.y / grid.x, u, 1);
+  }
+  const labelPoint = new THREE.Vector3();
+  function labelPerson(p, el, text) {
+    el.hidden = !!ctx.worldState || chosen || !text;
+    if (el.hidden) return;
+    if (el.textContent !== text) el.textContent = text;
+    p.obj.localToWorld(labelPoint.set(0, 71, 0)).project(camera);
+    el.style.left = `${(labelPoint.x * .5 + .5) * innerWidth}px`;
+    el.style.top = `${(-labelPoint.y * .5 + .5) * innerHeight - 8}px`;
   }
 
   /* ---------- the sheet: avatars of the passenger with each option tried on ---------- */
@@ -230,12 +249,12 @@ export async function load(ctx) {
   function resize(w, h) {
     const aspect = w / h; narrow = w <= 700 || aspect <= 1; SPOT = SPOTS[narrow ? 'narrow' : 'wide']; sizeAvatars();
     const viewH = Math.min(IH, IW / aspect), viewW = viewH * aspect;   // the whole painting's height: the people read at their size
-    ppf = viewH / ctx.ink.size.y;
+    ppf = viewH / (ctx.ink.layoutSize || ctx.ink.size).y;
     stage.place(taxi.jeep, TAXI[0], TAXI[1], TAXI_K * ppf, stage.depthAt(TAXI[0], TAXI[1] + 14));
     U.uHead.value.set(TAXI[0] + 1.69 * TAXI_K * ppf, TAXI[1] - 20 * ppf);
     // the group: the taxi's tail to the rider; put its middle where there's room, its feet clear of the sheet and the button
     const r = sheet.getBoundingClientRect(), left = P(SPOT.you)[0] - (narrow ? 15 : 32) * ppf, right = P(SPOT.rider)[0] + (narrow ? 15 : 23) * ppf, feet = TAXI[1] + 12 * ppf;
-    const figH = 64 * h / ctx.ink.size.y, sx = narrow ? w / 2 : r.left / 2, sy = narrow ? (r.bottom + h - 84) / 2 + figH / 2 : h * .68;
+    const figH = 72 * h / (ctx.ink.layoutSize || ctx.ink.size).y, sx = narrow ? w / 2 : r.left / 2, sy = narrow ? (r.bottom + h - 84) / 2 + figH / 2 : h * .68;
     const cx = clamp((left + right) / 2 - (sx / w - .5) * viewW, viewW / 2, IW - viewW / 2);
     const cy = clamp(feet - (sy / h - .5) * viewH, viewH / 2, IH - viewH / 2);
     stage.view(cx, cy, viewH, aspect);
@@ -244,7 +263,7 @@ export async function load(ctx) {
   }
 
   /* ---------- get in: they turn, walk round the nose to the far door; it swings open, they're in, it shuts ---------- */
-  let leg = 0, doneAt = 0, since = 0;
+  let leg = 0, doneAt = 0, since = 0, boardingSince = 0, boardDoorClosed = false;
   function go() {
     if (chosen) return;
     if (!name.trim()) { nameIn.focus(); return; }
@@ -254,7 +273,7 @@ export async function load(ctx) {
     rider.mesh.material.depthTest = true;
   }
   const steer = new Steer(.3), AIM = U.uDir.value.clone();   // the scripted aim: straight along the road
-  const lightAt = (x, y) => clamp(.3 + lightCPU(x, y) * .8, .3, 1);   // capped at "lit": the warm step quantizes skin to the palette's orange
+  const lightAt = (x, y) => clamp(.58 + lightCPU(x, y) * .52, .58, 1.08);   // readable cool ambient with the stall and headlights as warm keys
   window.__stand = { look: () => ({ ...look, name }), get rider() { return rider; }, me, go, get leg() { return leg; } };   // for checking
 
   return {
@@ -262,9 +281,17 @@ export async function load(ctx) {
     onTap() { if (document.activeElement === nameIn) nameIn.blur(); else if (name.trim()) go(); },   // a tap on the scene first puts the keyboard away
     frame(dt, now) {
       ctx.prompt(!chosen && name.trim() ? `Get in, ${name.trim()}` : null);
+      ctx.progress?.(chosen ? .45 + Math.min(1, leg / 6) * .55 : name.trim() ? .35 : .08);
       ctx.rpm(0);
       // the walk: by exactly the px the feet take (frame px -> painting px), up past the nose, then left to the door
-      const step = rider.update(dt) * ppf;
+      const step = rider.update(dt * (chosen ? .82 : 1)) * ppf;
+      if (ctx.worldState && chosen) {
+        boardingSince += dt;
+        leg = boardingSince < 1.5 ? 1 : boardingSince < 3.7 ? 2 : boardingSince < 4.0 ? 3 : boardingSince < 4.4 ? 4 : boardingSince < 5.4 ? 5 : 6;
+        door.userData.open = boardingSince > 2.3 && boardingSince < 4.1 ? 1 : 0;
+        if (boardingSince >= 4.1 && !boardDoorClosed) { boardDoorClosed = true; ctx.sfx.door(); }
+        if (leg === 6) ctx.next();
+      } else {
       if (leg === 1) { walker.y -= step; if (walker.y <= P(SPOT.far)[1]) { walker.y = P(SPOT.far)[1]; rider.face('left'); leg = 2; behind = true; rider.shadow.visible = false; } }
       else if (leg === 2) {
         walker.x -= step;
@@ -274,6 +301,7 @@ export async function load(ctx) {
       else if (leg === 3 && now - doneAt > .25) { rider.obj.visible = false; leg = 4; doneAt = now; }   // in
       else if (leg === 4 && now - doneAt > .3) { door.userData.open = 0; ctx.sfx.door(); leg = 5; doneAt = now; }   // and it shuts
       else if (leg === 5 && now - doneAt > 1.1) { leg = 6; ctx.next(); }
+      }
       { const u = door.userData; u.v += (-49 * (door.rotation.y + 1.1 * u.open) - 7.7 * u.v) * dt; door.rotation.y += u.v * dt; }   // a spring (ω 7, ζ .55), like the edge's
       me.update(dt);
       if (waveT > 0 && (waveT -= dt) <= 0) me.play('idle');
@@ -284,8 +312,10 @@ export async function load(ctx) {
       stage.update(dt, 4);
       const [yx, yy] = P(SPOT.you);
       pin(me, yx, yy); pin(rider, walker.x, walker.y, behind ? 3 : 1);
-      me.setLight(Math.max(.8, lightAt(yx, yy - 29 * ppf) * .9), 1);   // the stall's bulb, behind you on the right
-      rider.setLight(lightAt(walker.x, walker.y - 29 * ppf) * (behind ? .7 : 1), -1);
+      me.setLight(Math.max(.95, lightAt(yx, yy - 29 * ppf)), 1, 'warm');
+      rider.setLight(Math.max(.72, lightAt(walker.x, walker.y - 29 * ppf) * (behind ? .82 : 1)), -1, 'warm');
+      labelPerson(me, $('#you-label'), 'YASH'); labelPerson(rider, $('#rider-label'), name.trim().toUpperCase());
+      ctx.worldState?.({ phase: chosen ? 'boarding' : 'customize', progress: chosen ? .45 + Math.min(1, leg / 6) * .55 : name.trim() ? .35 : .08, hold: ctx.input.hold, look: { ...look, name }, name, since, leg, boardingSince });
       ctx.ink.render(scene, camera, taxi.jeep);
     },
     dispose() { me.dispose(); rider.dispose(); disposeScene(scene); delete window.__stand; },

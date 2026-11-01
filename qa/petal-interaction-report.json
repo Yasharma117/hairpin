@@ -1,0 +1,13 @@
+{
+  "result": "passed",
+  "changedTransformValues": 261,
+  "liveDisplacement": 16.134908632622682,
+  "interaction": {
+    "breeze": 0.015511284803631665,
+    "petalDisplacement": 0.00018358919078309555,
+    "bankedAt": 20
+  },
+  "petalAspectRatio": 2.0871700545387983,
+  "deterministicFreeze": true,
+  "singleWishPulse": true
+}

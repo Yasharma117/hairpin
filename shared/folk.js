@@ -28,11 +28,14 @@ import { FOLK } from './style.js';
 // D d E sleeve  F f g forearm (skin under short sleeves)  P p q trousers  B b n shoes (n: sole)  e eye  W eye glint
 // m mouth  A a c extra  X x y extra's second ramp, or a prop  K k z cap, or a prop's second ramp  G the ember (a cigarette's
 // tip, coloured by setEmber)  Z its second pixel, lit only when it swells.   _ in an overlay erases.
-const CH = '.oSslrHhjTtuVvwDdEFfgPpqBbneWmAacXxyKkzGZ';
+// Appended slots are half-tone ramps for the detailed atlas. Existing slot indices, including the ghost's ember,
+// never move: the edge scene addresses those two slots while fading the ghost.
+const CH = '.oSslrHhjTtuVvwDdEFfgPpqBbneWmAacXxyKkzGZ0123456789';
+const HALF_TONES = [['H', 'h'], ['h', 'j'], ['S', 's'], ['s', 'l'], ['T', 't'], ['t', 'u'], ['P', 'p'], ['p', 'q'], ['B', 'b'], ['A', 'a']];
 const SLOT = Object.fromEntries([...CH].map((c, i) => [c, i]));
 const NS = CH.length;
 // each slot's lightest sibling in its ramp (the warm rim's colour): skin l, hair j, top u, and so on
-const LIGHT = [...CH].map((c, i) => { const g = ['Sslr', 'Hhj', 'Ttu', 'Vvw', 'DdE', 'Ffg', 'Ppq', 'Bbn', 'Aac', 'Xxy', 'Kkz'].find(g => g.includes(c)); return g ? SLOT[g[2]] : i; });
+const LIGHT = [...CH].map((c, i) => { const base = /[0-9]/.test(c) ? HALF_TONES[+c][1] : c; const g = ['Sslr', 'Hhj', 'Ttu', 'Vvw', 'DdE', 'Ffg', 'Ppq', 'Bbn', 'Aac', 'Xxy', 'Kkz'].find(g => g.includes(base)); return g ? SLOT[g[2]] : i; });
 
 // a head seen from behind: the same skull with the face taken off
 const faceless = (map, nose) => map.map((r, j) => [...r].map((c, i) => 'HeWmr'.includes(c) || (nose && j === nose[0] && i === nose[1]) ? 's' : c).join(''));
@@ -168,7 +171,20 @@ const N_DRAG1 = smokeArms(-7, [
   'oDDDDDDDDo',
   '.oooooooo.']);
 // him in ink, from behind: the skull's line into two neck lines (the jaw's edges read as dashes in line only)
-const N_HEAD_GHOST = N_HEAD_M.map((r, j) => j >= 20 ? '.........o.....o.........' : j === 19 ? '....ooooo.....ooooo......' : r.replace(/[HeWmrlS]/g, 's'));
+// Three-quarter seated profile: crown, forehead, nose, lip and chin are a recognizable contour even with no fill.
+// The small inner ear is intentional line work. The hair overlay is omitted for him so it cannot cover the profile.
+const N_HEAD_GHOST = [
+  at(25, [9, 'ooooooo']), at(25, [6, 'ooosssssssoo']), at(25, [4, 'oossssssssssoo']),
+  at(25, [3, 'ossssssssssssso']), at(25, [2, 'osssssssssssssso']), at(25, [2, 'ossssssssssssssso']),
+  at(25, [2, 'osssssssssssssssso']), at(25, [2, 'osssssssssssssssso']), at(25, [2, 'osssssssssssssssso']),
+  at(25, [2, 'osssssssssssssssso']), at(25, [2, 'osssssssssoosssssso']),
+  at(25, [2, 'ossssssssosssssssssoo']), at(25, [2, 'ossssssssossssssssssso']),
+  at(25, [2, 'osssssssssoosssssssoo']), at(25, [3, 'osssssssssssssssso']),
+  at(25, [3, 'ossssssssssssssssoo']), at(25, [4, 'ossssssssssssssso']),
+  at(25, [5, 'osssssssssssssso']), at(25, [6, 'oossssssssssoo']), at(25, [8, 'oosssssssoo']),
+  at(25, [10, 'osssso']), at(25, [10, 'osssso']), at(25, [10, 'o....o']),
+  at(25, [10, 'o....o']), at(25, [10, 'o....o']),
+];
 // waving, front: the arm on the viewer's left up beside the face, the hand open (31 wide at x -6, 12 rows above the body)
 const N_WAVE = hand => [
   ...(hand ? ['.ooo..', 'olsso.', 'ossSo.', '.oSsSo'] : ['..ooo.', '.olsso', '.ossSo', '.oSsSo']),
@@ -263,6 +279,8 @@ const N_LEGS_L = {
   stand: legsSide({ x: 10 }, { x: 15 }),
   w0: legsSide({ x: 8 }, { x: 16 }, 18), w1: legsSide({ x: 12 }, { x: 14, lift: 3 }),
   w2: legsSide({ x: 16 }, { x: 8 }, 18), w3: legsSide({ x: 13, lift: 3 }, { x: 12 }),
+  w01: legsSide({ x: 9 }, { x: 15, lift: 1 }, 19), w12: legsSide({ x: 14 }, { x: 10, lift: 2 }, 19),
+  w23: legsSide({ x: 15, lift: 1 }, { x: 9 }, 19), w30: legsSide({ x: 10, lift: 2 }, { x: 14 }, 19),
 };
 
 // ---- near overlays ----
@@ -1728,11 +1746,11 @@ FAR.left.arms.hold = FAR.left.arms.down.map((r, j) => r.slice(0, 7) + (['.......
 // khoh, woven, its strap across her forehead
 const F_CANOPY = ['...........ooooo...........', '........oyyxXXXxxxo........', '......oyyxXxxXxxXxXXo......', '....oyyxXxxxXxxxXxxXXXo....',
   '...oyyXxxxXxxXxxXxxxXXXo...', '..oyxxxxxXxxxXxxxXxxxXXXo..', '.oxXxxxxXxxxxXxxxxXxxxXXXo.', 'oXXXXXXXXXXXXXXXXXXXXXXXXXo', '.oo...oo....oo....oo...oo..'];
-const F_SHAFT = rows(24, j => j === 23 ? '..oo.' : j === 22 ? '.okko' : j === 21 ? '.oko.' : '.oKo.');
+const F_SHAFT = rows(25, j => j === 24 ? '..oo.' : j === 23 ? '.okko' : j === 22 ? '.oko.' : '.oKo.');
 const F_UMBRELLA = {
-  left: [L('body', 6, -17, 'cloth', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
-  front: [L('body', 7, -17, 'cloth', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
-  back: [L('body', 6, -17, 'back', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
+  left: [L('body', 6, -18, 'cloth', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
+  front: [L('body', 7, -18, 'cloth', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
+  back: [L('body', 6, -18, 'back', F_SHAFT), L('body', -5, -26, 'over', F_CANOPY)],
 };
 const F_BASKET = {
   left: [L('body', 9, -8, 'back', ['oooooooooooooooooo', 'oyyxxxxxxxxxxxxxXo', 'oXXXXXXXXXXXXXXXXo', 'oyxXyyxXyyxXyyxXXo', '.oxXxXxXxXxXxXxXo.', '.oXxXxXxXxXxXxXXo.',
@@ -1750,20 +1768,22 @@ const F_BASKET = {
 FAR.props = { umbrella: F_UMBRELLA, basket: F_BASKET };
 
 const SIZES = { near: NEAR, far: FAR };
+// The far cast keeps its economical silhouettes at the passing frames; near people have individually drawn knees.
+for (const [key, from] of Object.entries({ w01: 'w0', w12: 'w1', w23: 'w2', w30: 'w3' })) FAR.left.legs[key] = FAR.left.legs[from];
 
 /* ======================================================================================================================
    Animation: frames are part choices; durations in ms (idle breathes over 1.2 s, walk is 8 fps)
    ==================================================================================================================== */
-const WALK_SIDE = [{ legs: 'w0', arms: 'bwd' }, { legs: 'w1', arms: 'down' }, { legs: 'w2', arms: 'fwd' }, { legs: 'w3', arms: 'down' }];
+const WALK_SIDE = [{ legs: 'w0', arms: 'bwd' }, { legs: 'w01', arms: 'down', secondary: -1 }, { legs: 'w1', arms: 'down' }, { legs: 'w12', arms: 'fwd', secondary: 1 }, { legs: 'w2', arms: 'fwd' }, { legs: 'w23', arms: 'down', secondary: 1 }, { legs: 'w3', arms: 'down' }, { legs: 'w30', arms: 'bwd', secondary: -1 }];
 const WALK_FRONT = [{ legs: 'stand', breath: 1 }, { legs: 'liftL' }, { legs: 'stand', breath: 1 }, { legs: 'liftR' }];
 export const ANIMS = {
-  idle: { views: ['front', 'left', 'back'], loop: true, frames: { all: [{ ms: 600 }, { breath: 1, ms: 600 }] } },
-  walk: { views: ['left', 'front', 'back'], loop: true, walk: true, frames: { left: WALK_SIDE.map(f => ({ ...f, ms: 125 })), all: WALK_FRONT.map(f => ({ ...f, ms: 125 })) } },
+  idle: { views: ['front', 'left', 'back'], loop: true, frames: { all: [{ ms: 750 }, { secondary: 1, ms: 250 }, { breath: 1, secondary: 1, ms: 550 }, { secondary: -1, ms: 250 }] } },
+  walk: { views: ['left', 'front', 'back'], loop: true, walk: true, frames: { left: WALK_SIDE.map(f => ({ ...f, travel: .5, ms: 62.5 })), all: WALK_FRONT.map(f => ({ ...f, ms: 125 })) } },
   wave: { views: ['front', 'left'], loop: true, frames: { all: [{ arms: 'wave0', ms: 240 }, { arms: 'wave1', ms: 240 }] } },
   sitdown: { views: ['back'], loop: false, frames: { all: [{ legs: 'crouch', ms: 160 }, { legs: 'squat', ms: 140 }, { legs: 'seat', ms: 260 }] } },
-  sit: { views: ['back'], loop: true, frames: { all: [{ legs: 'seat', ms: 1100 }, { legs: 'seat', headDx: 1, ms: 1100 }] } },
+  sit: { views: ['back', 'front'], loop: true, frames: { all: [{ legs: 'seat', ms: 1100 }, { legs: 'seat', headDx: 1, ms: 1100 }] } },
   // seated, from behind: the head tips back to look up (at the star), and holds
-  lookup: { views: ['back'], loop: false, frames: { all: [{ legs: 'seat', tilt: 1, ms: 160 }, { legs: 'seat', tilt: 2, ms: 400 }] } },
+  lookup: { views: ['back', 'front'], loop: false, frames: { all: [{ legs: 'seat', tilt: 1, ms: 160 }, { legs: 'seat', tilt: 2, ms: 400 }] } },
   // the ghost's cigarette: hand up, at the mouth (hold), down again; then play('sit')
   drag: { views: ['back'], loop: false, frames: { all: [{ legs: 'seat', arms: 'drag0', ms: 220 }, { legs: 'seat', arms: 'drag1', ms: 1500 }, { legs: 'seat', arms: 'drag0', ms: 220 }] } },
   // up off the ledge, from behind: sitdown backwards
@@ -1836,6 +1856,12 @@ function litColours(look) {
   const ex = look.extra === 'muffler' ? (look.muffler === 'gamosa' ? [FOLK.top.shirt[0], FOLK.cap] : FOLK[look.muffler || 'muffler']) : look.extra !== 'none' ? FOLK[look.extra] : null;
   if (ex) { set('Aac', ex[0]); if (ex[1]) set('Xxy', ex[1]); }
   if (look.prop) { set('Xxy', FOLK[look.prop][0]); set('Kkz', FOLK[look.prop][1]); }
+  // Intermediate tones are authored material colors, not a blur over the sprite. They give the fine atlas room for
+  // a turned cheek, a hair strand and a narrow stitched edge without adding unrelated colors to the scene.
+  HALF_TONES.forEach(([a, b], i) => {
+    const A = hexRGB(c[SLOT[a]]), B = hexRGB(c[SLOT[b]]);
+    c[SLOT[String(i)]] = '#' + A.map((v, k) => Math.round((v + B[k]) / 2).toString(16).padStart(2, '0')).join('');
+  });
   return c;
 }
 
@@ -1918,7 +1944,7 @@ export function compose(size, lookIn, view, f = {}) {
   const hx = S.x + (f.headDx || 0), at = { head: [hx, headY], body: [S.x, bodyY] };
   const layers = { back: [], cloth: [], face: [], neck: [], hair: [], ears: [], over: [] };
   const add = list => list && list.forEach(o => layers[o.layer].push(o));
-  add(S.hair[look.hair]?.[view]);
+  if (!look.ghost) add(S.hair[look.hair]?.[view]);
   add(S.tops[look.top]?.[view]);
   if (look.extra !== 'none') add(S.extras[look.extra]?.[view]);
   if (look.beard) add(S.face.beard[view]); if (look.tache) add(S.face.tache[view]); if (look.tired) add(S.face.tired?.[view]);
@@ -1941,7 +1967,114 @@ export function compose(size, lookIn, view, f = {}) {
     if (f.sill) stamp(buf, W, H, ['.' + 'o'.repeat(bw - 2) + '.', 'oss' + 'g' + 'f'.repeat(bw - 8) + 'F' + 'Sso', 'oSS' + 'F'.repeat(bw - 6) + 'SSo'], S.x, cut - 3);
     buf.fill(0, Math.max(0, cut) * W);
   }
+  // Pose anchors stay in the original logical units. The fine atlas uses them to keep details attached to moving
+  // anatomy, rather than painting a static face or a textile pattern over an animation.
+  buf.pose = { headX: hx, headY, bodyX: S.x, bodyY, legsTop };
   return buf;
+}
+
+/* ---------- the fine atlas: two authored pixels per logical sprite unit ---------- */
+// Geometry and foot anchors deliberately stay 48x72 / 32x48. Only the backing artwork is finer. A closer camera can
+// now reveal eyebrows, seams and hair clusters instead of magnifying the old large squares.
+const ART_SCALE = 2;
+function fineFrame(size, look, view, f = {}) {
+  const S = SIZES[size], source = compose(size, look, view, f), W = S.W * ART_SCALE, H = S.H * ART_SCALE;
+  const buf = new Uint8Array(W * H), at = (x, y) => x < 0 || x >= W || y < 0 || y >= H ? 0 : buf[y * W + x];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) buf[y * W + x] = source[(y >> 1) * S.W + (x >> 1)];
+  const raw = buf.slice(), sample = (x, y) => x < 0 || x >= W || y < 0 || y >= H ? 0 : raw[y * W + x];
+  const put = (x, y, c, allowed) => {
+    x = Math.round(x); y = Math.round(y); if (x < 0 || x >= W || y < 0 || y >= H) return;
+    if (!allowed || allowed.includes(CH[at(x, y)])) buf[y * W + x] = SLOT[c];
+  };
+  const line = (x0, y0, x1, y1, c, allowed) => {
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+    for (let i = 0; i <= n; i++) put(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, c, allowed);
+  };
+  // Selective one-fine-pixel contour. The former two-pixel ring made heads and clothing look like block cutouts.
+  // Keep the outside edge; replace its interior half with the nearest material, and bevel convex stair corners.
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (sample(x, y) !== SLOT.o) continue;
+    const a = [sample(x - 1, y), sample(x + 1, y), sample(x, y - 1), sample(x, y + 1)];
+    if (a.every(Boolean)) {
+      let fill = a.find(s => s > SLOT.o);
+      if (!fill) for (let d = 2; d <= 3 && !fill; d++) fill = [sample(x - d, y), sample(x + d, y), sample(x, y - d), sample(x, y + d)].find(s => s > SLOT.o);
+      if (fill) buf[y * W + x] = fill;
+    } else if ((!a[0] && !a[2] || !a[0] && !a[3] || !a[1] && !a[2] || !a[1] && !a[3]) && y < H - 3) buf[y * W + x] = 0;
+  }
+  const { headX, headY, bodyX, bodyY, legsTop } = source.pose, hx = headX * 2, hy = headY * 2, bx = bodyX * 2, by = bodyY * 2;
+  const skin = 'Sslr23', hair = 'Hhj01', cloth = 'Ttu45', pants = 'Ppq67';
+  // Clustered light across the crown, with curved strands and quieter shadow transitions at the temple/nape.
+  const spread = size === 'near' ? 48 : 32, crown = hy - (look.hair === 'bun' ? 10 : 4);
+  for (let y = Math.max(0, crown); y < Math.min(H, hy + (size === 'near' ? 47 : 30)); y++) for (let x = Math.max(0, hx - 4); x < Math.min(W, hx + spread + 4); x++) {
+    const ch = CH[at(x, y)]; if (!hair.includes(ch)) continue;
+    const u = x - hx, v = y - hy, bend = Math.floor((v + 8) * (v + 8) / 180), strand = (u + bend + (view === 'back' ? 3 : 0)) % 11;
+    if (ch === 'h' && strand <= 1 && u < spread * .48 && (v < 18 || view === 'back' && v < 30)) put(x, y, '1');
+    else if (ch === 'H' && strand >= 7 && v > 6) put(x, y, '0');
+    else if (ch === 'j' && (u + v) % 7 === 0) put(x, y, '1');
+    if (look.hair === 'curly' && size === 'near' && v < 22) {
+      // Larger, deliberately grouped curls replace the old checkerboard texture. Light sits on each curl's upper arc.
+      const row = Math.floor((v + 9) / 9), u0 = (u + (row % 2) * 4 + 90) % 9 - 4, v0 = (v + 90) % 9 - 4, radius = u0 * u0 + v0 * v0;
+      put(x, y, radius < 10 && u0 <= 0 && v0 <= 0 ? '1' : radius > 15 ? 'H' : radius > 9 ? '0' : 'h');
+    }
+  }
+  if (size === 'near' && view !== 'back' && !look.ghost) {
+    // Rounded cheek plane and a small nose, preserving five selectable skin ramps.
+    for (let y = hy + 18; y < hy + 39; y++) for (let x = hx + 4; x < hx + 39; x++) {
+      const u = (x - hx - (view === 'left' ? 15 : 18)) / 15, v = (y - hy - 27) / 16;
+      if (u * u + v * v < 1 && at(x, y) === SLOT.s) put(x, y, '3');
+    }
+    // Eye and mouth pixels are redrawn at the fine scale, with shaped lids and a single clean catch-light.
+    for (let y = hy + 21; y < hy + 41; y++) for (let x = hx + 2; x < hx + 42; x++) {
+      const c = CH[at(x, y)];
+      if ('eWm'.includes(c)) put(x, y, 's');
+      if (c === 'H' && y < hy + 26 && x > hx + 4 && x < hx + (view === 'left' ? 27 : 39)) put(x, y, 's');
+    }
+    const eyes = view === 'left' ? [[6, 27], [19, 27]] : [[14, 27], [33, 27]];
+    for (const [ex, ey] of eyes) {
+      line(hx + ex - 3, hy + ey - 5, hx + ex + 2, hy + ey - 6, 'H', skin + 'H');
+      if (f.blink) { line(hx + ex - 2, hy + ey + 1, hx + ex + 2, hy + ey + 1, 'e', skin); continue; }
+      line(hx + ex - 2, hy + ey - 1, hx + ex + 2, hy + ey - 1, 'e', skin);
+      for (let j = 0; j < 4; j++) for (let i = -2; i < 3; i++) if (!(j === 3 && Math.abs(i) === 2)) put(hx + ex + i, hy + ey + j, 'e', skin + 'e');
+      put(hx + ex - 1, hy + ey, 'W', 'e'); put(hx + ex - 1, hy + ey + 1, 'W', 'e');
+      if (look.build === 'f') put(hx + ex - 3, hy + ey - 1, 'e', skin);
+      line(hx + ex - 3, hy + ey + 5, hx + ex + 1, hy + ey + 5, 'r', skin);
+    }
+    const nose = view === 'left' ? 13 : 24;
+    line(hx + nose, hy + 30, hx + nose + 1, hy + 33, '2', skin);
+    put(hx + nose - 1, hy + 31, 'l', skin);
+    const mouth = view === 'left' ? 12 : 24;
+    line(hx + mouth - 3, hy + 36, hx + mouth + 3, hy + 36, 'm', skin + 'm');
+    line(hx + mouth - 2, hy + 37, hx + mouth + 2, hy + 37, 'm', skin + 'm');
+    line(hx + mouth - 1, hy + 35, hx + mouth + 1, hy + 35, 'l', skin);
+  }
+  // Garments have construction: a turned shoulder, side folds, fine top-stitching and a lit hem.
+  for (let y = by + 6; y < by + 33; y++) {
+    line(bx + 10, y, bx + 11, y, '5', cloth);
+    if (y > by + 20) put(bx + 14 + Math.floor((y - by - 20) / 5), y, '4', cloth);
+    if (view === 'back' && y < by + 24) put(bx + 36 - Math.floor((y - by) / 9), y, '4', cloth);
+  }
+  if (['jacket', 'denim', 'shirt', 'vest', 'kurta'].includes(look.top)) {
+    const seam = view === 'left' ? 19 : 24;
+    line(bx + seam - 1, by + 10, bx + seam - 1, by + 31, '5', cloth);
+    for (let y = by + 12; y < by + 30; y += 8) put(bx + seam + 1, y, 'w', cloth + 'Vvw');
+  }
+  if (view === 'back') {
+    line(bx + 13, by + 7, bx + 35, by + 7, '5', cloth);
+    line(bx + 23, by + 11, bx + 24, by + 26, '4', cloth);
+  }
+  const ly = legsTop * 2;
+  for (const x of [bx + 13, bx + 31]) line(x, ly + 6, x - 1, Math.min(H - 10, ly + 24), '7', pants);
+  for (let y = H - 9; y < H - 3; y++) for (let x = 0; x < W; x++) if (CH[at(x, y)] === 'b' && (y === H - 7 || y === H - 6) && x % 15 < 3) put(x, y, 'n');
+  // A one-fine-pixel lag in long hair/scarf ends is tied to the pose, so it never crawls across the face or cloth.
+  const sway = f.secondary || 0;
+  if (sway && look.hair === 'long') {
+    const copy = buf.slice();
+    for (let y = hy + 46; y < Math.min(H, hy + 66); y++) for (let x = Math.max(1, hx - 2); x < Math.min(W - 1, hx + 51); x++) {
+      if (!hair.includes(CH[copy[y * W + x]])) continue;
+      const tx = x + sway; if (!at(tx, y) || hair.includes(CH[at(tx, y)])) { buf[y * W + x] = 0; buf[y * W + tx] = copy[y * W + x]; }
+    }
+  }
+  return { buf, W, H };
 }
 
 // the sill under someone at a window (play('lean')): sprite px up from the foot anchor to the bust's bottom row
@@ -1966,7 +2099,7 @@ export function render(buf, W, H, cols, st = 3, { flip = false, side = -1, rim =
     if (s === SLOT.G) col = EMBER[ember > .5 ? 1 : 0].map(v => v * 255);
     else if (s === SLOT.Z) { if (ember <= .5) continue; col = EMBER[0].map(v => v * 255); }
     else {
-      if (back && s >= SLOT.H && s <= SLOT.j) k = Math.max(k, 2);   // hair from behind never sinks into the night
+      if (back && (s >= SLOT.H && s <= SLOT.j || s === SLOT['0'] || s === SLOT['1'])) k = Math.max(k, 2);   // hair from behind never sinks into the night
       if (cols[s][k][3] < 128) continue;
       if (rim && s !== 1 && at(i + side, j) <= 1 && lit) col = lit === 1 ? cols[s][5] : cool;
       else { if (rim && s !== 1 && at(i - side, j) <= 1) { if (k) k--; else dim = .8; } col = cols[s][k]; }
@@ -1980,17 +2113,20 @@ export function render(buf, W, H, cols, st = 3, { flip = false, side = -1, rim =
 // rim: false, true (auto), 'warm', 'cool', 'none' (the dark rim only); then: the flashback's sepia; ember 0..1
 export function frameCanvas(who, { size = 'near', view = 'front', anim = 'idle', i = 0, blink = false, light = 1, rim = false, side = -1, then = false, ember = 0 } = {}) {
   const S = SIZES[size], v = view === 'right' ? 'left' : view, fr = framesOf(anim, v), look = normalise(who);
-  return render(compose(size, look, v, { ...fr[i % fr.length], blink }), S.W, S.H, palette(look, then), step(light), { flip: view === 'right', rim: look.ghost ? false : rim, side, back: v === 'back', ember, then });
+  const { buf, W, H } = fineFrame(size, look, v, { ...fr[i % fr.length], blink });
+  const result = render(buf, W, H, palette(look, then), step(light), { flip: view === 'right', rim: look.ghost ? false : rim, side, back: v === 'back', ember, then });
+  result.artScale = ART_SCALE;
+  return result;
 }
 export const preview = look => frameCanvas(look, { size: 'near', view: 'front' });
 // the head and shoulders, for UI: a px x px canvas (whole-pixel scale, transparent around)
 export function avatar(look, px = 48) {
   const S = NEAR, buf = compose('near', look, 'front', {}), cols = palette(normalise(look));   // (the ghost has no avatar)
   let top = S.H; for (let k = 0; k < buf.length; k++) if (buf[k]) { top = Math.floor(k / S.W); break; }
-  const cw = S.avatar, ch = S.avatar, src = render(buf, S.W, S.H, cols, 3), out = canvas(px, px), x = out.getContext('2d');
-  const z = Math.max(1, Math.floor(px / cw));
+  const cw = S.avatar, ch = S.avatar, src = frameCanvas(look), out = canvas(px, px), x = out.getContext('2d');
+  const z = px / cw;
   x.imageSmoothingEnabled = false;
-  x.drawImage(src, S.cx + 1 - cw / 2, Math.max(0, top - 1), cw, ch, Math.round((px - cw * z) / 2), Math.round((px - ch * z) / 2), cw * z, ch * z);
+  x.drawImage(src, (S.cx + 1 - cw / 2) * ART_SCALE, Math.max(0, top - 1) * ART_SCALE, cw * ART_SCALE, ch * ART_SCALE, Math.round((px - cw * z) / 2), Math.round((px - ch * z) / 2), cw * z, ch * z);
   return out;
 }
 export const sizes = Object.fromEntries(Object.entries(SIZES).map(([k, s]) => [k, { w: s.W, h: s.H, foot: [s.cx + .5, s.H], stride: s.stride }]));
@@ -2014,7 +2150,7 @@ const FRAG = /* glsl */`
     if (s == ${SLOT.G}) { gl_FragColor = vec4(uEmber > .5 ? uEmber1 : uEmber0, 1.); return; }   // the ember: flat, no halo
     if (s == ${SLOT.Z}) { if (uEmber <= .5) discard; gl_FragColor = vec4(uEmber0, 1.); return; }
     int k = int(uStep); float dim = 1.;
-    if (uBack > .5 && s >= ${SLOT.H} && s <= ${SLOT.j}) k = max(k, 2);   // hair from behind never sinks into the night
+    if (uBack > .5 && (s >= ${SLOT.H} && s <= ${SLOT.j} || s == ${SLOT['0']} || s == ${SLOT['1']})) k = max(k, 2);   // hair from behind never sinks into the night
     if (texelFetch(tPal, ivec2(s, k), 0).a < .5) discard;   // the ghost: line only
     vec3 c;
     if (uRim > .5 && s != 1 && slotAt(p + ivec2(int(uSide), 0)) <= 1)   // the rim on the lit side
@@ -2039,21 +2175,23 @@ export function person(who, { size = 'near' } = {}) {
     cells.push({ key: `${anim}:${v}:${i}`, f });
     if (anim === 'idle' && v !== 'back') cells.push({ key: `${anim}:${v}:${i}:b`, f: { ...f, blink: true } });
   });
-  const cols = Math.ceil(Math.sqrt(cells.length)), rows = Math.ceil(cells.length / cols), AW = cols * W, AH = rows * H;
-  const data = new Uint8Array(AW * AH * 4), where = {};
+  const TW = W * ART_SCALE, TH = H * ART_SCALE;
+  const cols = Math.ceil(Math.sqrt(cells.length)), rows = Math.ceil(cells.length / cols), AW = cols * TW, AH = rows * TH;
+  // Only the palette index is stored. A single-channel atlas keeps the finer art's memory near the old RGBA atlas.
+  const data = new Uint8Array(AW * AH), where = {};
   cells.forEach(({ key, f }, n) => {
-    const [anim, v] = key.split(':'), buf = compose(size, look, v, f), ox = (n % cols) * W, oy = Math.floor(n / cols) * H;
+    const [anim, v] = key.split(':'), { buf } = fineFrame(size, look, v, f), ox = (n % cols) * TW, oy = Math.floor(n / cols) * TH;
     where[key] = [ox, oy];
-    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) data[((oy + j) * AW + ox + i) * 4] = buf[j * W + i];
+    for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) data[(oy + j) * AW + ox + i] = buf[j * TW + i];
   });
-  const tIdx = new THREE.DataTexture(data, AW, AH, THREE.RGBAFormat);
+  const tIdx = new THREE.DataTexture(data, AW, AH, THREE.RedFormat);
   const pd = new Uint8Array(NS * 6 * 4), fill = then => palette(look, then).forEach((r, s) => r.forEach((c, k) => pd.set(c, (k * NS + s) * 4)));
   fill(false);
   const tPal = new THREE.DataTexture(pd, NS, 6, THREE.RGBAFormat);
   for (const t of [tIdx, tPal]) { t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; }
   const mat = new THREE.ShaderMaterial({
     uniforms: {
-      tIdx: { value: tIdx }, tPal: { value: tPal }, uCell: { value: new THREE.Vector2(W, H) }, uOff: { value: new THREE.Vector2() }, uFlip: { value: 0 }, uStep: { value: 3 }, uSide: { value: -1 },
+      tIdx: { value: tIdx }, tPal: { value: tPal }, uCell: { value: new THREE.Vector2(TW, TH) }, uOff: { value: new THREE.Vector2() }, uFlip: { value: 0 }, uStep: { value: 3 }, uSide: { value: -1 },
       uBack: { value: 0 }, uRim: { value: look.ghost ? 0 : 1 }, uEmber: { value: 0 }, uRimCool: { value: new THREE.Color(FOLK.rimCool) },
       uEmber0: { value: new THREE.Vector3(...EMBER[0]) }, uEmber1: { value: new THREE.Vector3(...EMBER[1]) },
     },
@@ -2085,6 +2223,18 @@ export function person(who, { size = 'near' } = {}) {
       const views = ANIMS[anim].views, base = dir === 'right' ? 'left' : dir;
       const v = views.includes(base) ? base : views[0];
       if (!quiet && dir !== facing && v !== 'left' && view !== 'left') turnT = .1;
+      // Side walking has eight frames; front/back have four. Carry the cycle's elapsed
+      // time across a turn, rather than an index that may not exist in the new view.
+      if (v !== view) {
+        const before = framesOf(anim, view), after = framesOf(anim, v);
+        const duration = frames => frames.reduce((sum, f) => sum + f.ms, 0);
+        let elapsed = t;
+        for (let i = 0; i < Math.min(frame, before.length); i++) elapsed += before[i].ms;
+        elapsed = elapsed / duration(before) * duration(after);
+        frame = 0;
+        while (frame < after.length - 1 && elapsed >= after[frame].ms) elapsed -= after[frame++].ms;
+        t = Math.min(elapsed, after[frame].ms - .001);
+      }
       facing = views.includes(base) ? dir : v; view = v; return show();
     },
     // advance the clock; returns the sprite px walked in this step (stride per walk frame), so callers move in sync
@@ -2096,7 +2246,7 @@ export function person(who, { size = 'near' } = {}) {
         if (frame + 1 < fr.length) frame++;
         else if (loop) frame = 0;
         else { t = 0; if (!p.done) { p.done = true; onEnd?.(p); } break; }
-        if (ANIMS[anim].walk) walked += S.stride;
+        if (ANIMS[anim].walk) walked += S.stride * (fr[frame].travel ?? 1);
       }
       if (turnT > 0) turnT -= dt;
       blinkT -= dt; if (blinkT < 0) { blinking = .12; blinkT = 2.5 + Math.random() * 3.5; }

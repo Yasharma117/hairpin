@@ -5,22 +5,28 @@ studio, chibi pixel people, cream paper UI, a serif for words and VT323 for labe
 higher finish than their own site. This file is the contract every part of the rebuild follows; STYLE.md still holds for
 anything this file doesn't change.
 
-## 1. One pixel grid for everything
+## 1. Fine pixels, preserved artwork
 
-- The whole frame renders at a **low internal resolution** and is scaled up with **nearest-neighbour**. Everything in the
-  3D scene (paintings, taxi, truck, blossom, petals, figures) lands on the same pixel grid. The DOM UI does not.
-- **Pixel size:** an integer screen-pixel scale chosen so the frame is about **360 px tall** in landscape
-  (`scale = max(2, round(canvasHeightInDevicePx / 360))`: 1280x720 is x2, 1920x1080 x3, a retina 1440 x4), about 400 tall
-  in portrait. Never a fractional scale.
-- **Palette:** the final pass quantizes to a fixed palette per scene (about 32 colours, from the scene's lit and dark
-  paintings plus the shared UI and people ramps), in a perceptual space, with **4x4 ordered (Bayer) dithering at low
-  strength** only in gradients (sky, beams, haze). Palettes live in `shared/style.js`, like every colour.
+The October 30 finish pass replaces the low-resolution presentation. The paintings contain fine brushwork and the cast
+needs readable faces; deliberate loss of detail is no longer the visual target.
+
+- **Painting resolution:** an integer device-pixel scale, with a minimum of 1, targets at least **720 rows in landscape**
+  and **800 in portrait**, up to the drawing buffer's native resolution. At 1280×720 the painting renders at 1280×720;
+  at a 2560×1440 Retina drawing buffer it renders at 1280×720. Nearest-neighbour presentation retains crisp fine edges.
+- **Staging resolution:** `ctx.ink.layoutSize` retains the former 360/400-row design grid so raising render quality does
+  not shrink the actors. `ctx.ink.size` is the actual detailed rendering/effects grid; `detailScale` gives their ratio.
+  Actor placement and scene layout use `layoutSize`; shaders and screen-space effects use `size`.
+- **Sampling:** `ctx.ink.sampleScale` is 1. Color renders directly at the detailed grid, avoiding a costly supersample
+  followed by discarded detail. Effects must not assume a hidden 2× render buffer.
+- **Palette:** each scene's 32-color palette guides the finish with a subtle 14% blend on paintings and 24% on vehicles;
+  it is no longer a hard color limit. Preserve the original brushwork, small fittings and readable dark values. A very
+  low-strength Bayer texture is restricted to smooth gradients. Palettes still live in `shared/style.js`.
 - **No sub-pixel shimmer:** the camera is snapped to the pixel grid on the painting plane; the leftover fraction is applied
   as an offset when upscaling, so slow camera moves stay smooth.
 - **Outlines:** things that move (taxi, truck, people, animals) get a 1 px dark outline (`ink`, or a darkened local colour
   for selective outlining). No boiling line: pixel art is stable. No paper grain. A very soft vignette at most.
-- **Light still works:** the headlights reveal the lit painting over the dark one exactly as before; it now happens per
-  pixel and through the palette, which gives the stepped, dithered light pools pixel games have.
+- **Light still works:** headlights reveal the lit painting over the dark one, with fine spatial detail and the existing
+  source-aware light pools. Vehicles use five restrained paint tones and a readable cool shadow floor.
 
 ## 2. People: chibi pixel sprites, in pocket.design's spirit, drawn by us
 

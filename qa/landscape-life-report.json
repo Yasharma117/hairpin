@@ -1,0 +1,13 @@
+{
+  "result": "passed",
+  "checks": 4464,
+  "movingWaterVertices": 2571,
+  "waterVertices": 2709,
+  "birds": 4,
+  "maximumBirdStep": 0.026965826132119185,
+  "waterY": [
+    -8.91795539855957,
+    -8.802029609680176
+  ],
+  "deterministic": true
+}

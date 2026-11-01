@@ -1,0 +1,13 @@
+{
+  "result": "passed",
+  "checks": 115,
+  "coverage": [
+    "canvas brushing cannot bank a wish",
+    "pointer reaches breeze",
+    "cancelled hold drains",
+    "button and keyboard each keep once",
+    "wish remains available after the star",
+    "festival caption precedes star",
+    "quote reaches final controls"
+  ]
+}

@@ -1,0 +1,29 @@
+/* Self-hosted Google Fonts. Original font files and SIL OFL licenses: ./vendor/fonts/. */
+@font-face {
+  font-family: 'Young Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./vendor/fonts/YoungSerif-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('./vendor/fonts/Newsreader-Variable.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('./vendor/fonts/Newsreader-Italic-Variable.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./vendor/fonts/VT323-Regular.ttf') format('truetype');
+}

@@ -8,53 +8,18 @@ import { clamp, lerp, sstep, mkCanvas, loadImg, tex, strokeMap, NOISE, line, pas
 import { SHILLONG_PLACEHOLDER } from '../shared/style.js';
 import * as folk from '../shared/folk.js';
 import { paintTree, paintOverlay, treeMesh, Petals, TREE } from './blossom.js';
+import { loadOverlook } from '../shared/overlook.js';
 
 const at = f => new URL(f, import.meta.url).href;
-export const assets = [];
+export const assets = ['shillong-view.png'];
 
 const IW = 1774, IH = 887;              // painting size in px; the whole scene lives in these units
 
-// The layout the real shillong-lit/dark pair must keep: sky above HORIZON, city in the bowl, the viewpoint's railing along RAIL.
-const HORIZON = .4, RAIL = .74;
+// The finished night painting keeps the city in the bowl and the near road below the railing.
+const HORIZON = .35, RAIL = .74;   // the painted rail spans .63–.74; RAIL is the road-side foot
 
-/* ---------- the paintings: shillong-lit.jpg + shillong-dark.jpg if they exist, else a placeholder drawn here ---------- */
-const canvasIW = (w = IW, h = IH) => mkCanvas(w, h);
-const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
-function placeholder() {
-  const cl = canvasIW(), cd = canvasIW(), ctx = [cl.getContext('2d'), cd.getContext('2d')], r = rng(11);
-  const both = f => ctx.forEach(f);
-  const P = SHILLONG_PLACEHOLDER;   // [lit swatches, dark swatches]
-  const dab = (pal, x, y, w, h, a) => { const i = r() * pal[0].length | 0; both((c, k) => { c.fillStyle = pal[k][i]; c.beginPath(); c.ellipse(x, y, w, h, a, 0, Math.PI * 2); c.fill(); }); };
-  const hy = HORIZON * IH, ry = RAIL * IH;
-  both((c, k) => { c.fillStyle = P.sky[k][0]; c.fillRect(0, 0, IW, IH); });
-  for (let i = 0; i < 1400; i++) dab(P.sky, r() * IW, r() * hy, 40 + r() * 90, 8 + r() * 16, (r() - .5) * .2);
-  for (let i = 0; i < 260; i++) { const x = r() * IW, y = r() * hy * .9, s = .6 + r() * 1.4; both(c => { c.fillStyle = P.star; c.fillRect(x, y, s, s); }); }
-  // far ridges, then the bowl of the town
-  const ridge = (y0, amp, f, ph) => x => y0 + Math.sin(x * f + ph) * amp + Math.sin(x * f * 2.7 + ph * 3) * amp * .4;
-  for (const [y0, pal] of [[hy, P.hill], [hy + 40, P.town]]) {
-    const f = ridge(y0, 22, .004, y0);
-    both((c, k) => { c.fillStyle = pal[k][0]; c.beginPath(); c.moveTo(0, IH); for (let x = 0; x <= IW; x += 20) c.lineTo(x, f(x)); c.lineTo(IW, IH); c.fill(); });
-    for (let i = 0; i < 1800; i++) { const x = r() * IW, y = f(x) + 6 + r() * (IH - f(x)); dab(pal, x, y, 10 + r() * 22, 3 + r() * 6, (r() - .5) * .4); }
-  }
-  // the lights: thick along the bowl, thinning up the slopes; the same in both, because they are lit either way
-  const towns = Array.from({ length: 36 }, () => [r() * IW, hy + 60 + Math.pow(r(), .6) * (ry - hy - 80), 30 + r() * 110]);
-  for (let i = 0; i < 4200; i++) {
-    const c0 = towns[r() * towns.length | 0], a = r() * 6.283, d = Math.sqrt(-2 * Math.log(r() + 1e-6)) * c0[2] * .4;   // clustered: neighbourhoods
-    const x = i % 5 ? c0[0] + Math.cos(a) * d * 1.8 : r() * IW, y = i % 5 ? c0[1] + Math.sin(a) * d * .5 : hy + 50 + r() * (ry - hy - 60), s = 1 + r() * 2.2;
-    if (y < hy + 40 || y > ry - 30) continue;
-    const col = P.lights[r() * 4 | 0];
-    both(c => { c.fillStyle = col; c.fillRect(x, y, s, s); });
-  }
-  // the viewpoint: a paved lip and a low railing, the drop to the town beyond it
-  both((c, k) => { c.fillStyle = P.ground[k][2]; c.fillRect(0, ry, IW, IH - ry); });
-  for (let i = 0; i < 2500; i++) dab(P.ground, r() * IW, ry + r() * (IH - ry), 12 + r() * 20, 3 + r() * 5, (r() - .5) * .3);
-  both((c, k) => {
-    c.fillStyle = P.rail[k]; c.fillRect(0, ry - 26, IW, 5); c.fillRect(0, ry - 8, IW, 4);
-    for (let x = 20; x < IW; x += 70) c.fillRect(x, ry - 30, 6, 30);
-  });
-  return [cl, cd];
-}
 export async function load(ctx) {
+if (ctx.worldState) return loadOverlook(ctx);
 const { input, layer } = ctx;
 layer.innerHTML = `<style>
 /* the quote: serif lines straight on the night, no panels; each comes in as the one before settles */
@@ -77,7 +42,11 @@ layer.innerHTML = `<style>
 .end .by { margin: 0; font: italic 400 calc(21px * var(--u))/1.3 var(--serif); color: var(--ui-ink); }
 .end .for { font-size: var(--t1); }
 .end .row { display: flex; gap: calc(12px * var(--u)); margin-top: calc(14px * var(--u)); padding-top: calc(18px * var(--u)); border-top: 2px dashed var(--ui-wood); }
-.end .again::after { content: "▶"; color: var(--ui-signal); font-size: .8em; }
+.end .again::after { content:none; }
+.world-ending .quote { top: 16%; gap: 10px; }
+.world-ending .quote p { color: var(--ui-end-quote); background: none; text-shadow: 0 2px 12px var(--ui-end-shadow); padding: 0 12px; }
+.world-ending .wish { top: 12%; background: var(--ui-end-wish-bg); color: var(--ui-end-wish); }
+.world-ending .end { border-radius: 14px; }
 @keyframes endin { from { opacity: 0; transform: translate(-50%, 8px); } }
 @media (prefers-reduced-motion: reduce) { .quote p, .quote { transition: opacity 200ms; transform: none; } .end { animation: none; } }
 </style>
@@ -91,19 +60,34 @@ layer.innerHTML = `<style>
   <span class="label for">Music: Blue Dot Sessions · CC BY-NC 4.0</span>
   <div class="row"><button class="btn again" id="again" type="button">Again</button><button class="btn" id="title" type="button">Title</button></div>
 </section>`;
+layer.classList.toggle('world-ending', !!ctx.worldState);
 const $ = s => layer.querySelector(s);
 ctx.bed({ engine: 1, crickets: 1, wind: .4 }); ctx.rpm(0);   // the truck idling at the railing
-// shillong-lit.jpg + shillong-dark.jpg aren't painted yet: not fetched (two 404s a visit); load them here once they exist
-const iLit = null, iDark = null;
-const [srcLit, srcDark] = iLit && iDark ? [iLit, iDark] : placeholder();
-// depth: depth.png once the real pair exists (tools/make_depth.py); until then built from the placeholder's own layout
+// One finished night painting, with a registered dark view derived from the same pixels. Only the foreground loses
+// the truck's warm light; the distant town and sky keep their own light sources when its engine goes off.
+const iLit = await loadImg(at('shillong-view.png'));
+if (!iLit) throw new Error('Shillong viewpoint did not load');
+function nightView(src) {
+  const c = mkCanvas(IW, IH), x = c.getContext('2d'); x.drawImage(src, 0, 0, IW, IH);
+  const img = x.getImageData(0, 0, IW, IH), d = img.data;
+  for (let y = 0; y < IH; y++) {
+    const foreground = sstep(.63, .8, y / IH);
+    for (let px = 0; px < IW; px++) {
+      const i = (y * IW + px) * 4;
+      d[i] *= 1 - foreground * .46; d[i + 1] *= 1 - foreground * .36; d[i + 2] *= 1 - foreground * .18;
+    }
+  }
+  x.putImageData(img, 0, 0); return c;
+}
+const srcLit = iLit, srcDark = nightView(iLit);
+// The layout-derived depth keeps the sky distant and the road in front of the rail; no optional asset requests.
 function layoutDepth() {
   const c = mkCanvas(IW, IH), x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 0, IH), f = v => `rgb(${v * 255 | 0},${v * 255 | 0},${v * 255 | 0})`;
   g.addColorStop(0, f(0)); g.addColorStop(HORIZON - .02, f(0)); g.addColorStop(HORIZON + .03, f(.18));   // sky, then the far ridge
   g.addColorStop(RAIL - .04, f(.62)); g.addColorStop(RAIL + .02, f(.8)); g.addColorStop(1, f(1));        // the town falling away below us, then the viewpoint
   x.fillStyle = g; x.fillRect(0, 0, IW, IH); return c;
 }
-const stage = new Stage({ W: IW, H: IH, depth: (iLit && await loadImg(at('depth.png'))) || layoutDepth(), k: .3 });
+const stage = new Stage({ W: IW, H: IH, depth: layoutDepth(), k: .24 });
 const tLit = tex(srcLit), tDark = tex(srcDark), tStroke = tex(strokeMap(srcLit, IW, IH));
 
 /* ---------- light model, in painting pixels ---------- */
@@ -144,14 +128,14 @@ const bg = stage.mesh(new THREE.ShaderMaterial({
       vec3 col = mix(dark, lit * vec3(1.05, .97, .86), reveal(p, lightAt(p)));
       // the town's lights: anything bright in the night painting twinkles through the air
       float glow = smoothstep(.5, .8, dot(dark, vec3(.333)));
-      col += dark * glow * (.25 * sin(uTime * (2. + h12(floor(p / 3.)) * 4.) + h12(floor(p / 3.) + 7.) * 6.28) + .15);
+      col += dark * glow * (.065 * sin(uTime * (.7 + h12(floor(p / 3.)) * 1.2) + h12(floor(p / 3.) + 7.) * 6.28) + .025);
       gl_FragColor = vec4(col, 1.);
     }`,
 }));
 scene.add(bg);
 
 /* ---------- the cherry blossom: trees down the slopes and petals on the ground, then the tree over the railing ---------- */
-const [oL, oD] = paintOverlay(IW, IH, HORIZON, RAIL, !(iLit && iDark)).map(tex);   // the real painting brings its own trees
+const [oL, oD] = paintOverlay(IW, IH, HORIZON, RAIL, false).map(tex);   // the finished painting brings the town and hillside vegetation
 const overlay = stage.mesh(new THREE.ShaderMaterial({
   uniforms: { ...U, tOL: { value: oL }, tOD: { value: oD } }, transparent: true,
   fragmentShader: LIGHT + /* glsl */`
@@ -167,8 +151,8 @@ const tree = treeMesh(U, LIGHT); scene.add(tree);   // painted in resize, on the
 const TREE_D = .97;   // right at the front: it moves most when the camera rises
 const touch = ctx.isTouch;
 const petals = [
-  new Petals({ stage, U, light: LIGHT, grid: ctx.ink.size, n: touch ? 140 : 340, d0: .25, d1: .75, size: [2.6, 5.5], IW, IH, HORIZON, RAIL, near: false }),
-  new Petals({ stage, U, light: LIGHT, grid: ctx.ink.size, n: touch ? 70 : 160, d0: .86, d1: .97, size: [4, 8.5], IW, IH, HORIZON, RAIL, near: true }),
+  new Petals({ stage, U, light: LIGHT, grid: ctx.ink.size, n: touch ? 75 : 170, d0: .25, d1: .75, size: [2.6, 5.5], IW, IH, HORIZON, RAIL, near: false }),
+  new Petals({ stage, U, light: LIGHT, grid: ctx.ink.size, n: touch ? 36 : 82, d0: .86, d1: .97, size: [4, 8.5], IW, IH, HORIZON, RAIL, near: true }),
 ];
 for (const p of petals) scene.add(p.points);
 let gust = 0, gustTo = 0, windy = false;
@@ -178,7 +162,7 @@ let gust = 0, gustTo = 0, windy = false;
 // is one frame pixel: placed at g painting px per sprite px (set in resize), and snapped to the grid every frame.
 const rider = passenger();
 const pair = [folk.person('you'), folk.person(rider || {})];
-const PAIR = { x: .585 * IW, y: RAIL * IH + 26, gap: 30 };   // gap: sprite px between the two
+const PAIR = { x: .585 * IW, y: .795 * IH, gap: 34 };   // seated on the near side of the painted railing
 for (const p of pair) { p.face('back'); p.play('sit'); p.obj.renderOrder = 3; p.mesh.renderOrder = 3; p.obj.traverse(o => { o.frustumCulled = false; }); scene.add(p.obj); }
 pair[1].update(.7);   // out of step with you: two heads don't sway as one
 let g = 3;            // painting px per frame pixel, at the rest framing
@@ -187,7 +171,7 @@ const _p = new THREE.Vector3();
 function snap(obj, lx, ly) {
   const base = obj.userData.base || (obj.userData.base = obj.position.clone());
   obj.position.copy(base);
-  const G = ctx.ink.size, sx = obj.scale.x, per = sx / (obj.userData.unit || 1);   // world units per frame pixel
+  const G = ctx.ink.size, sx = obj.scale.x, per = 2 * (camera.position.z - base.z) * Math.tan(camera.fov * Math.PI / 360) / G.y;
   _p.set(base.x + lx * sx, base.y + ly * obj.scale.y, base.z).project(camera);
   const gx = (_p.x * .5 + .5) * G.x, gy = (_p.y * .5 + .5) * G.y;
   obj.position.x += (Math.round(gx) - gx) * per; obj.position.y += (Math.round(gy) - gy) * per;
@@ -217,7 +201,7 @@ const starMat = new THREE.ShaderMaterial({
     uniform float uI, uT, uLen; uniform vec2 uHead, uDir; uniform vec3 cStar;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){
-      vec2 p = floor(gl_FragCoord.xy * .5) + .5, v = p - uHead;   // this frame pixel (the scene renders at 2x the grid)
+      vec2 p = floor(gl_FragCoord.xy) + .5, v = p - uHead;   // the scene and post pass share the detailed grid
       float along = -dot(v, uDir), perp = abs(v.x * uDir.y - v.y * uDir.x), m = abs(v.x) + abs(v.y), a = 0.;
       if (along > 0. && along < uLen && perp < .55) a = along < uLen * .3 ? .8 : along < uLen * .65 ? .45 : .2;
       if (m < .5) a = 1.4; else if (m < 1.5) a = max(a, .8); else if (m < 2.5) a = max(a, .3);
@@ -242,8 +226,9 @@ function resize(w, h) {
   stage.view(cx, cy, viewH, aspect);
   // the tree: its trunk at the right edge of the frame (just past it in portrait, so only the crown reaches in) and its foot
   // well below it (the camera rises later), the crown overhead
-  g = viewH / ctx.ink.size.y;
-  const gh = Math.round((viewH + 100) / g), gw = Math.round(gh * TREE.w / TREE.h), H = gh * g, W = gw * g;   // whole frame pixels
+  g = viewH / (ctx.ink.layoutSize || ctx.ink.size).y * 1.14;
+  const paintStep = viewH / ctx.ink.size.y;
+  const gh = Math.round((viewH + 100) / paintStep), gw = Math.round(gh * TREE.w / TREE.h), H = gh * paintStep, W = gw * paintStep;
   const ax = cx + viewW / 2 + (aspect < 1 ? 200 : -30), ay = cy + viewH / 2 + 160;
   if (tree.material.uniforms.uTex.value.x !== gw) tree.setTex(paintTree(gw, gh));
   stage.place(tree, ax, ay, [W, H], TREE_D); tree.userData.base = tree.position.clone(); tree.userData.unit = gw;   // its local unit is the whole tree
@@ -295,7 +280,7 @@ const QUOTE = [
 // the viewer: unbanked it crawls (SLOW s to cross), banked it streaks off (FAST). The quote counts from when it's gone.
 // bye: their sign-off, once the lights have died; the star after its box has gone (a breath of ticks between); card: the
 // end card, after the last line has sat a while
-const T = { firstTick: 1.7, bye: 1, hint: 1, star: 8, quote: [1.6, 5.6, 10.1, 14.6, 19.6], card: 24.6 };
+const T = { firstTick: 1.7, bye: 1, hint: 1.8, star: 14, quote: [1.6, 5.6, 10.1, 14.6, 19.6], card: 24.6 };
 const SLOW = 9, FAST = 1.4;
 const HOLD_TO_BANK = .6;   // seconds of holding while the star is up
 const KEY = 'hairpin.wish';
@@ -304,6 +289,7 @@ const bye = line('shillong');   // the passenger's sign-off, before the star: ne
 let byeSaid = false;
 function bankWish() {
   banked = true; chime();
+  wishEl.firstChild.nodeValue = 'Wish kept'; fillEl.textContent = 'Wish kept';
   gustTo = 1; petals[1].shower(.4);   // the tree lets go
   try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}   // read by the dashboard: a paper star on your next visit
 }
@@ -373,6 +359,7 @@ function frame(dt) {
     if (shown === QUOTE.length && qt() > T.card) showEnd();
   }
   ctx.prompt(phase === 'arrive' ? 'Turn the engine off' : null);
+  ctx.progress?.(phase === 'done' ? 1 : phase === 'arrive' ? .04 : starEnd === Infinity ? .08 + .27 * clamp(since / (T.star + SLOW), 0, 1) : .35 + .65 * clamp(qt() / T.card, 0, 1));
   // engine off: the headlights die back to a faint parking light
   U.uHeadI.value = phase === 'arrive' ? 1 : .12 + .88 * (1 - Math.min(1, since / 1.4));
   truckMat.uniforms.uLamp.value = U.uHeadI.value;
@@ -387,7 +374,7 @@ function frame(dt) {
     const look = phase === 'stop' && since > T.star + .2 + i * .3 && since < starEnd + .6 + i * .3;
     if (look !== (p.anim === 'lookup')) p.play(look ? 'lookup' : 'sit');
   });
-  for (const p of pair) { p.update(dt); p.setLight(1.1, -1, 'auto'); snap(p.obj, p.mesh.position.x - p.w / 2, 0); }
+  for (const p of pair) { p.update(dt); p.setLight(1.08, -1, 'warm'); snap(p.obj, p.mesh.position.x - p.w / 2, 0); }
   snap(tree, -TREE.anchorU, 0);
   // the star, in frame pixels
   star.visible = starUp;
@@ -407,9 +394,10 @@ function frame(dt) {
   if (windy !== gust > .45) { windy = !windy; ctx.bed({ engine: phase === 'arrive' ? 1 : 0, crickets: 1, wind: windy ? 1 : .4 }); }   // never restarts the engine after the stop
   tree.material.uniforms.uSway.value = 1 + gust * 3;
   const ptr = input.ptr && stage.screenToPaint(...input.ptr);
-  // petal sizes in frame pixels (the shader doubles them: the scene renders at ctx.ink.size.y * 2)
+  // Petals use the actual detailed grid; actor placement uses the independent layout grid.
   const screen = ctx.ink.size.y / (2 * Math.tan(stage.fov * Math.PI / 360));
   for (const p of petals) { p.mat.uniforms.uScreen.value = screen; p.update(dt, t, gust, ptr); }
+  ctx.worldState?.({ phase, since, hold: input.hold, starK, starUp, banked, wish: banked, look: rider, gust });
   ctx.ink.render(scene, camera, truck);
 }
 return { frame, resize, onTap: advance, dispose() { disposeScene(scene); } };

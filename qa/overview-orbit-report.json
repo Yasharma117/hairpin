@@ -1,0 +1,37 @@
+{
+  "result": "passed",
+  "checks": 257,
+  "layouts": [
+    {
+      "width": 1280,
+      "height": 720,
+      "frame": {
+        "left": 384,
+        "top": 164,
+        "width": 876,
+        "height": 460
+      }
+    },
+    {
+      "width": 626,
+      "height": 750,
+      "frame": {
+        "left": 16,
+        "top": 327,
+        "width": 590,
+        "height": 307
+      }
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "frame": {
+        "left": 16,
+        "top": 330,
+        "width": 354,
+        "height": 398
+      }
+    }
+  ],
+  "largestChapterEntryTurn": 0.008652811132953632
+}
