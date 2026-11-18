@@ -286,9 +286,9 @@ export function buildLandmark(kind, THREE, palette = {}) {
     label('A FEW THINGS I’VE MADE', 4.5, .55, .4, 2.25, 2.09, { size: 61 });
     box(4.4, .12, .95, P.wood, .4, .97, 1.1);
     for (const x of [-1.5, 2.3]) box(.12, .92, .75, P.wood, x, .48, 1.1);
-    const projects = ['TopNotch', '1mg', 'Warden', 'Dodo', 'Markon'];
+    const projects = ['TopNotch', '1mg', 'Warden', 'Dodo'];
     projects.forEach((name, i) => {
-      const x = -1.45 + i * .92;
+      const x = -.98 + i * .92;   // four boards, centred on the shelf (x .4)
       box(.73, .63, .13, i % 2 ? P.roof : P.leaf, x, 1.42, 1.2);
       label(name, .65, .30, x, 1.45, 1.12, { size: 120, background: i % 2 ? P.roof : P.leaf, color: P.cream });
       box(.62, .05, .3, P.cream, x, 1.04, .96);

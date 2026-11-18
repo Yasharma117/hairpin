@@ -4,15 +4,15 @@ import * as THREE from 'three';
 import { clamp, lerp, damp, sstep, loadImg, tex, strokeMap, line, passenger, disposeScene, Stage } from '../shared/kit.js';
 
 const at = f => new URL(f, import.meta.url).href;
-const OBJ_FILES = ['teleprompter', 'pill-strip', 'test-sheet', 'billing-receipt', 'markon-card', 'star'];
+const OBJ_FILES = ['teleprompter', 'pill-strip', 'test-sheet', 'billing-receipt', 'star'];
 export const assets = ['dashboard-lit.jpg', 'dashboard-dark.jpg', 'depth.png', ...OBJ_FILES.map(n => `objects/${n}.png`)];
 
 const IW = 1672, IH = 941;   // dashboard-lit/dark.jpg in px (mirrored to right-hand drive)
 const DASH = .64, SHELF = .74;   // the dash top, as fractions of the height: windscreen base to front edge
-// The five projects on the dash, and what each one's window says. Every piece of copy is [text, status]:
+// The four projects on the dash, and what each one's window says. Every piece of copy is [text, status]:
 //   'PORTFOLIO' = Yash's own words or facts, from ~/Portfolio-Site (the file is noted beside it);
 //   'DRAFT'     = Claude wrote it (or it's a guess from the story board); Yash to approve, line by line, before it changes.
-// Links only where the portfolio has them. Dodo billingSDK and Markon aren't in the portfolio at all: everything about them is a guess.
+// Links only where the portfolio has them. Dodo billingSDK isn't in the portfolio at all: everything about it is a guess.
 // x: across the painting; h: height in painting px; rot: a little askew, as if tossed there
 const PROJECTS = [
   { file: 'teleprompter', x: .14, h: 130, rot: .06,
@@ -45,14 +45,6 @@ const PROJECTS = [
     year: ['2026', 'DRAFT'],
     tagline: ['Billing screens, ready to drop in.', 'DRAFT'],
     about: ['My part of billingSDK, Dodo’s kit of ready-made billing components. The receipt on the dash is for every line of it.', 'DRAFT'],
-    links: [],
-  },
-  { file: 'markon-card', x: .68, h: 98, rot: .07,
-    name: ['Markon', 'DRAFT'],                                               // a guess (story board); not in the portfolio
-    role: ['Personal project', 'DRAFT'],
-    year: ['2026', 'DRAFT'],
-    tagline: ['The black card with the gold edge.', 'DRAFT'],
-    about: ['The one I’d rather show you than describe. Ask me about it on the way up.', 'DRAFT'],
     links: [],
   },
 ];
@@ -182,7 +174,7 @@ export async function load(ctx) {
     const cx = cx0 = clamp(.5 * IW, viewW / 2, IW - viewW / 2), cy = clamp(.55 * IH, viewH / 2, IH - viewH / 2);
     stage.view(cx, cy, viewH * .95, aspect);
   }
-  /* ---------- the project window: opens on a pick (once the dashboard answers), steps through the five ---------- */
+  /* ---------- the project window: opens on a pick (once the dashboard answers), steps through the four ---------- */
   let win = -1;
   function show(i) {
     const o = objects[i], p = o.proj, was = win; win = kbd = i;
