@@ -50,6 +50,7 @@ const PROJECTS = [
 ];
 // DRAFT lines. [seconds, who, line, expression]
 const DRIVE_AT = 40;   // the drive starts on its own after this, as in the story
+const IDLE = 15;   // ...but only once the viewer has been still this long
 
 export async function load(ctx) {
   const { layer, on, input, U: { uMode } } = ctx;
@@ -217,6 +218,7 @@ export async function load(ctx) {
   // a tap on the canvas picks the nearest object (and says what it is); only the advance button (or Enter) drives off
   let canvasDown = -1e9;
   on(ctx.canvas, 'pointerdown', () => { canvasDown = performance.now(); });
+  for (const t of ['pointermove', 'pointerdown', 'keydown', 'wheel']) on(window, t, () => { lastInput = since; }, { passive: true });
   const pickAt = (sx, sy) => {
     if (ctx.worldState) return;
     // on a phone the dash is wider than the screen: a tap near either side steps to the next object that way
@@ -236,7 +238,7 @@ export async function load(ctx) {
     [5, 'PASSENGER', 'So what do you do?'],
     [8.5, 'YOU', 'Easier to show you. It’s all on the dashboard.'],
   ];
-  let since = 0, lineI = 0, shownObj = -1, gone = false;
+  let since = 0, lineI = 0, shownObj = -1, gone = false, lastInput = 0;   // lastInput: when the viewer last moved or pressed (the drive waits for a reader)
   // the dashboard answers only once "Easier to show you…" has been said (as long as say() keeps it up)
   const lineSecs = (text, secs) => Math.max(secs, text.length / 32 + Math.max(1.6, .28 * text.split(/\s+/).length)) + .4;
   const READY = SCRIPT[2][0] + lineSecs(SCRIPT[2][2], 3.2);
@@ -290,7 +292,7 @@ export async function load(ctx) {
         for (const el of [document.getElementById('story'), document.getElementById('chip')]) if (el?.getClientRects().length) top = Math.min(top, el.getBoundingClientRect().top);
         panel.style.setProperty('--foot', `${innerHeight - top}px`);
       }
-      if (since > DRIVE_AT && win < 0) leave();   // not while you're reading a window
+      if (since > DRIVE_AT && win < 0 && since - lastInput > IDLE) leave();   // not while you're reading a window, or still moving about the list
       ctx.worldState?.({ phase: 'explore', progress: clamp(since / DRIVE_AT, 0, 1), since, project: win, look: passenger(), hold: input.hold });
       ctx.ink.render(scene, camera, null);   // no taxi in this shot: just the grain and vignette
     },

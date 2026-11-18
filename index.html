@@ -225,6 +225,12 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
 #play { background: var(--ui-ink); }
 #card .credit { color: var(--ui-ink-soft); font-size: 10px; letter-spacing: .04em; text-shadow: none; }
 #card .credit b { color: var(--ui-ink); }
+/* who made it, and how to reach him: the first thing a recruiter looks for */
+#card .byline { margin: 18px 0 0; max-width: 34ch; font: 400 15px/1.55 var(--serif); color: var(--ui-ink-soft); }
+#card .byline b { font-weight: 600; color: var(--ui-ink); }
+#card .byline a, .end .contact a { color: var(--ui-ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { #card .byline a:hover, .end .contact a:hover { color: var(--ui-rust); } }
+#card .byline a:focus-visible, .end .contact a:focus-visible { outline: 2px solid var(--ui-signal); outline-offset: 2px; }
 .keys { font-size: 10px; color: var(--ui-ink-soft); }
 .keys dd { text-shadow: none; }
 .keys dt { border-width: 1px; border-radius: 4px; padding: 5px 7px; }
@@ -266,7 +272,7 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
 }
 </style>
 <link rel="stylesheet" id="soft-ui" href="./shared/journey-ui.css?v=ui-20261104">
-<link rel="stylesheet" id="pixel-ui" href="./shared/pixel-ui.css?v=ui-20261104">
+<link rel="stylesheet" id="pixel-ui" href="./shared/pixel-ui.css?v=tier1-20261118">
 
 <canvas id="c" aria-label="An illustrated miniature road from Jorabat to Shillong, connecting seven chapters"></canvas>
 <button class="btn sm road-button" id="road" type="button" aria-expanded="false" hidden>The whole road</button>
@@ -303,10 +309,12 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
     <p class="hook">Real moments from the hills of Northeast India. A night drive, a stranger’s kindness, and a wish for another day.</p>
     <div class="act">
       <button id="play" class="btn" type="button">Begin the drive</button>
+      <button id="skip" class="btn sm" type="button">Skip to my work</button>
     </div>
+    <p class="byline">By <b>Yash Sharma</b>, product designer · <a href="https://8bityash.vercel.app/" target="_blank" rel="noopener">Portfolio</a> · <a href="https://drive.google.com/file/d/1jf0agVewM3BQ9FrY81D9E09hAfzbfVWe/view?usp=sharing" target="_blank" rel="noopener">Résumé</a> · <a href="https://www.linkedin.com/in/yashsharma71102" target="_blank" rel="noopener">LinkedIn</a> · <a href="mailto:yash.republic@gmail.com">Email</a></p>
   </main>
   <footer class="foot">
-    <span class="credit" style="line-height: 1.6">by <b>Yash Sharma</b><br>music <b>Blue Dot Sessions</b> · CC BY-NC 4.0</span>
+    <span class="credit" style="line-height: 1.6">music <b>Blue Dot Sessions</b> · CC BY-NC 4.0</span>
     <dl class="keys" aria-label="Controls">
       <div><dt id="hold-key">HOLD</dt><dd id="hold-say">Space · go faster, brake</dd></div>
       <div><dt>TAP</dt><dd>Enter · next</dd></div>
@@ -334,13 +342,13 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
     "./shared/score.js": "./shared/score.js?v=river-20261101-d",
     "./shared/grade.js": "./shared/grade.js?v=river-20261101-d",
     "./shared/folk.js": "./shared/folk.js?v=river-20261101-d",
-    "./13-the-stand/scene.js": "./13-the-stand/scene.js?v=river-20261101-d",
-    "./10-jorabat-intro/scene.js": "./10-jorabat-intro/scene.js?v=projects-20261118",
+    "./13-the-stand/scene.js": "./13-the-stand/scene.js?v=tier1-20261118",
+    "./10-jorabat-intro/scene.js": "./10-jorabat-intro/scene.js?v=tier1-20261118",
     "./01-cloud-line-scene/scene.js": "./01-cloud-line-scene/scene.js?v=river-20261101-d",
     "./11-nongpoh/scene.js": "./11-nongpoh/scene.js?v=river-20261101-d",
     "./12-cloud-line/scene.js": "./12-cloud-line/scene.js?v=river-20261101-d",
     "./08-edge-scene/scene.js": "./08-edge-scene/scene.js?v=river-20261101-d",
-    "./09-shillong/scene.js": "./09-shillong/scene.js?v=river-20261101-d",
+    "./09-shillong/scene.js": "./09-shillong/scene.js?v=tier1-20261118",
     "./09-shillong/blossom.js": "./09-shillong/blossom.js?v=river-20261101-d"
   }
 }
@@ -840,7 +848,8 @@ else {
   showTitle();
   const wake = () => { unlock(); if (!sceneName && !busy) setScore('hopeful'); };   // the first tap or key on the title: Roundpine under the splash, carried on into the stand
   for (const t of ['pointerdown', 'keydown']) addEventListener(t, wake, { once: true });
-  $('#play').addEventListener('click', () => { unlock(); $('#play').textContent = 'Loading…'; $('#play').disabled = true; go('stand'); });
+  $('#play').addEventListener('click', () => { unlock(); $('#play').textContent = 'Loading…'; $('#play').disabled = $('#skip').disabled = true; go('stand'); });
+  $('#skip').addEventListener('click', () => { unlock(); $('#skip').textContent = 'Loading…'; $('#play').disabled = $('#skip').disabled = true; go('jorabat'); });   // straight to the dashboard of projects
   for (const t of ['pointerenter', 'focus']) $('#play').addEventListener(t, () => current?.greet?.());   // you wave back
   $('#play').focus();
 }

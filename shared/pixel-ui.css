@@ -117,3 +117,7 @@
 [data-ui="pixel"] .ui-switch button { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-ink); }
 [data-ui="pixel"] .ui-switch button + button { border-left: var(--edge); }
 [data-ui="pixel"] .ui-switch button[aria-pressed="true"] { background: var(--ui-ink); color: var(--ui-cream); }
+
+/* the title's byline and the end card's contact line: VT323 labels, ink links */
+[data-ui="pixel"] #card .byline { font: 400 var(--t1)/1.6 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-ink-soft); max-width: none; }
+[data-ui="pixel"] #card .byline b { font-weight: 400; }

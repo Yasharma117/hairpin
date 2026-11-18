@@ -278,9 +278,9 @@ export async function load(ctx) {
 
   return {
     resize,
-    onTap() { if (document.activeElement === nameIn) nameIn.blur(); else if (name.trim()) go(); },   // a tap on the scene first puts the keyboard away
+    onTap() { if (document.activeElement === nameIn && name.trim()) nameIn.blur(); else go(); },   // a tap puts the keyboard away; with no name yet, go() puts the cursor in the name box
     frame(dt, now) {
-      ctx.prompt(!chosen && name.trim() ? `Get in, ${name.trim()}` : null);
+      ctx.prompt(chosen ? null : name.trim() ? `Get in, ${name.trim()}` : 'Name your passenger to get in');   // always a way forward, even before a name
       ctx.progress?.(chosen ? .45 + Math.min(1, leg / 6) * .55 : name.trim() ? .35 : .08);
       ctx.rpm(0);
       // the walk: by exactly the px the feet take (frame px -> painting px), up past the nose, then left to the door

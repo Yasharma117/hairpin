@@ -41,6 +41,7 @@ layer.innerHTML = `<style>
 .end h2 { margin: 0; font: 400 calc(64px * var(--u))/.9 var(--display); letter-spacing: -.02em; color: var(--ui-ink); }
 .end .by { margin: 0; font: italic 400 calc(21px * var(--u))/1.3 var(--serif); color: var(--ui-ink); }
 .end .for { font-size: var(--t1); }
+.end .contact { margin: 0 0 calc(4px * var(--u)); font: 400 calc(17px * var(--u))/1.5 var(--serif); color: var(--ui-ink-soft); }
 .end .row { display: flex; gap: calc(12px * var(--u)); margin-top: calc(14px * var(--u)); padding-top: calc(18px * var(--u)); border-top: 2px dashed var(--ui-wood); }
 .end .again::after { content:none; }
 .world-ending .quote { top: 16%; gap: 10px; }
@@ -56,6 +57,7 @@ layer.innerHTML = `<style>
 <section class="panel end" id="end" aria-labelledby="end-t" hidden>
   <h2 id="end-t">Hairpin</h2>
   <p class="by">by Yash Sharma</p>
+  <p class="contact">Product designer · <a href="https://8bityash.vercel.app/" target="_blank" rel="noopener">Portfolio</a> · <a href="https://drive.google.com/file/d/1jf0agVewM3BQ9FrY81D9E09hAfzbfVWe/view?usp=sharing" target="_blank" rel="noopener">Résumé</a> · <a href="https://www.linkedin.com/in/yashsharma71102" target="_blank" rel="noopener">LinkedIn</a> · <a href="mailto:yash.republic@gmail.com">Email</a></p>
   <span class="label for">Made for Pocket FM Design</span>
   <span class="label for">Music: Blue Dot Sessions · CC BY-NC 4.0</span>
   <div class="row"><button class="btn again" id="again" type="button">Again</button><button class="btn" id="title" type="button">Title</button></div>
