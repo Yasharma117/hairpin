@@ -50,8 +50,13 @@ export function createWorld({ renderer, ink, onSelect = () => {}, still = false 
   renderer.shadowMap.autoUpdate = false;
   // Ink schedules the single beauty-pass shadow update; auxiliary passes reuse it.
   const fill = new THREE.DirectionalLight(P.water, .52); fill.position.set(25, 15, 20); scene.add(fill);
-  const practical = new THREE.PointLight(P.amber, 0, 13, 2); scene.add(practical);
-  const daylight=new THREE.Color(P.cream),dusk=new THREE.Color(P.water),twilight=new THREE.Color(P.night);
+  const practical = new THREE.PointLight(P.amber, 0, 0, 2); scene.add(practical);   // no cutoff distance: a cutoff edge reads as a ring
+  const daylight=new THREE.Color(P.cream),duskLight=new THREE.Color(P.dusk),moon=new THREE.Color(P.moon),skyFill=new THREE.Color(P.nightSky),bounce=new THREE.Color(P.nightGround);
+  const paper=new THREE.Color(P.cream),nightPaper=new THREE.Color(P.nightPaper);
+  // How far into the night each chapter's stretch of road is: dusk at the stand, deep night at the hairpin. The overview
+  // stays the daylight map; the light falls as the drive goes on, and the room's lights go down around the miniature.
+  const NIGHT={stand:.38,jorabat:.45,climb:.86,nongpoh:.9,cloud:.92,edge:.94,shillong:.95};
+  let glowing=null,lightStep=-1;
 
 
   // The cut edge reads as one little piece of the hills, rather than seven separate cards.
@@ -370,12 +375,20 @@ export function createWorld({ renderer, ink, onSelect = () => {}, still = false 
     keyLight(taxi.jeepMat,camera,taxi.jeep.position,sun.position,1.1);keyLight(truck.mat,camera,truck.truck.position,sun.position,1.1);
     // The paper remains warm; the focused stretch of road changes from dusk into a clear, blue evening.
     const focusedSpan=focusedPose(active).span,nearFocus=clamp(1-(pose.span-focusedSpan)/(focusedSpan*.6),0,1);
-    const moodTarget=mode==='overview'?0:({cloud:.7,edge:memory?0:.9,shillong:.85}[active]||0)*nearFocus;
+    const moodTarget=mode==='overview'?0:(active==='edge'&&memory?0:NIGHT[focusTarget||active]||0)*(journey?1:nearFocus);
     mood=still?moodTarget:mood+(moodTarget-mood)*(1-Math.exp(-dt*1.7));
-    hemi.color.copy(daylight).lerp(dusk,mood*.55);hemi.groundColor.set(P.leaf).lerp(twilight,mood*.58);hemi.intensity=.9-mood*.12;
-    sun.color.copy(daylight).lerp(dusk,mood*.62);sun.intensity=2.65-mood*1.45;
-    fill.intensity=.52+mood*.12;taxi.jeepMat.uniforms.uExposure.value=1.28-mood*.08;
-    const fixture=stops.get(active)?.group.userData.practical||{x:active==='stand'?2.1:-1.2,y:2.8,z:-.6};practical.position.set(stop.x+fixture.x,fixture.y,stop.z+fixture.z+(stops.get(active)?.group.userData.sceneOffsetZ||0));practical.intensity=mood*11;
+    // Moonlight keeps the construction and its shadows; the sky and the ground's bounce turn blue; practicals take over.
+    // Up to .45 it is the golden hour (a low warm sun); past it the moon takes over and the sky and its bounce turn blue.
+    const golden=clamp(mood/.45,0,1),blue=clamp((mood-.45)/.55,0,1);
+    sun.color.copy(daylight).lerp(duskLight,golden*.8).lerp(moon,blue);sun.intensity=2.65-golden*.5-blue*1.2;
+    hemi.color.copy(daylight).lerp(skyFill,blue);hemi.groundColor.set(P.leaf).lerp(bounce,blue);hemi.intensity=.9-golden*.12+blue*.08;
+    fill.intensity=.52-blue*.36;taxi.jeepMat.uniforms.uExposure.value=1.28-blue*.34;
+    // The room's lights go down only once it is night: cream lingers through dusk, so the page never passes through grey.
+    paper.set(P.cream).lerp(nightPaper,THREE.MathUtils.smoothstep(mood,.62,.84));if(ink.uniforms?.uPaper)ink.uniforms.uPaper.value.copy(paper);
+    if(!glowing){glowing=[];scene.traverse(o=>{for(const m of [].concat(o.material||[]))if(m.emissiveIntensity>0&&!glowing.some(g=>g.m===m))glowing.push({m,base:m.emissiveIntensity});});}
+    for(const g of glowing)g.m.emissiveIntensity=g.base*(1+mood*4.5);   // windows, lamps and bulbs come on
+    const st=mood>.7?.6:mood>.3?.9:1.1;if(st!==lightStep){lightStep=st;for(const a of actors)if(a!==ghost)a.setLight(st,-1,'warm');}
+    const fixture=stops.get(active)?.group.userData.practical;const fixturePos=fixture||{x:0,y:-20,z:0};practical.position.set(stop.x+fixturePos.x,fixturePos.y,stop.z+fixturePos.z+(stops.get(active)?.group.userData.sceneOffsetZ||0));practical.intensity=fixture?blue*16:0;   // only where a lamp actually hangs
     for(const [lights,vehicle,scale] of [[taxiLights,taxi.jeep,1],[truckLights,truck.truck,1.15]]){lights.root.visible=vehicle.visible&&mood>.18&&!(vehicle===taxi.jeep&&atEdge&&s.phase!=='drive');lights.root.position.set(vehicle.position.x,0,vehicle.position.z);lights.root.rotation.y=vehicle.rotation.y;lights.root.scale.setScalar(scale);const lampPower=atEnd&&s.phase!=='arrive'?.16:1;lights.pool.material.opacity=mood*.36*lampPower;for(const beam of lights.beams)beam.material.opacity=mood*.038*lampPower;}
 
     taxiShadow.visible=taxi.jeep.visible&&!(atEdge&&s.fallT>0);taxiShadow.position.set(taxi.jeep.position.x,.095,taxi.jeep.position.z);taxiShadow.rotation.z=taxi.jeep.rotation.y;taxiShadow.scale.x=atEdge?.56:1;if(atEdge)taxiShadow.position.z=stop.z-2.45;
@@ -391,12 +404,12 @@ export function createWorld({ renderer, ink, onSelect = () => {}, still = false 
   function render(){
     if(disposed)return;
     const state=states.get(active)||{},cinematic=active==='shillong'&&state.phase!=='arrive'&&Number(state.since)>=6&&mode==='focus';
-    if(ink.uniforms?.uPaletteMix)ink.uniforms.uPaletteMix.value=cinematic?.18:.72;
+    if(ink.uniforms?.uPaletteMix)ink.uniforms.uPaletteMix.value=cinematic?.18:.72-mood*.58;   // the 64-colour set has no night: guide less
     if(cinematic){
       if(!skylineStarted){ink.holdFrame?.();skylineStarted=true;}
       ink.revealFrame?.(clamp((Number(state.since)-6)/2.5,0,1));
       ink.render(skyline.scene,skyline.camera,null,skyline.night);
-    }else{skylineStarted=false;ink.revealFrame?.(1);ink.render(scene,camera,[taxi.jeep,truck.truck],P.cream);}
+    }else{skylineStarted=false;ink.revealFrame?.(1);ink.render(scene,camera,[taxi.jeep,truck.truck],paper);}
   }
   function resize(w,h){width=w;height=h;for(const m of markers)m.labelWidth=0;skyline.resize(w,h);if(transition){transition.steps.forEach((step,i)=>{if(journey&&i<transition.steps.length-1){step.pose={...DEFAULT_VIEW,x:i?journey.to.x:journey.from.x,y:1.1,z:i?journey.to.z:journey.from.z,span:journey.span};}else step.pose=i===transition.steps.length-1&&transition.finalMode==='focus'?focusedPose(focusTarget||active):overviewPose();});}else Object.assign(pose,mode==='overview'?overviewPose():focusedPose(active));applyPose();positionMarkers();}
   function dispose(){disposed=true;skyline.dispose();resolveTransition();labels.remove();for(const a of actors)a.dispose();const geometries=new Set(),materials=new Set(),textures=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of [].concat(o.material||[])){materials.add(m);for(const v of Object.values(m))if(v?.isTexture)textures.add(v);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();for(const t of textures)t.dispose();shadowTex.dispose();contactTex.dispose();poolTex.dispose();}

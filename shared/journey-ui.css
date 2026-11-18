@@ -168,3 +168,8 @@ body.is-travelling #chapter-rail { opacity:.55; pointer-events:none; }
 .orbit-tools button:hover{color:#1c3424;border-color:currentColor;}.orbit-tools button:focus-visible{outline:2px solid #64765c;outline-offset:4px;}
 
 .world-labels{transition:opacity .18s ease;}.orbit-dragging .world-labels{opacity:0;pointer-events:none;}
+
+/* The interface-style switch: a small chrome-edged segmented pill. */
+.ui-switch{margin-top:7px;padding:3px;gap:2px;border:1px solid var(--control-line);border-radius:999px;background:linear-gradient(180deg,#fffefa,#e8e9e3);box-shadow:inset 0 1px 1px #fff,0 2px 3px #1d21171a;}
+.ui-switch button{border-radius:999px;font:500 12px/1 var(--serif);color:#5d6357;}
+.ui-switch button[aria-pressed="true"]{background:var(--control-ink);color:#fffdf4;}

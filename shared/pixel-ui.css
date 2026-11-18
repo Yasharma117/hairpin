@@ -1,0 +1,119 @@
+/* Pixel: the interface in pocket.design's idiom (PIXEL.md 3). Cream paper, a warm-ink line on the world's pixel grid,
+   a hard offset shadow, square corners, VT323 for every label and button, the serifs for words. Enabled in place of
+   journey-ui.css by the switch top-right (index.html setUI). Scoped to [data-ui="pixel"] so it outranks the softer base
+   block and the scenes' own <style>s. Colours are tokens only (shared/style.js). */
+[data-ui="pixel"] {
+  --pixel: "VT323", ui-monospace, Menlo, monospace;
+  --line: max(2px, var(--px, 3px)); --edge: var(--line) solid var(--ui-ink);
+  --drop: calc(var(--line) * 2) calc(var(--line) * 2) 0 var(--ui-ink);
+  --t1: calc(16px * var(--u)); --t2: calc(20px * var(--u)); --t3: calc(25px * var(--u)); --t-cue: calc(28px * var(--u));
+}
+/* No rounded corners anywhere (the mute and the rail included): pixel art has none. */
+[data-ui="pixel"] body *:not(canvas):not(svg):not(path) { border-radius: 0 !important; }
+
+/* ----- the shared pieces ----- */
+[data-ui="pixel"] .panel { background: var(--ui-cream); color: var(--ui-ink); border: var(--edge); box-shadow: var(--drop); }
+[data-ui="pixel"] .label { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-rust); }
+[data-ui="pixel"] .btn { min-height: 44px; padding: 0 14px; border: var(--edge); background: var(--ui-cream); color: var(--ui-ink); box-shadow: var(--drop);
+  font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; transition: none; }
+[data-ui="pixel"] .btn.sm { min-height: 40px; font-size: var(--t2); }
+[data-ui="pixel"] .btn:active:not(:disabled) { transform: translate(var(--line), var(--line)); box-shadow: var(--line) var(--line) 0 var(--ui-ink); }
+@media (hover: hover) and (pointer: fine) { [data-ui="pixel"] .btn:hover:not(:disabled):not(.on):not([aria-pressed="true"]) { background: var(--ui-cream-deep); } }
+[data-ui="pixel"] .btn.on, [data-ui="pixel"] .pick.on, [data-ui="pixel"] .pick[aria-pressed="true"] { color: var(--ui-rust); box-shadow: 0 0 0 2px var(--ui-signal), var(--drop); }
+[data-ui="pixel"] .btn.on::after, [data-ui="pixel"] .pick.on::after, [data-ui="pixel"] .pick[aria-pressed="true"]::after { content: "▼"; width: auto; height: auto; top: 2px; right: 3px; background: none; font: 400 var(--t1)/1 var(--pixel); color: var(--ui-signal); }
+[data-ui="pixel"] .ui-icon { display: block; width: 18px; height: 18px; flex: 0 0 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: square; stroke-linejoin: miter; shape-rendering: crispEdges; pointer-events: none; overflow: visible; }
+[data-ui="pixel"] :focus-visible { outline: var(--line) solid var(--ui-signal); outline-offset: var(--line); }
+
+/* the one advance button and the cues: red, like their Apply now */
+[data-ui="pixel"] .btn.chip, [data-ui="pixel"] #layer .links .btn, [data-ui="pixel"] #layer #wave { background: var(--ui-signal); color: var(--ui-cream); font-size: var(--t3); padding: 0 18px; }
+[data-ui="pixel"] .btn.chip::after { content: " ▶"; display: inline; margin-left: .3em; }
+@media (hover: hover) and (pointer: fine) { [data-ui="pixel"] .btn.chip:hover:not(:disabled), [data-ui="pixel"] #layer #wave:hover:not(:disabled) { background: var(--ui-rust); } }
+[data-ui="pixel"] .chip.btn:active:not(:disabled) { transform: translate(calc(-50% + var(--line)), var(--line)); }
+[data-ui="pixel"] #layer .cue { background: var(--ui-signal); color: var(--ui-cream); border: var(--edge); box-shadow: var(--drop); font: 400 var(--t3)/1 var(--pixel); letter-spacing: .12em; text-transform: uppercase; padding: 9px 16px 6px; }
+[data-ui="pixel"] .hint { background: color-mix(in srgb, var(--ui-ink) 80%, transparent); color: var(--ui-cream); border: 1px dashed var(--ui-cream-deep); box-shadow: none; font: 400 var(--t2)/1 var(--pixel); letter-spacing: .1em; padding: 8px 14px 5px; }
+
+/* ----- the title card: an ink wordmark with a stepped wood-and-rust shadow, over the paper map ----- */
+[data-ui="pixel"] #card .kicker { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .14em; color: var(--ui-rust); }
+[data-ui="pixel"] #card .hero { width: 340px; }
+[data-ui="pixel"] #card h1 { color: var(--ui-ink); letter-spacing: -.02em; text-shadow: var(--line) var(--line) 0 var(--ui-wood), calc(var(--line) * 2) calc(var(--line) * 2) 0 var(--ui-rust); }
+[data-ui="pixel"] #card .invitation { font: 400 var(--t3)/1.2 var(--serif); color: var(--ui-ink); margin: calc(22px * var(--u)) 0 0; max-width: 24ch; }
+[data-ui="pixel"] #card .hook { font: 400 calc(18px * var(--u))/1.45 var(--serif); color: var(--ui-ink-soft); }
+[data-ui="pixel"] #play { min-height: 52px; padding: 0 20px; background: var(--ui-signal); color: var(--ui-cream); font: 400 var(--t3)/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; }
+[data-ui="pixel"] #play::after { content: " ▶"; display: inline; margin-left: .35em; }
+@media (hover: hover) and (pointer: fine) { [data-ui="pixel"] #play:hover:not(:disabled) { background: var(--ui-rust); } }
+[data-ui="pixel"] #card .credit { font: 400 var(--t1)/1.4 var(--pixel); letter-spacing: .12em; text-transform: uppercase; color: var(--ui-wood); }
+[data-ui="pixel"] #card .credit b { font-weight: 400; color: var(--ui-ink); }
+[data-ui="pixel"] .keys { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-ink-soft); }
+[data-ui="pixel"] .keys dt { border: var(--line) solid var(--ui-ink); border-bottom-width: calc(var(--line) * 2); box-shadow: none; background: var(--ui-cream); color: var(--ui-ink); padding: 3px 7px 1px; }
+
+/* ----- the map's stop markers and the travel note ----- */
+[data-ui="pixel"] .world-marker { border: var(--edge); background: var(--ui-cream); color: var(--ui-ink); box-shadow: calc(var(--line) * 1.5) calc(var(--line) * 1.5) 0 var(--ui-ink); padding: 6px 10px 4px; font: 400 var(--t1)/1 var(--pixel); letter-spacing: .06em; text-transform: uppercase; }
+[data-ui="pixel"] .world-marker .world-marker-number { color: var(--ui-signal); font: inherit; }
+[data-ui="pixel"] .world-marker:hover { background: var(--ui-cream-deep); }
+[data-ui="pixel"] .world-marker.is-current { background: var(--ui-ink); color: var(--ui-cream); }
+[data-ui="pixel"] #travel { border: var(--edge); background: var(--ui-cream); color: var(--ui-ink); box-shadow: var(--drop); font: 400 var(--t2)/1.2 var(--pixel); letter-spacing: .08em; text-transform: uppercase; padding: 9px 16px 6px; }
+[data-ui="pixel"] .orbit-tools { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-ink-soft); }
+[data-ui="pixel"] .orbit-tools button { font: inherit; color: var(--ui-rust); border-bottom: var(--line) solid currentColor; }
+
+/* ----- top controls: the whole road, the chapter rail, mute ----- */
+[data-ui="pixel"] .road-button { min-height: 40px !important; padding: 0 14px !important; font: 400 var(--t2)/1 var(--pixel) !important; }
+[data-ui="pixel"] .mute { width: 44px; min-height: 44px; padding: 0 !important; }
+[data-ui="pixel"] body.is-playing #chapter-rail { display: flex; }
+[data-ui="pixel"] body.is-travelling #chapter-rail { opacity: .55; pointer-events: none; }
+[data-ui="pixel"] #chapter-rail { position: fixed; z-index: 42; left: var(--gutter); top: 84px; width: 56px; box-sizing: border-box; flex-direction: column; overflow: visible; background: var(--ui-cream); border: var(--edge); box-shadow: var(--drop); padding: 4px; gap: 2px; transition: none; }
+[data-ui="pixel"] #chapter-rail::before { content: none; }
+[data-ui="pixel"] #chapter-rail button { border: 0; background: none; box-shadow: none; min-width: 44px; min-height: 36px; padding: 0; display: flex; align-items: center; white-space: nowrap; cursor: pointer; color: var(--ui-ink); font: 400 var(--t2)/1 var(--pixel); }
+[data-ui="pixel"] #chapter-rail .rail-number { display: grid; place-items: center; flex: none; width: 42px; height: 34px; margin: 0; color: inherit; font: 400 var(--t2)/1 var(--pixel); }
+[data-ui="pixel"] #chapter-rail .rail-toggle .ui-icon { margin: 0 12px; }
+[data-ui="pixel"] #chapter-rail .rail-label { opacity: 0; max-width: 0; overflow: hidden; padding: 0; color: inherit; font: 400 var(--t1)/1 var(--pixel); letter-spacing: .08em; text-transform: uppercase; transition: none; }
+[data-ui="pixel"] #chapter-rail button:hover { background: var(--ui-cream-deep); }
+[data-ui="pixel"] #chapter-rail button[aria-current="step"] { background: var(--ui-ink); color: var(--ui-cream); box-shadow: none; }
+[data-ui="pixel"] #chapter-rail:hover, [data-ui="pixel"] #chapter-rail:focus-within, [data-ui="pixel"] #chapter-rail.is-open { width: 210px; }
+[data-ui="pixel"] #chapter-rail:hover .rail-label, [data-ui="pixel"] #chapter-rail:focus-within .rail-label, [data-ui="pixel"] #chapter-rail.is-open .rail-label { opacity: 1; max-width: 150px; padding-right: 12px; }
+@media (max-width: 700px) {
+  [data-ui="pixel"] .world-overview #chapter-rail { display: none; }
+  [data-ui="pixel"] #chapter-rail { left: 12px; top: 70px; width: 50px; }
+  [data-ui="pixel"] #chapter-rail [data-stop] { display: none; }
+  [data-ui="pixel"] #chapter-rail.is-open { width: 198px; } [data-ui="pixel"] #chapter-rail.is-open [data-stop] { display: flex; }
+  [data-ui="pixel"] #chapter-rail:hover:not(.is-open), [data-ui="pixel"] #chapter-rail:focus-within:not(.is-open) { width: 50px; }
+  [data-ui="pixel"] #chapter-rail:hover:not(.is-open) .rail-label, [data-ui="pixel"] #chapter-rail:focus-within:not(.is-open) .rail-label { opacity: 0; max-width: 0; padding: 0; }
+  [data-ui="pixel"] body:not(.is-playing) .ui-switch { bottom: calc(var(--bottom) + 58px); }
+  [data-ui="pixel"] .ui-switch { right: calc(env(safe-area-inset-right, 0px) + var(--gutter) + 54px); }
+}
+
+/* ----- the story window: an ink title bar with seven pixel segments, the line in the serif ----- */
+[data-ui="pixel"] .story { overflow: visible; }
+[data-ui="pixel"] .story .head { background: var(--ui-ink); color: var(--ui-cream); border: 0; font: 400 var(--t2)/1 var(--pixel); letter-spacing: .08em; padding: 8px 12px 10px; }
+[data-ui="pixel"] .story .no { font: 400 var(--t1)/1 var(--pixel); color: var(--ui-wood); }
+[data-ui="pixel"] .story .segs { gap: var(--line); }
+[data-ui="pixel"] .story .segs li { height: calc(var(--line) * 2); background: var(--ui-ink-lift); }
+[data-ui="pixel"] .story .segs li.done { background: var(--ui-cream); }
+[data-ui="pixel"] .story .segs li b { background: var(--ui-signal); }
+[data-ui="pixel"] .story .body { border-top: var(--edge); padding: 12px 16px 14px; }
+[data-ui="pixel"] .story .box .who { display: inline-block; border: var(--edge); background: var(--ui-cream-deep); padding: 3px 7px 1px; font: 400 var(--t1)/1 var(--pixel); letter-spacing: .1em; color: var(--ui-rust); margin-bottom: 7px; }
+[data-ui="pixel"] .story .box .line { font: 500 calc(21px * var(--u))/1.34 var(--serif); color: var(--ui-ink); }
+[data-ui="pixel"] .story .log li { font: 400 var(--t1)/1.35 var(--serif); color: var(--ui-ink-soft); }
+[data-ui="pixel"] .story .log b { font: 400 var(--t1)/1 var(--pixel); }
+[data-ui="pixel"] .story .log:not(:empty) + .sub:not(.off) { border-top: 2px dashed var(--ui-wood); }
+
+/* ----- the stand's customiser, the projects, the truck, the ending ----- */
+[data-ui="pixel"] .appearance summary { font: 400 var(--t2)/1.2 var(--pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-rust); }
+[data-ui="pixel"] .person-label { border: var(--edge); font: 400 var(--t1)/1 var(--pixel); }
+[data-ui="pixel"] #layer .projects-list p { font: 400 calc(24px * var(--u))/1.1 var(--display); }
+[data-ui="pixel"] #layer .projects-list .project-options button { min-height: 38px; border: var(--edge); background: var(--ui-cream); box-shadow: calc(var(--line) * 1.5) calc(var(--line) * 1.5) 0 var(--ui-ink); font: 400 var(--t2)/1 var(--pixel); letter-spacing: .04em; text-transform: none; }
+[data-ui="pixel"] #layer .projects-list .project-options button span { color: var(--ui-signal); font: inherit; }
+[data-ui="pixel"] #layer .projects-list .project-options button:hover { background: var(--ui-cream-deep); }
+[data-ui="pixel"] #layer .proj .pic { background: var(--ui-cream-deep); border: var(--edge); }
+[data-ui="pixel"] #layer .proj .role { font: 400 var(--t1)/1.3 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-rust); }
+[data-ui="pixel"] .truck-signal { background: var(--ui-cream); border: var(--edge); box-shadow: var(--drop); }
+[data-ui="pixel"] .truck-signal h3 { font: 400 calc(24px * var(--u))/1.1 var(--display); color: var(--ui-ink); }
+[data-ui="pixel"] .truck-signal p { font: 400 var(--t1)/1.4 var(--serif); color: var(--ui-ink-soft); opacity: 1; }
+[data-ui="pixel"] .truck-signal .signal-track { height: calc(var(--line) * 2); background: var(--ui-cream-deep); }
+[data-ui="pixel"] .truck-signal .signal-fill { background: var(--ui-signal); }
+[data-ui="pixel"] .end .row { border-top: 2px dashed var(--ui-wood); }
+
+/* the interface-style switch: two keycaps on one ink line */
+[data-ui="pixel"] .ui-switch { margin-top: 4px; border: var(--edge); background: var(--ui-cream); box-shadow: calc(var(--line) * 1.5) calc(var(--line) * 1.5) 0 var(--ui-ink); }
+[data-ui="pixel"] .ui-switch button { font: 400 var(--t1)/1 var(--pixel); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-ink); }
+[data-ui="pixel"] .ui-switch button + button { border-left: var(--edge); }
+[data-ui="pixel"] .ui-switch button[aria-pressed="true"] { background: var(--ui-ink); color: var(--ui-cream); }

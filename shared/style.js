@@ -124,6 +124,8 @@ export const WORLD = {
   night: '#273e46', grass: '#9ca97a', grassLight: '#abb887', leaf: '#4d6a50', leafLight: '#6c8659',
   roof: '#bd6e4a', red: '#bc4b35', pink: '#e5a1ad', road: '#7a7e6f', rock: '#859386', water: '#9cbab7',
   earth: '#c0a480', blue: '#617e8c', plaster: '#f1dfb6', yellow: '#e7b859',
+  // the drive's night (world.js NIGHT): a cool moon key, a navy sky fill, the ground's bounce, and the room's lights down
+  moon: '#7f9ee0', nightSky: '#2f4778', nightGround: '#161d2a', nightPaper: '#121924', dusk: '#f2b46e',
 };
 
 // ---- PIXEL_PALETTES: written by tools/fit_palette.py, do not edit by hand ----

@@ -200,6 +200,10 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night)
   .btn { transition: none; }
 }
 
+/* the interface-style switch, left of mute (each style sheet dresses it) */
+.ui-switch { position: fixed; top: var(--top); right: calc(env(safe-area-inset-right, 0px) + var(--gutter) + 58px); z-index: 45; display: flex; }
+@media (max-width: 700px) { body:not(.is-playing) .ui-switch { top: auto; bottom: var(--bottom); right: var(--gutter); } }
+.ui-switch button { cursor: pointer; min-height: 32px; padding: 0 10px; border: 0; background: none; color: inherit; }
 .still *, .still *::before, .still *::after { animation: none !important; transition: none !important; }
 .world-stoplist { display: none; }
 /* A quieter paper interface leaves the connected miniature world in view. */
@@ -261,7 +265,8 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
   #travel { max-width: calc(100% - 64px); white-space: normal; text-align: center; }
 }
 </style>
-<link rel="stylesheet" href="./shared/journey-ui.css?v=river-20261101-d">
+<link rel="stylesheet" id="soft-ui" href="./shared/journey-ui.css?v=ui-20261104">
+<link rel="stylesheet" id="pixel-ui" href="./shared/pixel-ui.css?v=ui-20261104">
 
 <canvas id="c" aria-label="An illustrated miniature road from Jorabat to Shillong, connecting seven chapters"></canvas>
 <button class="btn sm road-button" id="road" type="button" aria-expanded="false" hidden>The whole road</button>
@@ -287,6 +292,7 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
 <div class="visually-hidden" id="said" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"></div>
 <button class="btn chip" id="chip" type="button" hidden></button>
 <button class="btn sm horn" id="horn" type="button" hidden>Horn</button>
+<div class="ui-switch" id="ui-switch" role="group" aria-label="Interface style"><button type="button" data-ui="soft">Soft</button><button type="button" data-ui="pixel">Pixel</button></div>
 <button class="btn mute" id="mute" type="button" aria-pressed="false" aria-label="Mute"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="x" d="m16 9 6 6m0-6-6 6"/></svg></button>
 <div class="tear up" id="tear" aria-hidden="true"><span></span></div>
 <div id="card">
@@ -322,9 +328,9 @@ html, body { background: var(--ui-cream); color: var(--ui-ink); }
     "./shared/overview-camera.js": "./shared/overview-camera.js?v=river-20261101-d",
     "./shared/river.js": "./shared/river.js?v=river-20261101-d",
     "./shared/landscape-life.js": "./shared/landscape-life.js?v=river-20261101-d",
-    "./shared/world.js": "./shared/world.js?v=river-20261101-d",
+    "./shared/world.js": "./shared/world.js?v=night-20261104",
     "./shared/kit.js": "./shared/kit.js?v=river-20261101-d",
-    "./shared/style.js": "./shared/style.js?v=river-20261101-d",
+    "./shared/style.js": "./shared/style.js?v=night-20261104",
     "./shared/score.js": "./shared/score.js?v=river-20261101-d",
     "./shared/grade.js": "./shared/grade.js?v=river-20261101-d",
     "./shared/folk.js": "./shared/folk.js?v=river-20261101-d",
@@ -346,6 +352,18 @@ import { applyCSS, applyUICSS } from './shared/style.js';
 import { createWorld } from './shared/world.js';
 import { makeScore } from './shared/score.js';
 applyCSS(); applyUICSS();
+/* Two interface styles to compare: Soft (the chrome-edged portfolio controls) and Pixel (cream, ink line, hard shadow).
+   ?ui=pixel or ?ui=soft picks one; the switch top-right (or U) flips it and remembers. */
+function setUI(kind) {
+  kind = kind === 'pixel' ? 'pixel' : 'soft';
+  document.getElementById('soft-ui').disabled = kind === 'pixel'; document.getElementById('pixel-ui').disabled = kind !== 'pixel';
+  document.documentElement.dataset.ui = kind;
+  for (const b of document.querySelectorAll('#ui-switch button')) b.setAttribute('aria-pressed', b.dataset.ui === kind);
+  try { localStorage.setItem('hairpin.ui', kind); } catch (e) {}
+}
+setUI(new URLSearchParams(location.search).get('ui') || (() => { try { return localStorage.getItem('hairpin.ui'); } catch (e) {} })());
+document.getElementById('ui-switch').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setUI(b.dataset.ui); });
+addEventListener('keydown', e => { if ((e.key === 'u' || e.key === 'U') && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) setUI(document.documentElement.dataset.ui === 'pixel' ? 'soft' : 'pixel'); });
 THREE.ColorManagement.enabled = false;
 
 // the scenes, in story order; each folder has a scene.js
